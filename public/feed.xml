@@ -5,7 +5,7 @@
     <link>https://memorygrain.org/blog/</link>
     <description>Deep dives into the Open Memory Specification (.mg format) — COSE signing, header bytes, GDPR compliance, autonomous vehicles, IoT device profiles, and portability.</description>
     <language>en-us</language>
-    <lastBuildDate>Sat, 21 Feb 2026 04:21:56 GMT</lastBuildDate>
+    <lastBuildDate>Thu, 26 Feb 2026 13:38:55 GMT</lastBuildDate>
     <atom:link href="https://memorygrain.org/feed.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>OMS for Autonomous Vehicles: Structured Memory for Sensor Fusion, Decisions, and Audit</title>
@@ -216,30 +216,30 @@
       <category>security</category>
     </item>
     <item>
-      <title>Memory Type Deep Dive: Checkpoints</title>
+      <title>Grain Type Deep Dive: State</title>
       <link>https://memorygrain.org/blog/memory-type-checkpoints/</link>
       <guid isPermaLink="true">https://memorygrain.org/blog/memory-type-checkpoints/</guid>
-      <description>Checkpoints are agent state snapshots for save/restore in OMS — like a video game save point for AI agents. Learn about the Checkpoint memory type, its context map, plan and history fields, fault tolerance patterns, and the immutability model.</description>
+      <description>OMS v1.2 update: The Checkpoint type is now named State. States are agent state snapshots for save/restore in OMS — like a video game save point for AI agents. Learn about the State grain type, its context map, plan and history fields, fault tolerance patterns, and the immutability model.</description>
       <pubDate>Thu, 19 Feb 2026 00:00:00 GMT</pubDate>
       <category>memory-types</category>
       <category>checkpoints</category>
       <category>agent-state</category>
     </item>
     <item>
-      <title>Memory Type Deep Dive: Episodes</title>
+      <title>Grain Type Deep Dive: Event</title>
       <link>https://memorygrain.org/blog/memory-type-episodes/</link>
       <guid isPermaLink="true">https://memorygrain.org/blog/memory-type-episodes/</guid>
-      <description>Episodes are the raw, unstructured interaction records in OMS — the input to consolidation that extracts structured Facts. Learn about the Episode memory type, its fields, the consolidation pipeline, and real-world use cases.</description>
+      <description>OMS v1.2 update: The Episode type is now named Event. Events are the raw, unstructured interaction records in OMS — the input to consolidation that extracts structured Beliefs. Learn about the Event grain type, its fields, the consolidation pipeline, and real-world use cases.</description>
       <pubDate>Thu, 19 Feb 2026 00:00:00 GMT</pubDate>
       <category>memory-types</category>
       <category>episodes</category>
       <category>interaction-records</category>
     </item>
     <item>
-      <title>Memory Type Deep Dive: Facts</title>
+      <title>Grain Type Deep Dive: Belief</title>
       <link>https://memorygrain.org/blog/memory-type-facts/</link>
       <guid isPermaLink="true">https://memorygrain.org/blog/memory-type-facts/</guid>
-      <description>A comprehensive guide to the Fact memory type in OMS — the semantic triple model, required and optional fields, confidence scoring, bi-temporal validity, protected facts, consolidation levels, and real-world applications.</description>
+      <description>OMS v1.2 update: The Fact type is now named Belief. A comprehensive guide to the Belief grain type in OMS — the semantic triple model, required and optional fields, confidence scoring, bi-temporal validity, protected beliefs, consolidation levels, and real-world applications.</description>
       <pubDate>Thu, 19 Feb 2026 00:00:00 GMT</pubDate>
       <category>memory-types</category>
       <category>facts</category>
@@ -270,10 +270,10 @@
       <category>robotics</category>
     </item>
     <item>
-      <title>Memory Type Deep Dive: ToolCall — The Immutable Audit Trail for Agent Actions</title>
+      <title>Grain Type Deep Dive: Action — The Immutable Audit Trail for Agent Actions</title>
       <link>https://memorygrain.org/blog/memory-type-toolcalls/</link>
       <guid isPermaLink="true">https://memorygrain.org/blog/memory-type-toolcalls/</guid>
-      <description>How OMS ToolCall grains record every tool invocation, argument, and result as an immutable, content-addressed record — enabling replay, debugging, cost tracking, and compliance.</description>
+      <description>OMS v1.2 update: The ToolCall type is now named Action with key field name changes. How OMS Action grains record every tool invocation, argument, and result as an immutable, content-addressed record — enabling replay, debugging, cost tracking, and compliance.</description>
       <pubDate>Thu, 19 Feb 2026 00:00:00 GMT</pubDate>
       <category>memory-types</category>
       <category>tool-calls</category>
@@ -386,7 +386,7 @@
       <title>What Is a Memory Grain?</title>
       <link>https://memorygrain.org/blog/what-is-a-memory-grain/</link>
       <guid isPermaLink="true">https://memorygrain.org/blog/what-is-a-memory-grain/</guid>
-      <description>The memory grain is the atomic unit of agent knowledge in the Open Memory Specification. This post covers the seven memory types, the immutability model, content addressing, the .mg container capabilities, and the ten design principles that shape the format.</description>
+      <description>The memory grain is the atomic unit of agent knowledge in the Open Memory Specification. This post covers the ten grain types, the immutability model, content addressing, the .mg container capabilities, and the ten design principles that shape the format.</description>
       <pubDate>Thu, 19 Feb 2026 00:00:00 GMT</pubDate>
       <category>memory-grain</category>
       <category>fundamentals</category>

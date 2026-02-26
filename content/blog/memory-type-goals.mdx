@@ -6,36 +6,36 @@ readTime: "17 min read"
 tags: ["memory-types", "goals", "agent-objectives", "lifecycle"]
 ---
 
-Facts describe what is. Episodes describe what happened. But agents do not just observe the world — they pursue objectives. They have tasks to complete, targets to hit, constraints to satisfy, deadlines to meet. Modeling these objectives as first-class memory objects — with lifecycle semantics, structured success criteria, delegation chains, and protection policies — is what the Goal memory type provides.
+Beliefs describe what is. Events describe what happened. But agents do not just observe the world — they pursue objectives. They have tasks to complete, targets to hit, constraints to satisfy, deadlines to meet. Modeling these objectives as first-class memory objects — with lifecycle semantics, structured success criteria, delegation chains, and protection policies — is what the Goal grain type provides.
 
-Defined in Section 8.7 of the OMS v1.0 specification, Goal is the most complex of the seven standard memory types. It introduces state transitions via immutable supersession chains, machine-evaluable criteria schemas, DAG-based goal hierarchies, delegation between agents, and normative protections against goal laundering attacks. This post covers all of it.
+Defined in Section 8.7 of the OMS v1.2 specification, Goal is one of ten grain types. It introduces state transitions via immutable supersession chains, machine-evaluable criteria schemas, DAG-based goal hierarchies, delegation between agents, and normative protections against goal laundering attacks. This post covers all of it.
 
 ## Why a Dedicated Goal Type?
 
-An obvious question: why not just use a Fact grain with `relation="has_goal"`? The specification addresses this directly.
+An obvious question: why not just use a Belief grain with `relation="has_goal"`? The specification addresses this directly.
 
 At scale, querying active goals via Fact requires full payload deserialization to inspect the `relation` field. Every grain must be decoded from MessagePack, the `relation` field extracted, and its value compared to `"has_goal"`. With millions of grains, this is expensive.
 
 A dedicated type byte solves this. Goal grains carry type byte `0x07` in the OMS header (byte 2). Any system scanning a stream of `.mg` blobs can identify all Goal grains by reading a single byte — **O(1) header-level filtering** before any MessagePack decode. The `goal_state` field is a first-class indexable field in the payload, not buried in a `context` map.
 
-The separation also enables distinct lifecycle semantics. Facts evolve through confidence revisions — a Fact's confidence might change from 0.7 to 0.9 as more evidence arrives. Goals evolve through state transitions: active, suspended, failed, satisfied. These are fundamentally different patterns that benefit from distinct type-level modeling.
+The separation also enables distinct lifecycle semantics. Beliefs evolve through confidence revisions — a Belief's confidence might change from 0.7 to 0.9 as more evidence arrives. Goals evolve through state transitions: active, suspended, failed, satisfied. These are fundamentally different patterns that benefit from distinct type-level modeling.
 
 ## Required Fields
 
-Every Goal grain MUST include these six fields:
+Every Goal grain MUST include these three fields (in OMS v1.2, `subject` and `source_type` are optional):
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `type` | string | Must be `"goal"` |
-| `subject` | non-empty string | Agent or entity this goal belongs to |
-| `description` | non-empty string | Natural language statement of the objective |
-| `goal_state` | string (enum) | One of: `"active"`, `"satisfied"`, `"failed"`, `"suspended"` |
-| `source_type` | non-empty string | Origin: `"user_explicit"`, `"agent_inferred"`, `"system"`, `"consolidated"` |
-| `created_at` | int64 (epoch ms) | When this goal grain was created |
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | Yes | Must be `"goal"` |
+| `description` | non-empty string | Yes | Natural language statement of the objective |
+| `goal_state` | string (enum) | Yes | One of: `"active"`, `"satisfied"`, `"failed"`, `"suspended"` |
+| `created_at` | int64 (epoch ms) | Yes | When this goal grain was created |
+| `subject` | non-empty string | No | Agent or entity this goal belongs to |
+| `source_type` | non-empty string | No | Origin: `"user_explicit"`, `"agent_inferred"`, `"system"`, `"consolidated"` |
 
-Two things stand out. First, `source_type` is **required, not optional**. The spec is explicit about this: "human-vs-agent origin is a first-class routing concern." A goal set by a human ("deploy version 2.3 by Friday") has different authority, priority, and trust implications than a goal inferred by an agent ("user seems to want faster response times"). Making `source_type` required ensures this distinction is always present.
+In OMS v1.2, `subject` and `source_type` were moved from required to optional. When provided, `source_type` carries important routing information: a goal set by a human has different authority and trust implications than one inferred by an agent.
 
-Second, `goal_state` is an enum with exactly four values. Not three, not five — four. The state machine is:
+`goal_state` is an enum with exactly four values. Not three, not five — four. The state machine is:
 
 - **active** — the goal is being pursued
 - **satisfied** — the goal was achieved

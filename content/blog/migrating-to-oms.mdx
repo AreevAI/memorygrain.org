@@ -23,13 +23,13 @@ Before mapping anything, take stock of what exists. Agent memory systems typical
 - **Sensor telemetry** --- IoT readings, monitoring metrics, environmental measurements
 - **Task tracking** --- objectives, goals, and their completion status in project management systems or custom stores
 
-Each of these maps to one or more of the seven OMS memory types. The mapping is not arbitrary --- it follows directly from the type definitions in Section 8 of the specification.
+Each of these maps to one or more of the ten OMS grain types. The mapping is not arbitrary --- it follows directly from the type definitions in Section 8 of the specification.
 
 ## Mapping existing stores to OMS grain types
 
-### Vector DB entries become Fact grains with embedding_refs
+### Vector DB entries become Belief grains with embedding_refs
 
-Vector database entries typically combine a text chunk or metadata document with an embedding vector stored for similarity search. In OMS, the knowledge becomes a Fact grain, and the embedding becomes an `embedding_refs` entry.
+Vector database entries typically combine a text chunk or metadata document with an embedding vector stored for similarity search. In OMS, the knowledge becomes a Belief grain, and the embedding becomes an `embedding_refs` entry.
 
 Section 7.2 defines the embedding reference schema:
 
@@ -47,13 +47,13 @@ The five fields capture everything needed to locate and use the vector: `vector_
 
 The key insight is that OMS does not embed vectors inside grains. Design Principle 1 --- "References, not blobs" --- means the grain references the vector by ID, and the vector continues to live in your vector store. The grain becomes the portable, verifiable metadata layer; the vector store remains the search engine.
 
-### Key-value stores become Fact grains
+### Key-value stores become Belief grains
 
-Key-value pairs map naturally to the Fact type's semantic triple model: `subject` + `relation` form the key, and `object` is the value.
+Key-value pairs map naturally to the Belief type's semantic triple model: `subject` + `relation` form the key, and `object` is the value.
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "user",
   "relation": "prefers",
   "object": "dark mode",
@@ -65,31 +65,31 @@ Key-value pairs map naturally to the Fact type's semantic triple model: `subject
 
 A Redis key like `user:preferences:theme` becomes subject="user", relation="prefers_theme", object="dark". A DynamoDB item with a partition key and sort key maps to subject and relation respectively. The confidence field adds something key-value stores lack --- a measure of how reliable the claim is. `source_type` records whether the value came from a user explicitly, was inferred by the agent, or was consolidated from multiple sources.
 
-### Conversation logs become Episode grains
+### Conversation logs become Event grains
 
-Raw conversation transcripts are Episodes --- the simplest grain type. Section 8.2 requires just three fields: `type`, `content`, and `created_at`.
+Raw conversation transcripts are Event grains --- the simplest grain type. Section 8.2 requires just three fields: `type`, `content`, and `created_at`.
 
 ```json
 {
-  "type": "episode",
+  "type": "event",
   "content": "User asked about dark mode settings and was shown the preferences panel",
   "created_at": 1739980800000
 }
 ```
 
-Episodes are intentionally unstructured. They are the input to consolidation --- the process by which an agent extracts structured Facts from raw interactions. The optional `consolidated` boolean tracks whether an episode has been processed. You can migrate entire conversation histories as Episodes and then run consolidation to produce Facts, preserving the full provenance chain via `derived_from`.
+Episodes are intentionally unstructured. They are the input to consolidation --- the process by which an agent extracts structured Beliefs from raw interactions. The optional `consolidated` boolean tracks whether an episode has been processed. You can migrate entire conversation histories as Event grains and then run consolidation to produce Facts, preserving the full provenance chain via `derived_from`.
 
-### API call logs become ToolCall grains
+### API call logs become Action grains
 
-Every tool invocation your agent makes --- API calls, function calls, database queries --- maps to a ToolCall grain. Section 8.5 captures the complete audit record:
+Every tool invocation your agent makes --- API calls, function calls, database queries --- maps to an Action grain. Section 8.5 captures the complete audit record:
 
 ```json
 {
-  "type": "tool_call",
+  "type": "action",
   "tool_name": "web_search",
-  "arguments": {"query": "OMS specification"},
-  "result": {"hits": 42},
-  "success": true,
+  "input": {"query": "OMS specification"},
+  "content": {"hits": 42},
+  "is_error": false,
   "duration_ms": 230,
   "created_at": 1739980800000
 }
@@ -97,13 +97,13 @@ Every tool invocation your agent makes --- API calls, function calls, database q
 
 Required fields are `tool_name`, `arguments`, `result`, `success`, and `created_at`. Optional fields include `duration_ms` for execution time and `error` for failure messages. If your existing logs lack some of these fields, you can still migrate --- set `success` based on HTTP status codes, estimate `duration_ms` from log timestamps, and reconstruct `arguments` from request payloads.
 
-### Configuration snapshots become Checkpoint grains
+### Configuration snapshots become State grains
 
 Agent state snapshots --- "where was I, what was I doing, what was my plan" --- are Checkpoints. Section 8.3 requires `type`, `context` (a map of the agent's current state), and `created_at`.
 
 ```json
 {
-  "type": "checkpoint",
+  "type": "state",
   "context": {"current_task": "analyze_report", "step": 3, "model": "claude-3"},
   "plan": ["validate_schema", "transform", "load"],
   "history": [{"action": "fetch_data", "status": "complete"}],
@@ -197,7 +197,7 @@ Level 1 (Section 17.1) is read-only. A Level 1 implementation can:
 - Deserialize the version byte and canonical MessagePack payload
 - Compute and verify SHA-256 content addresses
 - Support field compaction (expanding short keys to full names)
-- Recognize all seven memory types
+- Recognize all ten grain types
 - Ignore unknown fields (forward compatibility)
 - Use constant-time hash comparison
 
@@ -271,7 +271,7 @@ Document every store that holds agent memory. For each store, record the data fo
 
 ### Step 2: Map to OMS grain types
 
-Using the mappings described above, assign each data source to one or more OMS types. A single source might produce multiple grain types --- a conversation log produces Episode grains directly and, after consolidation, Fact grains indirectly.
+Using the mappings described above, assign each data source to one or more OMS types. A single source might produce multiple grain types --- a conversation log produces Event grains directly and, after consolidation, Belief grains indirectly.
 
 ### Step 3: Define namespace strategy
 

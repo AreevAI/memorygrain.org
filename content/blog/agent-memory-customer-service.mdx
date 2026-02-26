@@ -26,13 +26,13 @@ OMS addresses each of these through immutable, content-addressed memory grains w
 
 ## Memory type mapping for customer service
 
-### Episodes for conversation capture
+### Events for conversation capture
 
-Every customer interaction — chat transcript, phone call summary, email thread — enters the system as an Episode grain (Section 8.2). Episodes capture raw, unstructured text with minimal required fields: `type`, `content`, and `created_at`.
+Every customer interaction — chat transcript, phone call summary, email thread — enters the system as an Event grain (Section 8.2). Episodes capture raw, unstructured text with minimal required fields: `type`, `content`, and `created_at`.
 
 ```json
 {
-  "type": "episode",
+  "type": "event",
   "content": "Customer Jane Smith called regarding invoice #789. States she was charged $499 for a service she canceled last month. Requested immediate credit. Mentioned she has been a customer for 6 years and is considering switching providers.",
   "created_at": 1768471200000,
   "user_id": "customer-456",
@@ -48,7 +48,7 @@ For phone calls, the `content_refs` field (Section 7.1) can reference the origin
 
 ```json
 {
-  "type": "episode",
+  "type": "event",
   "content": "Phone call summary: Customer discussed billing discrepancy for invoice #789",
   "created_at": 1768471200000,
   "user_id": "customer-456",
@@ -65,13 +65,13 @@ For phone calls, the `content_refs` field (Section 7.1) can reference the origin
 }
 ```
 
-### Facts for customer preferences
+### Beliefs for customer preferences
 
-As interactions accumulate, the consolidation pipeline (Section 8.1) extracts structured knowledge. Customer preferences become Fact grains with the semantic triple model:
+As interactions accumulate, the consolidation pipeline (Section 8.1) extracts structured knowledge. Customer preferences become Belief grains with the semantic triple model:
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "user",
   "relation": "prefers",
   "object": "dark mode",
@@ -87,7 +87,7 @@ This follows the exact pattern from the spec's Test Vector 1 (Section 21.1). The
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "customer-456",
   "relation": "preferred_language",
   "object": "Spanish",
@@ -98,13 +98,13 @@ This follows the exact pattern from the spec's Test Vector 1 (Section 21.1). The
 }
 ```
 
-### Facts for account knowledge
+### Beliefs for account knowledge
 
 Account-level information uses the same Fact structure but adds temporal validity for accuracy over time:
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "customer-456",
   "relation": "subscription_tier",
   "object": "enterprise",
@@ -148,17 +148,17 @@ The `goal_state` field cycles through `"active"`, `"satisfied"`, `"failed"`, and
 
 The `criteria` array lists human-readable success conditions: `"customer confirms resolution"` and `"credit applied to account"`. Both must be verified before the Goal can transition to `"satisfied"`.
 
-### ToolCalls for system interactions
+### Actions for system interactions
 
-Every API call the agent makes — CRM lookups, ticket updates, payment processing — is recorded as a ToolCall grain (Section 8.5):
+Every API call the agent makes — CRM lookups, ticket updates, payment processing — is recorded as a Action grain (Section 8.5):
 
 ```json
 {
-  "type": "tool_call",
+  "type": "action",
   "tool_name": "crm_lookup_customer",
-  "arguments": {"customer_id": "customer-456", "fields": ["subscription", "history"]},
-  "result": {"subscription_tier": "enterprise", "tenure_years": 6, "lifetime_value": 28400},
-  "success": true,
+  "input": {"customer_id": "customer-456", "fields": ["subscription", "history"]},
+  "content": {"subscription_tier": "enterprise", "tenure_years": 6, "lifetime_value": 28400},
+  "is_error": false,
   "duration_ms": 145,
   "created_at": 1768471200000,
   "namespace": "support:billing",
@@ -168,11 +168,11 @@ Every API call the agent makes — CRM lookups, ticket updates, payment processi
 
 ```json
 {
-  "type": "tool_call",
+  "type": "action",
   "tool_name": "apply_account_credit",
-  "arguments": {"customer_id": "customer-456", "amount": 499.00, "invoice": "INV-789", "reason": "erroneous_charge"},
-  "result": {"credit_id": "CR-20260115-001", "new_balance": 0.00},
-  "success": true,
+  "input": {"customer_id": "customer-456", "amount": 499.00, "invoice": "INV-789", "reason": "erroneous_charge"},
+  "content": {"credit_id": "CR-20260115-001", "new_balance": 0.00},
+  "is_error": false,
   "duration_ms": 312,
   "created_at": 1768471500000,
   "namespace": "support:billing",
@@ -180,15 +180,15 @@ Every API call the agent makes — CRM lookups, ticket updates, payment processi
 }
 ```
 
-The `success` field, `duration_ms`, and full `arguments`/`result` capture create a complete audit trail. When something goes wrong — a payment fails, a CRM call times out — the `error` field records what happened, and `success: false` flags the failure.
+The `success` field, `duration_ms`, and full `input`/`content` capture create a complete audit trail. When something goes wrong — a payment fails, a CRM call times out — the `error` field records what happened, and `is_error: true` flags the failure.
 
-### Checkpoints for multi-session issues
+### States for multi-session issues
 
-Complex issues that span multiple interactions use Checkpoint grains (Section 8.3) to snapshot the full state:
+Complex issues that span multiple interactions use State grains (Section 8.3) to snapshot the full state:
 
 ```json
 {
-  "type": "checkpoint",
+  "type": "state",
   "context": {
     "issue": "billing_discrepancy_inv_789",
     "customer": "customer-456",
@@ -304,7 +304,7 @@ Header sensitivity bits are advisory routing metadata, not a compliance guarante
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "relation": "payment_pattern",
   "object": "consistently_late_by_3_days",
   "confidence": 0.88,
@@ -322,7 +322,7 @@ The product team can see the pattern (late payments) and the confidence level, b
 
 ## Tracking what works: success and failure counts
 
-The `success_count` and `failure_count` fields on Fact grains (Section 6.1) track which pieces of customer knowledge actually help resolve issues. When an agent uses a Fact — say, that a customer prefers email over phone — and the interaction goes well, `success_count` increments. When a Fact leads to a poor outcome, `failure_count` increments.
+The `success_count` and `failure_count` fields on Belief grains (Section 6.1) track which pieces of customer knowledge actually help resolve issues. When an agent uses a Fact — say, that a customer prefers email over phone — and the interaction goes well, `success_count` increments. When a Fact leads to a poor outcome, `failure_count` increments.
 
 Over time, this creates a feedback loop. Facts with high success counts become more reliable. Facts with rising failure counts signal outdated or inaccurate knowledge that needs reverification. Combined with the `confidence` field (which represents the initial credibility of the knowledge claim), `success_count` and `failure_count` provide empirical validation of customer knowledge.
 
@@ -338,7 +338,7 @@ Consider the full lifecycle for the billing discrepancy scenario:
 
 3. **Track**: A Goal grain is created with `description: "Resolve billing discrepancy for invoice #789"` and `goal_state: "active"`.
 
-4. **Act**: ToolCall grains record the CRM lookup, the credit application, and the ticket update.
+4. **Act**: Action grains record the CRM lookup, the credit application, and the ticket update.
 
 5. **Snapshot**: A Checkpoint captures the current state for handoff to the next session.
 

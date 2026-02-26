@@ -316,7 +316,7 @@ In multi-robot systems, one robot may delegate sub-tasks to another. The `delega
 
 The `delegate_to` field is a DID (Section 8.7) — a W3C decentralized identifier — so delegation is cryptographically verifiable. The transport robot can verify that the delegation came from an authorized source. The provenance chain uses `method: "goal_delegation"`, another standard method string from the Goal-specific provenance table.
 
-Goal state transitions follow the immutable supersession model. When the "Pick part A" goal is completed, a new grain is created with `goal_state: "satisfied"` and `satisfaction_evidence` referencing the Observation or ToolCall grains that confirm success. The original active goal gets `superseded_by` set in the index layer, preserving the complete state transition history.
+Goal state transitions follow the immutable supersession model. When the "Pick part A" goal is completed, a new grain is created with `goal_state: "satisfied"` and `satisfaction_evidence` referencing the Observation or Action grains that confirm success. The original active goal gets `superseded_by` set in the index layer, preserving the complete state transition history.
 
 ## Checkpoints for robot state recovery
 
@@ -324,7 +324,7 @@ When a robot loses power, crashes, or needs to hand off a task to another robot,
 
 ```json
 {
-  "type": "checkpoint",
+  "type": "state",
   "context": {
     "joint_positions": "[0.0, -1.57, 1.57, 0.0, 1.57, 0.0]",
     "gripper_state": "closed",
@@ -349,7 +349,7 @@ When a robot loses power, crashes, or needs to hand off a task to another robot,
 
 The `context` map captures the robot's complete state as string-to-string pairs: joint positions, gripper state, current task reference, environment map version. The `plan` field (array of strings) records the remaining steps. The `history` field (array of maps) can capture the actions already completed, providing a full before-and-after picture.
 
-On recovery, the robot loads the most recent Checkpoint grain, restores its state from the `context` map, and resumes from the current step in the `plan`. Because Checkpoints are immutable and content-addressed, the recovery process is deterministic — the same checkpoint always produces the same restored state.
+On recovery, the robot loads the most recent State grain, restores its state from the `context` map, and resumes from the current step in the `plan`. Because Checkpoints are immutable and content-addressed, the recovery process is deterministic — the same checkpoint always produces the same restored state.
 
 ## Workflows for learned manipulation skills
 
@@ -428,7 +428,7 @@ OMS handles this through the `invalidation_policy` field (Section 23):
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "assembly-robot-01",
   "relation": "constraint",
   "object": "never apply force > 50N near humans",
@@ -463,7 +463,7 @@ Here is how the pieces fit together in a real scenario. A robot receives a task 
 
 3. **Observation grains** stream in from LiDAR (`frame_id: "base_link"`), cameras (`frame_id: "camera_optical"`), and IMU (`frame_id: "base_link"`), all sharing `sync_group` IDs for temporal alignment. Content references point to point clouds and images in external storage.
 
-4. **Checkpoint grains** save state at each major phase transition — after navigation, after grasp, after placement — enabling recovery if anything goes wrong.
+4. **State grains** save state at each major phase transition — after navigation, after grasp, after placement — enabling recovery if anything goes wrong.
 
 5. **Workflow grains** provide learned manipulation sequences triggered by conditions like `"object_detected_at_location"`.
 

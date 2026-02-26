@@ -139,13 +139,13 @@ The `metadata` field is typed as a generic map, so applications can add custom m
 
 ## A Complete Multi-Modal Grain Example
 
-Here is what a Fact grain with content references and embedding references looks like before and after compaction. Imagine a medical AI that has diagnosed a pneumonia case from a chest X-ray:
+Here is what a Belief grain with content references and embedding references looks like before and after compaction. Imagine a medical AI that has diagnosed a pneumonia case from a chest X-ray:
 
 **Before compaction:**
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "patient-0042",
   "relation": "diagnosed_with",
   "object": "pneumonia",
@@ -252,11 +252,11 @@ The multi-modal reference architecture enables a wide range of applications:
 
 ### Medical Imaging
 
-A diagnostic AI creates Fact grains linking patients to conditions. Each Fact references the medical images (X-rays, MRIs, CT scans) that informed the diagnosis via `content_refs`. The images themselves live in a PACS (Picture Archiving and Communication System) or content-addressed store.
+A diagnostic AI creates Belief grains linking patients to conditions. Each Fact references the medical images (X-rays, MRIs, CT scans) that informed the diagnosis via `content_refs`. The images themselves live in a PACS (Picture Archiving and Communication System) or content-addressed store.
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "patient-0042",
   "relation": "shows_finding",
   "object": "right_lower_lobe_opacity",
@@ -278,11 +278,11 @@ The grain is kilobytes. The DICOM image is megabytes. They are linked, not merge
 
 ### Voice Recordings and Conversation Episodes
 
-A meeting assistant creates Episode grains for each conversation segment. The raw audio is referenced, not embedded:
+A meeting assistant creates Event grains for each conversation segment. The raw audio is referenced, not embedded:
 
 ```json
 {
-  "type": "episode",
+  "type": "event",
   "content": "Discussion about Q3 revenue projections. CFO presented updated forecast showing 12% growth.",
   "created_at": 1768471200000,
   "content_refs": [
@@ -298,7 +298,7 @@ A meeting assistant creates Episode grains for each conversation segment. The ra
 }
 ```
 
-The Episode grain contains the text summary. The audio reference allows the original recording to be retrieved for verification.
+The Event grain contains the text summary. The audio reference allows the original recording to be retrieved for verification.
 
 ### LiDAR Point Clouds and Robotics
 
@@ -331,11 +331,11 @@ The Observation grain records what was detected and when. The point cloud refere
 
 ### Document Attachments
 
-A research agent creates Fact grains summarizing findings from papers. The papers are referenced as documents:
+A research agent creates Belief grains summarizing findings from papers. The papers are referenced as documents:
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "transformer_architecture",
   "relation": "introduced_in",
   "object": "Attention Is All You Need (Vaswani et al., 2017)",
@@ -355,11 +355,11 @@ A research agent creates Fact grains summarizing findings from papers. The paper
 
 ### Vector Search Integration
 
-The embedding reference schema enables a powerful pattern: grains that are both content-addressed (for exact lookup) and vector-indexed (for semantic search). A Fact grain can have both a deterministic content address and one or more embedding references:
+The embedding reference schema enables a powerful pattern: grains that are both content-addressed (for exact lookup) and vector-indexed (for semantic search). A Belief grain can have both a deterministic content address and one or more embedding references:
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "Alice",
   "relation": "expertise_in",
   "object": "distributed systems and consensus protocols",
@@ -391,7 +391,7 @@ The OMS multi-modal design creates a clean separation of concerns:
 
 This separation means grains remain portable and efficient. You can export a user's complete memory as a `.mg` container file — all grains, all metadata, all provenance chains — without including gigabytes of media files. The content references remain intact, pointing to wherever the media is stored. A new system can resolve those URIs to fetch content on demand.
 
-It also means the same content can be referenced by multiple grains without duplication. Ten Fact grains derived from the same X-ray all point to the same URI. The image is stored once.
+It also means the same content can be referenced by multiple grains without duplication. Ten Belief grains derived from the same X-ray all point to the same URI. The image is stored once.
 
 ## Conclusion
 

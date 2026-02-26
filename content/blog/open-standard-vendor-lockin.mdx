@@ -120,7 +120,7 @@ This is not incidental. An interchange format is only useful if everyone can imp
 
 Section 17 defines three conformance levels, and their progressive structure is designed to make adoption incremental rather than all-or-nothing.
 
-**Level 1: Minimal Reader.** Deserialize grains, verify SHA-256 content addresses, support field compaction, recognize all seven memory types, ignore unknown fields. Level 1 is read-only. You can consume OMS grains without producing them. This is the lowest-risk entry point.
+**Level 1: Minimal Reader.** Deserialize grains, verify SHA-256 content addresses, support field compaction, recognize all ten grain types (0x01–0x0A), ignore unknown fields. Level 1 is read-only. You can consume OMS grains without producing them. This is the lowest-risk entry point.
 
 **Level 2: Full Implementation.** All Level 1 requirements plus serialization, canonical encoding, schema validation, test vector compliance, the Store protocol (get/put/delete/list/exists), and enforcement of invalidation policies. Level 2 is read-write.
 
@@ -167,6 +167,6 @@ Without a standard interchange format, every agent memory system is an island. M
 
 The cost compounds over time. As your agent accumulates more knowledge, the switching cost grows. As more systems touch that knowledge, the integration cost grows. As regulations tighten, the compliance cost of ad-hoc formats grows. The longer you wait to adopt a portable format, the more knowledge you accumulate in formats that are not portable.
 
-OMS does not require you to abandon your existing storage, your existing framework, or your existing cloud provider. It requires you to agree on what the data looks like when it moves between systems. The 9-byte fixed header, the canonical MessagePack payload, the SHA-256 content address, the seven memory types, the `.mg` container file --- these are the common language. Everything else is your choice.
+OMS does not require you to abandon your existing storage, your existing framework, or your existing cloud provider. It requires you to agree on what the data looks like when it moves between systems. The 9-byte fixed header, the canonical MessagePack payload, the SHA-256 content address, the ten grain types, the `.mg` container file --- these are the common language. Everything else is your choice.
 
 The specification is published. The license is open. The format is language-agnostic. The conformance levels allow incremental adoption. The question is not whether your agent memory should be portable --- it is when you start making it so.

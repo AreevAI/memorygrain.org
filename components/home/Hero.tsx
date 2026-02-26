@@ -48,12 +48,12 @@ export function Hero() {
                 width: 7,
                 height: 7,
                 borderRadius: '50%',
-                background: 'var(--episode)',
+                background: 'var(--event)',
                 display: 'inline-block',
                 flexShrink: 0,
               }}
             />
-            v1.0 · Standards Track · OWF Final
+            v1.2 · Standards Track · OWF Final
           </span>
         </div>
 

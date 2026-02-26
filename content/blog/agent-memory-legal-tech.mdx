@@ -14,13 +14,13 @@ The Open Memory Specification was not designed specifically for legal tech, but 
 
 ## Memory type mapping for legal technology
 
-### Facts for legal knowledge
+### Beliefs for legal knowledge
 
-Contract analysis, regulatory research, and case law review all produce structured knowledge claims. These become Fact grains with the semantic triple model:
+Contract analysis, regulatory research, and case law review all produce structured knowledge claims. These become Belief grains with the semantic triple model:
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "contract-2024-001",
   "relation": "effective_date",
   "object": "2024-03-15",
@@ -33,13 +33,13 @@ Contract analysis, regulatory research, and case law review all produce structur
 }
 ```
 
-The `source_type` of `"imported"` (Section 6.1) indicates this fact was extracted from an external document through automated analysis, not stated by a human or inferred by the agent from patterns. The `derived_from` array links this Fact back to the specific ToolCall grain that performed the document analysis — the provenance chain from knowledge claim to source document.
+The `source_type` of `"imported"` (Section 6.1) indicates this fact was extracted from an external document through automated analysis, not stated by a human or inferred by the agent from patterns. The `derived_from` array links this Fact back to the specific Action grain that performed the document analysis — the provenance chain from knowledge claim to source document.
 
 Contract terms, deadlines, party identities, financial figures — all follow this same pattern. Each is a discrete knowledge claim with a confidence score, a source type, and a provenance link to the document it came from.
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "contract-2024-001",
   "relation": "termination_clause",
   "object": "30 days written notice required; 90 days for material breach",
@@ -51,13 +51,13 @@ Contract terms, deadlines, party identities, financial figures — all follow th
 }
 ```
 
-### Episodes for case research and client consultations
+### Events for case research and client consultations
 
 Deposition summaries, case research notes, and client consultation records are unstructured text — ideal for the Episode type (Section 8.2):
 
 ```json
 {
-  "type": "episode",
+  "type": "event",
   "content": "Deposition of CFO John Martinez, Case #456. Testified that the contract amendment was signed on 2024-06-10, contradicting the plaintiff's claim of 2024-05-15. Stated that all amendments require board approval per Section 12.4 of the corporate bylaws. Became evasive when questioned about email correspondence from May 2024.",
   "created_at": 1768471200000,
   "namespace": "litigation:case-456",
@@ -71,7 +71,7 @@ Client consultations may contain attorney-client privileged information. The `st
 
 ```json
 {
-  "type": "episode",
+  "type": "event",
   "content": "Client meeting with General Counsel. Discussed litigation strategy for Case #456. Counsel advised that the email chain from May 2024 presents significant risk. Recommended early settlement if opposing counsel discovers the internal audit report.",
   "created_at": 1768471200000,
   "namespace": "litigation:case-456",
@@ -85,17 +85,17 @@ Client consultations may contain attorney-client privileged information. The `st
 Grains tagged with `legal:privilege` carry sensitivity bits `10` (PII) in the header per the tag-to-sensitivity mapping (Section 13.4), since `legal:*` tags map to a minimum of PII classification. This ensures privileged material is routed to encrypted storage and access-controlled endpoints by default.
 </Callout>
 
-### ToolCalls for legal system interactions
+### Actions for legal system interactions
 
-Every interaction with external legal systems — document review platforms, court filing systems, legal databases — is recorded as a ToolCall grain:
+Every interaction with external legal systems — document review platforms, court filing systems, legal databases — is recorded as a Action grain:
 
 ```json
 {
-  "type": "tool_call",
+  "type": "action",
   "tool_name": "westlaw_search",
-  "arguments": {"query": "breach of contract termination clause 30 days notice", "jurisdiction": "NY", "date_range": "2020-2026"},
-  "result": {"cases_found": 47, "most_relevant": ["Smith v. Jones 2024", "ABC Corp v. DEF Inc 2023"], "search_id": "WL-20260115-001"},
-  "success": true,
+  "input": {"query": "breach of contract termination clause 30 days notice", "jurisdiction": "NY", "date_range": "2020-2026"},
+  "content": {"cases_found": 47, "most_relevant": ["Smith v. Jones 2024", "ABC Corp v. DEF Inc 2023"], "search_id": "WL-20260115-001"},
+  "is_error": false,
   "duration_ms": 2340,
   "created_at": 1768471200000,
   "namespace": "litigation:case-456"
@@ -104,11 +104,11 @@ Every interaction with external legal systems — document review platforms, cou
 
 ```json
 {
-  "type": "tool_call",
+  "type": "action",
   "tool_name": "court_filing_submit",
-  "arguments": {"case_number": "2026-CV-456", "document_type": "motion_to_compel", "filing_id": "F-20260115-001"},
-  "result": {"status": "accepted", "confirmation_number": "CF-789012", "filed_at": "2026-01-15T14:30:00Z"},
-  "success": true,
+  "input": {"case_number": "2026-CV-456", "document_type": "motion_to_compel", "filing_id": "F-20260115-001"},
+  "content": {"status": "accepted", "confirmation_number": "CF-789012", "filed_at": "2026-01-15T14:30:00Z"},
+  "is_error": false,
   "duration_ms": 4100,
   "created_at": 1768471200000,
   "namespace": "litigation:case-456",
@@ -196,7 +196,7 @@ When a grain is placed under litigation hold, its `invalidation_policy` uses `mo
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "contract-2024-001",
   "relation": "amendment_date",
   "object": "2024-06-10",
@@ -243,7 +243,7 @@ When producing relevant Facts, the creating party can elide fields that reveal p
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "relation": "amendment_date",
   "object": "2024-06-10",
   "confidence": 0.99,
@@ -267,7 +267,7 @@ Privilege logs must identify the existence of privileged communications without 
 
 ```json
 {
-  "type": "episode",
+  "type": "event",
   "created_at": 1768471200000,
   "_elided": {
     "content": "sha256:f7a8b9...",
@@ -339,7 +339,7 @@ Legal chain of custody requires tracing every derived insight back to its source
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "contract-2024-001",
   "relation": "breach_identified",
   "object": "failure to provide 30 days written notice per Section 8.2",
@@ -410,7 +410,7 @@ The .mg file structure includes:
 - **Grain data**: The complete .mg blobs, each self-describing with its 9-byte header and MessagePack payload
 - **32-byte SHA-256 footer checksum**: Over header + index + grains, verifying the integrity of the entire file
 
-A single .mg file can contain all grains relevant to a case — Facts extracted from contracts, Episodes from depositions, ToolCalls documenting the analysis process, and the provenance chains linking them together. The footer checksum (Section 11.5) proves the file has not been tampered with since creation.
+A single .mg file can contain all grains relevant to a case — Facts extracted from contracts, Episodes from depositions, Actions documenting the analysis process, and the provenance chains linking them together. The footer checksum (Section 11.5) proves the file has not been tampered with since creation.
 
 ```
 Evidence Package: case-456-production.mg
@@ -419,7 +419,7 @@ Header:  MG\x01 | flags | 2,847 grains | field_map v1 | zstd compression
 Index:   2,847 × 4-byte offsets (random access)
 Grains:  847 Facts (contract analysis, testimony extraction)
          423 Episodes (depositions, meeting notes, research)
-         1,102 ToolCalls (document review, database searches)
+         1,102 Actions (document review, database searches)
          89 Goals (case milestones)
          386 provenance-chain grains (linking everything)
 Footer:  SHA-256 checksum (32 bytes)
@@ -435,9 +435,9 @@ Because every grain in the .mg file is content-addressed, deduplication is autom
 
 Consider how these features compose across a full litigation lifecycle:
 
-**1. Document collection.** AI agents ingest contracts, emails, and corporate records. Each becomes a series of ToolCall grains (the ingestion process) and Fact grains (extracted knowledge). All carry `structural_tags: ["legal:litigation_hold"]` and `invalidation_policy: {mode: "locked", scope: "lineage"}`.
+**1. Document collection.** AI agents ingest contracts, emails, and corporate records. Each becomes a series of Action grains (the ingestion process) and Belief grains (extracted knowledge). All carry `structural_tags: ["legal:litigation_hold"]` and `invalidation_policy: {mode: "locked", scope: "lineage"}`.
 
-**2. Document review.** Agents analyze documents for relevance and privilege. Privileged documents are tagged with `structural_tags: ["legal:privilege"]`. Review decisions are recorded as Fact grains with `source_type: "agent_inferred"` and provenance linking to the reviewed documents.
+**2. Document review.** Agents analyze documents for relevance and privilege. Privileged documents are tagged with `structural_tags: ["legal:privilege"]`. Review decisions are recorded as Belief grains with `source_type: "agent_inferred"` and provenance linking to the reviewed documents.
 
 **3. Deposition preparation.** Deposition summaries enter as Episodes. Key testimony is extracted as Facts with `derived_from` pointing to the Episode. Contradictions between testimony and documentary evidence are tracked through `related_to` cross-links with `relation_type: "contradicts"` (Section 14.3).
 

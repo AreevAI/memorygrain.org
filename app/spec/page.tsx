@@ -13,7 +13,7 @@ import { buildMetadata } from '@/lib/metadata'
 export const metadata: Metadata = buildMetadata({
   title: 'OM Specification',
   description:
-    'The Open Memory Specification (OMS) v1.1: Memory Grain (.mg) Container Definition. Blob layout, canonical serialization, content addressing, cryptographic signing, generalized Observer model, GDPR/HIPAA compliance, device profiles, and test vectors.',
+    'The Open Memory Specification (OMS) v1.2: Memory Grain (.mg) Container Definition. Ten cognitive grain types (Belief, Event, State, Workflow, Action, Observation, Goal, Reasoning, Consensus, Consent), agent-builder primitives, domain profiles, and query conventions.',
 })
 
 async function getSpecHtml(): Promise<string> {
@@ -45,7 +45,7 @@ const tocSections = [
   { id: '5-content-addressing', label: '5. Content Addressing' },
   { id: '6-field-compaction', label: '6. Field Compaction' },
   { id: '7-multi-modal-content-references', label: '7. Multi-Modal Refs' },
-  { id: '8-memory-types', label: '8. Memory Types' },
+  { id: '8-grain-types', label: '8. Grain Types' },
   { id: '9-cryptographic-signing', label: '9. Cryptographic Signing' },
   { id: '10-selective-disclosure', label: '10. Selective Disclosure' },
   { id: '11-file-format-mg-files', label: '11. File Format' },
@@ -64,6 +64,15 @@ const tocSections = [
   { id: '24-observer-type-registry', label: '24. Observer Types' },
   { id: '25-observation-mode-registry', label: '25. Observation Modes' },
   { id: '26-observation-scope-registry', label: '26. Observation Scope' },
+  { id: '27-grain-type-field-specifications', label: '27. Field Specifications' },
+  { id: '28-query-conventions', label: '28. Query Conventions' },
+  { id: 'appendix-a-domain-profile-registry', label: 'Appendix A: Domain Profiles' },
+  { id: 'appendix-b-abnf-grammar', label: 'Appendix B: ABNF Grammar' },
+  { id: 'appendix-c-field-mapping-table-compact-reference', label: 'Appendix C: Field Mapping' },
+  { id: 'appendix-d-compliance-mapping', label: 'Appendix D: Compliance' },
+  { id: 'appendix-e-version-history', label: 'Appendix E: Version History' },
+  { id: 'appendix-f-glossary', label: 'Appendix F: Glossary' },
+  { id: 'appendix-g-complete-example-grain', label: 'Appendix G: Example Grain' },
 ]
 
 export default async function SpecPage() {

@@ -74,7 +74,7 @@ export function Footer() {
             </p>
             {[
               { href: '/about', label: 'About' },
-              { href: 'https://github.com/ariv-ai/memorygrain.org', label: 'GitHub', external: true },
+              { href: 'https://github.com/AreevAI/memorygrain.org', label: 'GitHub', external: true },
               { href: '/llms.txt', label: 'llms.txt' },
               { href: '/sitemap.xml', label: 'Sitemap' },
             ].map(({ href, label, external }) => (
@@ -114,7 +114,7 @@ export function Footer() {
             .
           </p>
           <p style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>
-            v1.1 · Standards Track · Hosted by{' '}
+            v1.2 · Standards Track · Hosted by{' '}
             <a href="https://arivai.dev" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
               arivai.dev
             </a>

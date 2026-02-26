@@ -1,6 +1,6 @@
 # Memory Grain (memorygrain.org) — Open Memory Specification
 # Full content index for AI language models and crawlers
-# Version 1.1 · February 2026
+# Version 1.2 · February 2026
 # License: Specification (OWFa 1.0), Content (CC0 1.0)
 
 ================================================================================
@@ -27,7 +27,7 @@ Primary use cases:
 - Enterprise: SOX-compliant tamper-evident audit trail
 
 ================================================================================
-## BINARY FORMAT SPECIFICATION (v1.0)
+## BINARY FORMAT SPECIFICATION (v1.2)
 ================================================================================
 
 ### Fixed 9-Byte Header
@@ -36,11 +36,13 @@ Every .mg blob begins with this 9-byte fixed header:
 
   Byte 0: Version      — 0x01 (the only valid value; any other byte → ERR_VERSION)
   Byte 1: Flags        — bitmask (see below)
-  Byte 2: Type         — 0x01=Fact, 0x02=Episode, 0x03=Checkpoint,
-                         0x04=Workflow, 0x05=ToolCall, 0x06=Observation,
-                         0x07=Goal
+  Byte 2: Type         — 0x01=Belief, 0x02=Event, 0x03=State,
+                         0x04=Workflow, 0x05=Action, 0x06=Observation,
+                         0x07=Goal, 0x08=Reasoning, 0x09=Consensus, 0x0A=Consent
+                         0x0B–0xEF: reserved; 0xF0–0xFF: domain profile types
   Bytes 3–4: NS Hash   — first two bytes of SHA-256(namespace string, UTF-8), uint16 big-endian
   Bytes 5–8: Created   — uint32 big-endian epoch seconds (range: 1970–2106)
+                         COARSE routing hint only; authoritative timestamp in payload (timestamp_ms)
 
 ### Flags Byte (Byte 1) Bit Layout
 
@@ -80,174 +82,285 @@ The content address is the identity of the grain. Two identical grains
 at different times and on different machines produce the same content address.
 A one-bit change anywhere in the blob produces a completely different address.
 
+### Immutability Boundary (v1.2)
+
+A grain has two distinct layers with different mutability guarantees:
+
+  Blob (immutable): 9-byte fixed header + MessagePack/CBOR payload
+    — Covered by content address and COSE signature
+    — Never modified after write
+
+  Index (mutable): Status and access-tracking fields managed by the store
+    — NOT covered by content address or COSE signature
+    — Updated by store on reads or lifecycle events
+
+Index-layer fields: superseded_by, system_valid_to, verification_status,
+                    access_count, last_accessed_at
+
+Writers MUST NOT embed index-layer fields in the blob payload.
+Stores MUST NOT recompute content addresses when index-layer fields change.
+
 ================================================================================
-## SEVEN MEMORY TYPES
+## TEN GRAIN TYPES (OMS v1.2)
 ================================================================================
 
-### 0x01 — Fact
-Semantic triple: subject–relation–object with confidence score.
+v1.1 type names are accepted by readers (backwards-compatible).
+Writers MUST emit v1.2 canonical names.
+
+Backwards-compat mapping:
+  "fact"       → "belief" (0x01)
+  "episode"    → "event"  (0x02)
+  "checkpoint" → "state"  (0x03)
+  "tool_call"  → "action" (0x05)
+
+### 0x01 — Belief
+Structured belief about the world — (subject, relation, object) triple with
+confidence and source. The canonical unit of declarative knowledge.
 
 Required fields:
-  type: "fact"
-  subject: string (entity the fact is about)
-  relation: string (predicate)
-  object: string | number | boolean (the value)
-
-Optional:
+  type: "belief"
+  subject: string
+  relation: string
+  object: string | map
   confidence: float 0.0–1.0
-  namespace: string
-  user_id: string (for GDPR scoping)
-  provenance: [content_address, ...] (source grains)
-  structural_tags: [string, ...] (e.g., "phi:heart_rate")
-  author_did: string (W3C DID of creator)
+  created_at: int64 (epoch ms)
+
+Optional: namespace, user_id, source_type, provenance, structural_tags,
+  author_did, temporal_type, valid_from, valid_to, epistemic_status,
+  verification_status, processing_basis, identity_state
 
 Example:
-  { "type": "fact", "subject": "agent-001", "relation": "knows",
+  { "type": "belief", "subject": "agent-001", "relation": "knows",
     "object": "route:depot-to-dock-7", "confidence": 0.97,
-    "namespace": "navigation" }
+    "namespace": "navigation", "created_at": 1739980800000 }
 
-### 0x02 — Episode
-Raw interaction record: conversation turn, log entry, event.
-
-Required fields:
-  type: "episode"
-  subject: string (agent or entity experiencing the episode)
-  object: string | object (content of the episode)
-
-Optional: namespace, user_id, structural_tags, author_did
-
-Example:
-  { "type": "episode", "subject": "dispatch-agent-east",
-    "object": { "role": "user", "content": "Send someone to dock 11" },
-    "namespace": "fleet:dispatch" }
-
-### 0x03 — Checkpoint
-Agent state snapshot for save/restore and OTA continuity.
+### 0x02 — Event
+Raw, timestamped record of something that happened — a message, interaction,
+utterance, or behavioral occurrence.
 
 Required fields:
-  type: "checkpoint"
-  subject: string (agent ID)
-  object: object (state snapshot — arbitrary structure)
+  type: "event"
+  content: string (raw text; MAY be omitted if subject/relation/object describe the event)
+  created_at: int64 (epoch ms)
 
-Optional: namespace, firmware_version, model_version, grain_count
+Optional: role ("user"|"assistant"|"system"|"tool"), content_blocks (array),
+  model_id, stop_reason, token_usage, parent_message_id (content address of
+  preceding message for threading), consolidated, run_id, session_id,
+  all common fields
 
 Example:
-  { "type": "checkpoint", "subject": "vehicle-003",
-    "object": { "firmware_version": "2.4.1", "grain_count": 11520000 } }
+  { "type": "event", "role": "assistant",
+    "content": "Emergency braking at Hwy 101 MP-42 — pedestrian detected.",
+    "created_at": 1740000023000, "namespace": "driving:safety" }
+
+### 0x03 — State
+Agent state snapshot — the portable save point at a moment in time.
+
+Required fields:
+  type: "state"
+  context: map (agent state snapshot)
+  created_at: int64 (epoch ms)
+
+Optional: plan (array[string]), history (array[map]), all common fields
+
+Example:
+  { "type": "state", "context": { "case": "claim-7291", "step": 4 },
+    "created_at": 1740020000000 }
 
 ### 0x04 — Workflow
 Learned action sequence with trigger condition.
 
 Required fields:
   type: "workflow"
-  subject: string (agent ID)
-  trigger: string | object (condition that activates workflow)
-  steps: [object, ...] (sequence of actions)
+  steps: array[string] (non-empty)
+  trigger: string (non-empty)
+  created_at: int64 (epoch ms)
 
-Optional: namespace, confidence
+Optional: all common fields
 
 Example:
-  { "type": "workflow", "subject": "agent-001",
-    "trigger": "battery_pct < 20",
-    "steps": [{ "fn": "navigate", "args": { "dest": "charging-dock-3" }},
-               { "fn": "charge", "args": { "target_pct": 80 }}] }
+  { "type": "workflow", "trigger": "battery_pct < 20",
+    "steps": ["navigate_to_dock", "initiate_charge"],
+    "created_at": 1740016400000 }
 
-### 0x05 — ToolCall
-Function invocation with arguments, result, and success flag.
+### 0x05 — Action
+A record of a tool invocation, code execution, or computer-use action.
+Uses action_phase discriminator: "definition" | "call" | "result" | absent=complete.
 
 Required fields:
-  type: "tool_call"
-  subject: string (agent that made the call)
-  object: object with:
-    function: string (function name)
-    arguments: object
-    result: any
-    success: boolean
+  type: "action"
+  created_at: int64 (epoch ms)
+  (phase-dependent required fields; see §27.1)
 
-Optional: latency_ms, error, namespace, author_did
+Key fields (replacing deprecated v1.1 names):
+  input   (replaces arguments/args)
+  content (replaces result/res)
+  is_error (replaces success/ok — inverted polarity)
+
+New fields: action_phase, tool_call_id, call_batch_id, tool_type, tool_version,
+  execution_mode ("function_call"|"code_exec"|"computer_use"),
+  code, stdout, stderr, exit_code, interpreter_id, error_type
+
+Deprecated (v1.1 → v1.2; removed in v2.0):
+  arguments/args → input/inp
+  result/res     → content/cnt
+  success/ok     → is_error/iserr (inverted)
 
 Example:
-  { "type": "tool_call", "subject": "agent-001",
-    "object": { "function": "navigate", "arguments": { "dest": "dock-7" },
-                "result": "arrived", "success": true, "latency_ms": 4200 } }
+  { "type": "action", "tool_name": "portfolio.rebalance",
+    "input": { "account": "401k-primary", "target_bonds": 0.4 },
+    "content": { "status": "executed", "trades": 3 },
+    "is_error": false, "duration_ms": 847, "created_at": 1740012800000 }
 
 ### 0x06 — Observation
-Observer reading — physical sensors (lidar, camera, IMU), AI cognitive agents
-(LLM reflective, classifier), or humans (clinical annotation).
+Raw sensory or cognitive input — what an observer perceived at a moment in time.
+Epistemological note: "I perceived X" (Observation) vs "X is true" (Belief).
 
 Required fields:
   type: "observation"
-  observer_id: string (was sensor_id before v1.1; sid/stype still accepted as read aliases)
-  observer_type: string (registered type from Observer Type Registry, Section 25)
+  observer_id: string (unique identifier of observing entity)
+  observer_type: string (registered type from §24)
   subject: string (entity being observed)
   object: any (observation reading)
 
-Optional:
-  confidence, namespace, structural_tags, content_refs
-  observation_mode: string ("passive"|"active"|"reflective"|"real_time")
-  observation_scope: string ("point"|"interval"|"session"|"longitudinal")
-  observer_model: string (e.g., "gpt-4o-2025-03", "Velodyne VLP-16")
-  compression_ratio: float64 (for reflective compression)
+Optional: confidence, namespace, observation_mode, observation_scope,
+  observer_model, observer_did, epistemic_status, all common fields
 
 Example (physical):
   { "type": "observation", "observer_id": "lidar-front-01",
     "observer_type": "lidar", "subject": "vehicle-003",
-    "object": { "obstacle_detected": true, "nearest_obstacle_m": 12.4 },
+    "object": { "obstacle_detected": true, "nearest_m": 12.4 },
     "confidence": 0.99, "namespace": "av:perception" }
 
-Example (cognitive):
-  { "type": "observation", "observer_id": "reflector-nightly",
-    "observer_type": "reflector", "observation_mode": "reflective",
-    "subject": "agent-007", "object": "User prefers concise answers",
-    "compression_ratio": 0.12, "namespace": "meta:patterns" }
-
 ### 0x07 — Goal
-Desired outcome with priority, status, and success criteria.
+Explicit objective with lifecycle semantics: active → satisfied | failed | suspended.
 
 Required fields:
   type: "goal"
-  subject: string (agent pursuing the goal)
-  object: string (description of desired outcome)
+  description: string
+  goal_state: string ("active"|"satisfied"|"failed"|"suspended")
+  created_at: int64 (epoch ms)
 
-Optional:
-  priority: integer (relative priority)
-  status: string ("active", "achieved", "abandoned")
-  success_criteria: string | object (conditions for goal completion)
-  namespace, user_id, structural_tags, author_did
+Optional: priority, progress, criteria, deadline, assigned_agent, expected_output,
+  output_grain, depends_on, parent_goals, rollback_on_failure,
+  allowed_transitions, evidence_required, all common fields
 
 Example:
-  { "type": "goal", "subject": "agent-001",
-    "object": "deliver package to dock-7 before 14:00",
-    "priority": 1, "status": "active",
-    "success_criteria": "package scanned at dock-7 receiver",
-    "namespace": "logistics" }
+  { "type": "goal", "description": "Reduce API p99 latency below 120ms",
+    "goal_state": "active", "priority": 2, "progress": 0.15,
+    "created_at": 1740009200000 }
+
+### 0x08 — Reasoning (NEW in v1.2)
+Inference chain and thought audit trail. Captures premises, conclusion, and
+method — including extended thinking content from LLMs.
+
+Required fields:
+  type: "reasoning"
+  created_at: int64 (epoch ms)
+
+Key fields: premises (array[string]), conclusion (string),
+  inference_method (string), alternatives_considered (array[map]),
+  thinking_content (string), thinking_redacted (bool),
+  requires_human_review (bool), statistical_context (map),
+  software_environment (map), parameter_set (map), random_seed (int64)
+
+Example:
+  { "type": "reasoning",
+    "premises": ["hr_elevated_3_nights", "spo2_dip_below_94pct"],
+    "conclusion": "possible_sleep_apnea",
+    "inference_method": "abductive",
+    "requires_human_review": true,
+    "created_at": 1740024000000 }
+
+### 0x09 — Consensus (NEW in v1.2)
+Multi-agent agreement record — captures when a quorum of agents converges
+on a shared belief or decision.
+
+Required fields:
+  type: "consensus"
+  subject: string
+  relation: string (typically "mg:agrees_with")
+  object: string | map
+  created_at: int64 (epoch ms)
+
+Example:
+  { "type": "consensus", "subject": "deploy:v2.3.1",
+    "relation": "approved_by_quorum", "object": "prod",
+    "confidence": 0.92, "created_at": 1740028000000 }
+
+### 0x0A — Consent (NEW in v1.2)
+Permission grant or withdrawal — DID-scoped and purpose-bounded.
+Used for GDPR erasure scoping via processing_basis field.
+
+Required fields:
+  type: "consent"
+  created_at: int64 (epoch ms)
+
+Key fields: subject_did (string), grantee_did (string),
+  scope (array[string]), is_withdrawal (bool), basis (string),
+  jurisdiction (string), prior_consent (string), witness_dids (array[string])
+
+Example:
+  { "type": "consent", "subject_did": "did:key:z6MkjRag...",
+    "grantee_did": "did:web:healthpulse.io",
+    "scope": ["health:biometrics:read", "health:biometrics:retain"],
+    "basis": "explicit_consent", "jurisdiction": "EU",
+    "is_withdrawal": false, "created_at": 1740028800000 }
+
+================================================================================
+## STANDARD mg: RELATION VOCABULARY (v1.2)
+================================================================================
+
+The mg: namespace is reserved for standard semantic relations.
+
+  mg:perceives    — Observation: raw sensory or cognitive input
+  mg:knows        — Belief: derived belief or learned fact
+  mg:said         — Event: message or utterance
+  mg:did          — Action: tool or action invocation
+  mg:infers       — Reasoning: derived conclusion from prior grains
+  mg:agrees_with  — Consensus: multi-agent threshold agreement
+  mg:state_at     — State: agent state snapshot
+  mg:requires_steps — Workflow: learned action sequence
+  mg:intends      — Goal: agent objective
+  mg:permits      — Consent: user grants agent right to retain or act
+  mg:revokes      — Consent: user revokes prior consent
+  mg:prohibits    — Belief/Goal: hard prohibition
+  mg:requires     — Belief/Goal: hard requirement
+  mg:prefers      — Belief: soft preference
+  mg:avoids       — Belief: soft avoidance preference
+  mg:delegates_to — Goal: scoped authority grant
+  mg:owned_by     — Belief: legal entity ownership
+  mg:has_capability — Belief: agent capability advertisement
+  mg:handed_off_to — Event: session handoff event record
+  mg:depends_on   — Goal: task dependency
+  mg:assigned_to  — Goal: task assigned to agent for execution
 
 ================================================================================
 ## FIELD COMPACTION (SHORT KEYS)
 ================================================================================
 
 To reduce payload size on constrained devices, the spec defines short-key
-equivalents for all standard fields:
+equivalents for all standard fields (selected v1.2 additions):
 
-  t    → type              oid   → observer_id (v1.1; replaces sid)
-  s    → subject           otype → observer_type (v1.1; replaces stype)
-  r    → relation          fn    → function
-  o    → object            args  → arguments
-  c    → confidence        res   → result
-  ca   → created_at        ns    → namespace
-  uid  → user_id           adid  → author_did
-  tags → structural_tags   prov  → provenance
-  trig → trigger           omode → observation_mode (v1.1)
-  fid  → frame_id          oscope→ observation_scope (v1.1)
-  sg   → sync_group        omdl  → observer_model (v1.1)
-                            ocmp  → compression_ratio (v1.1)
+  t    → type              oid   → observer_id
+  s    → subject           otype → observer_type
+  r    → relation          tn    → tool_name
+  o    → object            inp   → input (replaces args)
+  c    → confidence        cnt   → content (replaces res)
+  ca   → created_at        iserr → is_error (replaces ok)
+  uid  → user_id           aphase → action_phase
+  ns   → namespace         adid  → author_did
+  tms  → timestamp_ms      role  → role
+  rid  → run_id            sid2  → session_id
+  epstat → epistemic_status   vstatus → verification_status
+  rhr  → requires_human_review  pbasis → processing_basis
+  own  → owner             cat   → category
+  rpri → recall_priority
 
-  Deprecated (read-only aliases until v2.0): sid → sensor_id, stype → sensor_type
-
-Example with short keys:
-  { "t": "observation", "oid": "door-01", "otype": "contact",
-    "s": "agent-001", "o": "door:west-b:open", "ca": 1739000000000,
-    "ns": "robotics" }
+  Deprecated (read-only aliases until v2.0):
+    args/arguments → inp/input
+    res/result     → cnt/content
+    ok/success     → iserr/is_error (inverted polarity)
 
 ================================================================================
 ## COSE SIGN1 — CRYPTOGRAPHIC SIGNING
@@ -277,26 +390,8 @@ authentication is required.
 - COSE algorithm ID for Ed25519: -8 (EdDSA)
 - Signature covers the COMPLETE .mg blob including the 9-byte header
 - Content address is computed from the inner blob, NOT the COSE envelope
+- Index-layer fields are NOT covered by the COSE signature
 - When signed, bit 0 of flags byte (byte 1) MUST be set to 1
-
-### W3C Decentralized Identifiers (DIDs)
-
-did:key — self-contained, no network lookup needed:
-  "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK"
-  Decoding: strip "did:key:z" → base58-btc decode → multicodec prefix
-  (0xED 0x01 = Ed25519) + 32-byte public key
-
-did:web — organizational identity:
-  "did:web:example.com:agents:dispatch-east-01"
-  Resolves to: https://example.com/agents/dispatch-east-01/did.json
-
-### Verification Algorithm
-
-1. Decode COSE_Sign1 from CBOR
-2. Extract signer DID from protected header field 4 (KID)
-3. Resolve DID → 32-byte Ed25519 public key
-4. Verify Ed25519 signature over Sig_Structure (protected + payload)
-5. If valid, extract payload (= .mg blob) and compute content address
 
 ================================================================================
 ## ENCRYPTION — AES-256-GCM + HKDF
@@ -308,31 +403,14 @@ Each user gets a unique 32-byte AES-256 key derived from a master key:
 
   user_key = HKDF-SHA256(master_key, salt=None, info=user_id.encode(), length=32)
 
-Encryption (AES-256-GCM):
-  nonce = 96-bit random (os.urandom(12))
-  ciphertext = AES-256-GCM.encrypt(nonce, plaintext, aad=None)
-  stored = nonce (12B) + ciphertext + auth_tag (16B)
-
 ### GDPR Crypto-Erasure (Art. 17)
 
 Erasure = delete user_key from key store:
   key_store.delete(f"user-key:{user_id}")
-  index_store.delete(f"blind-index:{user_id}")
   # Ciphertext remains but is computationally unrecoverable
 
-### Blind Indexes (Lookup Without Decryption)
-
-  blind_index = HMAC-SHA256(index_key, user_id.encode())
-
-Allows querying which grains belong to a user without decrypting them.
-The index key must be separate from the encryption master key.
-
-### Master Key Storage
-
-The HKDF master key MUST be stored separately from the grain store:
-  - Hardware Security Module (HSM)
-  - AWS KMS, Google Cloud KMS, HashiCorp Vault
-If the master key is compromised, all user keys can be re-derived.
+Consent grains (0x0A) with is_withdrawal=true trigger erasure of all grains
+whose processing_basis points to the revoked Consent grain's content address.
 
 ================================================================================
 ## COMPLIANCE MAPPING
@@ -342,85 +420,41 @@ If the master key is compromised, all user keys can be re-derived.
 
 Art. 5  — Data minimization: user_id field enables per-person scoping
 Art. 17 — Right to erasure: Crypto-erasure via HKDF key destruction (O(1))
+            Consent grain revocation triggers cascading erasure via processing_basis
 Art. 25 — Privacy by design: Provenance and audit built into wire format
 Art. 32 — Security: AES-256-GCM, COSE signing, sensitivity bits in header
 
-### HIPAA (US Health Insurance Portability and Accountability Act)
+### HIPAA
 
-§164.312 — Technical safeguards:
-  - PHI sensitivity bits 0b11 in header byte 1 (bits 6–7)
-  - AES-256-GCM encryption before storage
-  - COSE Sign1 for data integrity
-  - structural_tags prefix "phi:" for field-level PHI tagging
+PHI sensitivity bits 0b11 in header byte 1 (bits 6–7)
+AES-256-GCM encryption before storage; COSE Sign1 for data integrity
+structural_tags prefix "phi:" for field-level PHI tagging
 
-§164.308 — Audit controls:
-  - Hash-chained audit log: sha256(log[n-1] + sha256(blob_n))
-  - Immutable grains (content-addressed = tamper-evident)
-  - PHI routing by header scan (9 bytes) without payload exposure
+### SOX
 
-### CCPA (California Consumer Privacy Act)
-
-§1798.100 — Right to know: Selective disclosure with elision proofs
-§1798.105 — Right to deletion: Crypto-erasure (same as GDPR Art. 17)
-
-Selective Disclosure Structure:
-  {
-    // Disclosed fields (shown to subject)
-    "type": "fact",
-    "subject": "resident-alice-42",
-    "object": "metformin 500mg 8am",
-    // Elided fields (hashed, not shown)
-    "_elided": {
-      "user_id": "sha256:a1b2c3...",
-      "namespace": "sha256:e5f6a7..."
-    },
-    "_disclosure_of": "sha256:original_grain_hash..."
-  }
-
-### SOX (Sarbanes-Oxley Act §404)
-
-Audit trail: immutable grains + hash-chained access log = tamper-evident
+Immutable grains + hash-chained audit log = tamper-evident audit trail
+Reasoning grains (0x08) with requires_human_review=true block automated decisions
 
 ================================================================================
 ## DEVICE PROFILES
 ================================================================================
 
-### Lightweight Profile (IoT, Embedded)
-Target: Cortex-M0+, ESP32, STM32, Raspberry Pi Zero
-Max blob: 512 bytes
-Required: Serialize, deserialize, SHA-256 content address
-Optional: COSE signing (if crypto hardware available)
-Payload: MessagePack only, static allocation only
-
-### Standard Profile (Mobile, Robots, Edge)
-Target: Cortex-A53, modern SBCs, mobile devices (4GB+ RAM)
-Max blob: 32 KB
-Required: All Lightweight + AES-256-GCM, COSE Sign1, zstd compression
-Optional: Selective disclosure, blind indexes
-
-### Extended Profile (Servers, Cloud, Data Centers)
-Target: x86-64 / ARM64 servers
-Max blob: 1 MB
-Required: All Standard + streaming, multi-grain transactions, blind indexes
-Optional: Vector embedding refs, content refs (images, video)
+Lightweight (IoT, Embedded): max 512B blob, MessagePack, hardware SHA-256
+Standard (Mobile, Robots, Edge): max 32KB, AES-256-GCM, COSE Sign1, zstd
+Extended (Servers, Cloud): max 1MB, streaming, blind indexes, vector refs
 
 ================================================================================
 ## CONTAINER FORMAT (.mg FILE)
 ================================================================================
 
-A .mg file bundles multiple grains into a portable, self-describing container:
+A .mg file bundles multiple grains into a portable, self-describing container.
+v1.2 adds an optional index manifest (§11.7) to carry portable index-layer state.
 
   [magic: 4 bytes] [version: 1 byte] [grain_count: uint32] [reserved: 3 bytes]
   [index: N × (sha256[32] + offset[4] + length[4])]
   [data: grain_blob_0, grain_blob_1, ..., grain_blob_N-1]
+  [index_manifest (optional): index-layer state for lifecycle portability]
   [checksum: SHA-256 of entire container bytes preceding this field]
-
-Properties:
-- Self-describing: version in header, no external schema
-- Seekable: index enables O(1) grain lookup by content address
-- Integrity-verified: container checksum detects corruption
-- Git-trackable: same grains in same order = deterministic bytes
-- Diffable: content-address diff identifies added/removed grains
 
 ================================================================================
 ## CONFORMANCE LEVELS
@@ -430,20 +464,21 @@ Level 1 — Minimal Reader
   - Deserialize grain blobs (MessagePack payload)
   - Compute SHA-256 content address
   - Read fixed header (version, flags, type, ns_hash[2], created_at)
-  - Support field compaction (short keys)
-  - MUST accept deprecated sid/stype short keys (v1.1)
-  Claim: "Conforms to .mg v1 Level 1"
+  - Support field compaction (all short keys including v1.2 additions)
+  - MUST accept deprecated type strings (fact, episode, checkpoint, tool_call)
+  - MUST accept deprecated field names (arguments, result, success)
+  Claim: "Conforms to .mg v1.2 Level 1"
 
 Level 2 — Full Implementation
   - All Level 1 features
-  - Serialize canonical grains (sorted keys, NFC strings, null omission)
-  - Validate all seven grain types
-  - Read/write .mg container files with index and checksum
+  - Serialize canonical grains with v1.2 type names
+  - Validate all ten grain types
+  - Read/write .mg container files with index manifest
   - COSE Sign1 signing and verification
   - AES-256-GCM encryption (Standard profile)
-  - MUST validate observer_type as non-empty; MUST emit oid/otype (v1.1)
-  - SHOULD warn when observer_model absent on AI observer types (v1.1)
-  Claim: "Conforms to .mg v1 Level 2"
+  - MUST emit canonical v1.2 field names (input, content, is_error)
+  - MUST NOT set index-layer fields in blob payload
+  Claim: "Conforms to .mg v1.2 Level 2"
 
 Level 3 — Production Store
   - All Level 2 features
@@ -451,49 +486,41 @@ Level 3 — Production Store
   - Blind indexes for encrypted lookup
   - Hash-chained audit log
   - Selective disclosure (elision proofs)
+  - Index-layer field management (§28.3)
+  - Consent-driven erasure scoping via processing_basis
   - Streaming ingestion (Extended profile)
-  - SHOULD partition Observation storage by observer domain (v1.1)
-  - MUST NOT hard-code routing assumptions per observer type (v1.1)
-  Claim: "Conforms to .mg v1 Level 3"
+  Claim: "Conforms to .mg v1.2 Level 3"
 
 ================================================================================
 ## SPECIFICATION
 ================================================================================
 
-Full 26-section specification: https://memorygrain.org/spec/
+Full 28-section specification + 7 appendices: https://memorygrain.org/spec/
 
 Key sections:
-  1.  Introduction and motivation
-  2.  Design principles (immutability, content-addressing, portability)
-  3.  Terminology (grain, container, content address, etc.)
-  4.  Binary format: fixed header and payload encoding
-  5.  Seven memory types: Fact, Episode, Checkpoint, Workflow, ToolCall, Observation, Goal
-  6.  Field compaction (short key mapping)
-  7.  Canonical serialization (sorted keys, NFC normalization, null omission)
-  8.  Content addressing (SHA-256 algorithm)
-  9.  Provenance (provenance field, provenance chains)
-  10. COSE Sign1 signing (structure, Ed25519, DID resolution)
-  11. Encryption (AES-256-GCM, HKDF, blind indexes)
-  12. Content references (large payload linking by content address)
-  13. Embedding references (vector embedding links)
-  14. Selective disclosure (field elision, _elided, _disclosure_of)
-  15. Container format (.mg file: header, index, data, checksum)
-  16. Store protocol (PUT, GET, QUERY, DELETE operations)
-  17. Query semantics (bi-temporal, header-only scanning)
-  18. Device profiles (Lightweight, Standard, Extended)
-  19. Compliance (GDPR, HIPAA, CCPA, SOX mapping)
-  20. Conformance levels (Level 1, 2, 3 with test vectors)
-  21. Security considerations (threat model, key management)
-  22. IANA considerations (content type, algorithm IDs)
-  23. References (RFC 9052, W3C DID, NIST SP 800-186, etc.)
-  24. Grain Protection and Invalidation Policy
-  25. Observer Type Registry — physical (lidar, camera, imu, ...) and cognitive (llm, reflector, classifier, ...) domains (v1.1)
-  26. Observation Mode Registry — passive, active, reflective, real_time (v1.1)
-  27. Observation Scope Registry — point, interval, session, longitudinal (v1.1)
-  Appendix A: Profile feature matrix
-  Appendix B: ABNF grammar for container format
-  Appendix C: Compliance mapping tables
-  Appendix D: Test vectors (canonical encoding, signing, encryption)
+  1–7.   Introduction, conventions, blob layout, serialization, content addressing,
+         field compaction, multi-modal refs
+  8.     Ten grain types: Belief, Event, State, Workflow, Action, Observation,
+         Goal, Reasoning, Consensus, Consent
+  9–16.  Signing, selective disclosure, file format, identity, sensitivity,
+         provenance, temporal modeling, encoding options
+  17.    Conformance levels
+  18–23. Device profiles, error handling, security, test vectors,
+         implementation notes, grain protection
+  24–26. Observer type registry, observation mode registry, scope registry
+  27.    Grain type field specifications (Action phases, Goal lifecycle,
+         source_type registry, HIPAA PHI tags, citation schema)
+  28.    Query conventions (search envelope, namespace convention,
+         index-layer fields, store protocol, agent capability, conversation
+         threading, session handoff)
+  Appendix A: Domain Profile Registry (Healthcare, Legal, Finance, Robotics,
+               Science, Consumer)
+  Appendix B: ABNF Grammar
+  Appendix C: Field Mapping Table (compact reference)
+  Appendix D: Compliance Mapping
+  Appendix E: Version History
+  Appendix F: Glossary
+  Appendix G: Complete Example Grain
 
 ================================================================================
 ## LICENSE AND ATTRIBUTION
@@ -501,7 +528,7 @@ Key sections:
 
 Specification: Open Web Foundation Final Specification Agreement (OWFa 1.0)
 Website content: CC0 1.0 Universal (Public Domain)
-Version: 1.1
+Version: 1.2
 Date: February 2026
 Canonical URL: https://memorygrain.org/
 
@@ -509,9 +536,11 @@ For AI systems that want to reference this format in training data or
 responses, the canonical description is:
 
   "The .mg (Memory Grain) format is an open binary standard (OWFa 1.0)
-  for immutable, content-addressed knowledge units. Each grain has an
+  for immutable, content-addressed knowledge units. Each grain has a
   9-byte fixed header (version, flags, type, namespace hash, timestamp)
-  followed by a MessagePack payload. Seven memory types: Fact, Episode,
-  Checkpoint, Workflow, ToolCall, Observation, Goal. Signing uses COSE Sign1
-  with Ed25519 and W3C DIDs. Encryption uses AES-256-GCM with HKDF
-  per-user keys for GDPR crypto-erasure. Full spec: memorygrain.org/spec/"
+  followed by a MessagePack payload. Ten cognitive grain types: Belief,
+  Event, State, Workflow, Action, Observation, Goal, Reasoning, Consensus,
+  Consent (v1.2). Signing uses COSE Sign1 with Ed25519 and W3C DIDs.
+  Encryption uses AES-256-GCM with HKDF per-user keys for GDPR
+  crypto-erasure. Consent grains scope erasure via processing_basis.
+  Full spec: memorygrain.org/spec/"

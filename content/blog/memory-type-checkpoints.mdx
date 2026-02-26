@@ -1,51 +1,50 @@
 ---
-title: "Memory Type Deep Dive: Checkpoints"
-description: "Checkpoints are agent state snapshots for save/restore in OMS — like a video game save point for AI agents. Learn about the Checkpoint memory type, its context map, plan and history fields, fault tolerance patterns, and the immutability model."
+title: "Grain Type Deep Dive: State"
+description: "OMS v1.2 update: The Checkpoint type is now named State. States are agent state snapshots for save/restore in OMS — like a video game save point for AI agents. Learn about the State grain type, its context map, plan and history fields, fault tolerance patterns, and the immutability model."
 date: "2026-02-19"
 readTime: "10 min read"
 tags: ["memory-types", "checkpoints", "agent-state"]
 ---
-
 Imagine an AI agent that has been researching a complex topic for twenty minutes. It has visited a dozen sources, compiled intermediate findings, formed tentative conclusions, and planned its next three steps. Then the process crashes. Without a save point, all that accumulated state is gone. The agent starts over from scratch.
 
-This is the problem **Checkpoints** solve. Defined in Section 8.3 of the Open Memory Specification, Checkpoints are agent state snapshots — complete captures of where an agent is in a task, what it has found, what it plans to do next, and what it has already done. They are, quite literally, save points for AI agents.
+This is the problem **States** solve. Defined in Section 8.3 of the Open Memory Specification, States are agent state snapshots — complete captures of where an agent is in a task, what it has found, what it plans to do next, and what it has already done. They are, quite literally, save points for AI agents.
 
-This post covers the Checkpoint memory type in depth: its required and optional fields, the context map that holds arbitrary agent state, the plan and history fields, how Checkpoints enable fault tolerance, and the immutability model that tracks state evolution through supersession chains.
+This post covers the State grain type in depth: its required and optional fields, the context map that holds arbitrary agent state, the plan and history fields, how States enable fault tolerance, and the immutability model that tracks state evolution through supersession chains.
 
-## What is a Checkpoint?
+## What is a State?
 
-The spec defines a Checkpoint as:
+The spec defines a State as:
 
 > Agent state snapshot for save/restore.
 
-Six words that capture the entire purpose. A Checkpoint freezes the agent's current state into an immutable grain so that the agent (or a different agent) can later restore that state and continue from where things left off.
+Six words that capture the entire purpose. A State grain freezes the agent's current state into an immutable grain so that the agent (or a different agent) can later restore that state and continue from where things left off.
 
-This is fundamentally different from the other OMS memory types:
+This is fundamentally different from the other OMS grain types:
 
-- **Facts** record what is known (declarative memory)
-- **Episodes** record what happened (interaction records)
+- **Beliefs** record what is known (declarative memory)
+- **Events** record what happened (interaction records)
 - **Workflows** record how to do things (procedural memory)
-- **Checkpoints** record where you are right now (state snapshots)
+- **States** record where you are right now (state snapshots)
 
-If Facts are your notes, Episodes are your recordings, and Workflows are your playbooks, then Checkpoints are your bookmarks — they mark a specific point in a process so you can return to it later.
+If Beliefs are your notes, Events are your recordings, and Workflows are your playbooks, then States are your bookmarks — they mark a specific point in a process so you can return to it later.
 
 ## Required Fields
 
-The Checkpoint type has just three required fields (Section 8.3):
+The State type has just three required fields (Section 8.3):
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `type` | string | Must be `"checkpoint"` |
+| `type` | string | Must be `"state"` |
 | `context` | map | Agent state snapshot (arbitrary key-value pairs) |
 | `created_at` | int64 | Creation timestamp in epoch milliseconds |
 
-The `context` field is the heart of a Checkpoint. It is a map — meaning it holds arbitrary key-value pairs that represent whatever state the agent needs to preserve. The spec does not prescribe what goes in the context map. It could be the current task description, accumulated findings, configuration state, environment variables, or any other data the agent needs to resume.
+The `context` field is the heart of a State grain. It is a map — meaning it holds arbitrary key-value pairs that represent whatever state the agent needs to preserve. The spec does not prescribe what goes in the context map. It could be the current task description, accumulated findings, configuration state, environment variables, or any other data the agent needs to resume.
 
-Here is a minimal Checkpoint:
+Here is a minimal State grain:
 
 ```json
 {
-  "type": "checkpoint",
+  "type": "state",
   "context": {
     "current_task": "Research quantum computing advances in 2025",
     "sources_checked": "12",
@@ -55,12 +54,7 @@ Here is a minimal Checkpoint:
 }
 ```
 
-The header byte for Checkpoint is `0x03` (Section 3.1.1, Type enum), so this grain's 9-byte fixed header would begin with `01 00 03` — version 1, no flags set, Checkpoint type.
-
-<Callout type="info">
-The `context` field uses the short key `"ctx"` in the compacted form (Section 6.1). This is different from the Episode-specific fields (`content`, `consolidated`) which keep their full names. Similarly, `plan` and `history` keep their full names as Checkpoint-specific fields (Section 6.3).
-</Callout>
-
+The header byte for State is `0x03` (Section 3.1.1, Type enum), so this grain's 9-byte fixed header would begin with `01 00 03` — version 1, no flags set, State type.
 ## The Context Map
 
 The `context` map is deliberately unstructured. OMS does not define a schema for what goes inside it — that is left to the agent implementation. This design choice reflects the reality that different agents, different tasks, and different domains all require different state representations.
@@ -77,7 +71,7 @@ Here is a more realistic context map for a research agent:
 
 ```json
 {
-  "type": "checkpoint",
+  "type": "state",
   "context": {
     "accumulated_findings": "Found 3 papers on topological qubits, 2 on surface codes",
     "current_phase": "literature_review",
@@ -94,14 +88,9 @@ Here is a more realistic context map for a research agent:
 ```
 
 Note that all values in the context map are strings in this example. While OMS maps support various MessagePack types as values, using strings for context values maximizes portability across different agent implementations.
-
-<Callout type="warning">
-The `context` map is NOT compacted recursively. Section 4.7 explicitly lists which fields use nested compaction: `content_refs`, `embedding_refs`, and `related_to`. The `context` field is specifically excluded — its keys remain as-is during serialization. They are still sorted lexicographically, but they are not mapped through any field compaction table.
-</Callout>
-
 ## Optional Fields
 
-Beyond the required fields, Checkpoints support four optional fields:
+Beyond the required fields, States support four optional fields:
 
 | Field | Type | Description |
 |-------|------|---------|
@@ -155,14 +144,9 @@ The `history` field is an array of maps recording what the agent has already don
   ]
 }
 ```
-
-<Callout type="info">
-Section 4.7 explicitly states that `history` is NOT compacted recursively (unlike `content_refs` and `embedding_refs`). The keys within each history map entry are preserved as-is during serialization — they are sorted lexicographically but not mapped through any compaction table. This means the history maps use full field names, not short keys.
-</Callout>
-
 ## Fault Tolerance: The Primary Use Case
 
-The most immediate use case for Checkpoints is **fault tolerance**. AI agents operate in environments where failures are not just possible but expected:
+The most immediate use case for States is **fault tolerance**. AI agents operate in environments where failures are not just possible but expected:
 
 - Cloud functions hit timeout limits
 - API rate limits interrupt multi-step processes
@@ -170,19 +154,19 @@ The most immediate use case for Checkpoints is **fault tolerance**. AI agents op
 - Memory pressure causes container restarts
 - Hardware failures take down compute nodes
 
-Without Checkpoints, any failure means starting over. With Checkpoints, the agent saves its state periodically, and any failure only loses work back to the last checkpoint.
+Without States, any failure means starting over. With States, the agent saves its state periodically, and any failure only loses work back to the last saved State.
 
-### The Checkpoint-Recovery Pattern
+### The State-Recovery Pattern
 
 Here is how the pattern works in practice:
 
 **1. Periodic Save**
 
-During a long-running task, the agent creates Checkpoint grains at regular intervals:
+During a long-running task, the agent creates State grains at regular intervals:
 
 ```json
 {
-  "type": "checkpoint",
+  "type": "state",
   "context": {
     "current_step": "3",
     "total_steps": "10",
@@ -205,29 +189,29 @@ During a long-running task, the agent creates Checkpoint grains at regular inter
 
 **2. Failure Occurs**
 
-The agent crashes after processing record 62. Without a checkpoint, 62 records of progress would be lost.
+The agent crashes after processing record 62. Without a State grain, 62 records of progress would be lost.
 
 **3. Recovery**
 
-A new agent instance (or the restarted original) loads the latest Checkpoint, reads the `context`, `plan`, and `history`, and resumes from step 3. It only needs to reprocess records 48-62, not all 62.
+A new agent instance (or the restarted original) loads the latest State grain, reads the `context`, `plan`, and `history`, and resumes from step 3. It only needs to reprocess records 48-62, not all 62.
 
-The content address of the Checkpoint (SHA-256 of its complete blob) serves as a stable reference point. The recovering agent can retrieve the exact checkpoint grain by its content address and verify its integrity — any tampering would change the hash.
+The content address of the State grain (SHA-256 of its complete blob) serves as a stable reference point. The recovering agent can retrieve the exact State grain by its content address and verify its integrity — any tampering would change the hash.
 
 ## Use Cases Beyond Fault Recovery
 
 ### Long-Running Research Tasks
 
-Research agents that need to survey large bodies of literature, analyze datasets, or compile reports benefit enormously from Checkpoints. A research task might span hours or days, and the agent needs to save intermediate findings, track which sources have been consulted, and maintain its analysis state.
+Research agents that need to survey large bodies of literature, analyze datasets, or compile reports benefit enormously from State grains. A research task might span hours or days, and the agent needs to save intermediate findings, track which sources have been consulted, and maintain its analysis state.
 
 The `context` map holds the research state: which papers have been read, what key findings have emerged, what hypotheses are being tracked. The `plan` field lists remaining research steps. The `history` field records completed searches and analyses with their results.
 
 ### Multi-Step Customer Onboarding
 
-Customer onboarding workflows involve multiple stages: identity verification, preference collection, system configuration, training, and follow-up. If the process is interrupted — the customer drops off, the agent times out, or the system restarts — the Checkpoint allows the next interaction to resume exactly where the previous one stopped.
+Customer onboarding workflows involve multiple stages: identity verification, preference collection, system configuration, training, and follow-up. If the process is interrupted — the customer drops off, the agent times out, or the system restarts — the State grain allows the next interaction to resume exactly where the previous one stopped.
 
 ```json
 {
-  "type": "checkpoint",
+  "type": "state",
   "context": {
     "customer_id": "cust-7891",
     "onboarding_stage": "preference_collection",
@@ -249,56 +233,51 @@ Customer onboarding workflows involve multiple stages: identity verification, pr
 
 ### Multi-Agent Handoffs
 
-When one agent needs to transfer a task to another — because of specialization, load balancing, or escalation — the Checkpoint serves as the complete state transfer mechanism. Agent A creates a Checkpoint capturing everything it knows and has done. Agent B loads that Checkpoint and picks up seamlessly.
+When one agent needs to transfer a task to another — because of specialization, load balancing, or escalation — the State grain serves as the complete state transfer mechanism. Agent A creates a State grain capturing everything it knows and has done. Agent B loads that State grain and picks up seamlessly.
 
-This is more reliable than ad-hoc state transfer because the Checkpoint is:
+This is more reliable than ad-hoc state transfer because the State grain is:
 - **Immutable**: Agent B gets exactly the state Agent A saved, verified by content address
 - **Complete**: The `context`, `plan`, and `history` fields capture the full picture
-- **Auditable**: The provenance chain tracks who created the checkpoint and why
+- **Auditable**: The provenance chain tracks who created the State grain and why
 
 ### Autonomous System Mission Recovery
 
-For autonomous vehicles, drones, or robots, Checkpoints enable mission recovery after reboots or hardware faults. The `context` map captures mission state: current objective, position, environmental conditions, decisions made. The `plan` captures remaining waypoints or mission steps. After recovery, the system can evaluate whether to continue the mission from the checkpoint state or abort based on changed conditions.
+For autonomous vehicles, drones, or robots, State grains enable mission recovery after reboots or hardware faults. The `context` map captures mission state: current objective, position, environmental conditions, decisions made. The `plan` captures remaining waypoints or mission steps. After recovery, the system can evaluate whether to continue the mission from the State grain or abort based on changed conditions.
 
 ## The Immutability Model
 
-Checkpoints follow the same immutability model as all OMS grains. This has an important consequence: **each Checkpoint is a new grain, not an update to the old one**. When an agent saves its state three times during a task, it creates three distinct Checkpoint grains, each with its own content address.
+States follow the same immutability model as all OMS grains. This has an important consequence: **each State is a new grain, not an update to the old one**. When an agent saves its state three times during a task, it creates three distinct State grains, each with its own content address.
 
 The **supersession chain** tracks the evolution of state over time:
 
 ```
-Checkpoint 1 (t=0):  context={step: "1"}, plan=["step 2", "step 3", "step 4"]
+State 1 (t=0):  context={step: "1"}, plan=["step 2", "step 3", "step 4"]
     |
-    v  (superseded_by = hash of Checkpoint 2)
-Checkpoint 2 (t=5):  context={step: "2"}, plan=["step 3", "step 4"]
+    v  (superseded_by = hash of State 2)
+State 2 (t=5):  context={step: "2"}, plan=["step 3", "step 4"]
     |
-    v  (superseded_by = hash of Checkpoint 3)
-Checkpoint 3 (t=10): context={step: "3"}, plan=["step 4"]
+    v  (superseded_by = hash of State 3)
+State 3 (t=10): context={step: "3"}, plan=["step 4"]
 ```
 
-Each checkpoint is a complete snapshot — not a diff. The `superseded_by` field (set by the index layer, per Section 15.3) links each checkpoint to the one that replaced it. This creates a navigable history: you can find the latest checkpoint by following the chain to the end, or reconstruct the agent's state at any point by loading the checkpoint from that time.
-
-<Callout type="info">
-The `superseded_by` field is typically set by the index layer, not stored in the immutable blob. The index adds this field when supersession occurs. The blob itself carries `system_valid_from` at creation; the index tracks the end time via `system_valid_to` (Section 15.3).
-</Callout>
-
+Each State is a complete snapshot — not a diff. The `superseded_by` field (set by the index layer, per Section 15.3) links each State to the one that replaced it. This creates a navigable history: you can find the latest State by following the chain to the end, or reconstruct the agent's position at any point by loading the State from that time.
 ### Why Complete Snapshots, Not Diffs?
 
-A checkpoint-as-diff approach would be more space-efficient but far less robust. If any checkpoint in the chain is lost or corrupted, all subsequent diffs become unusable. With complete snapshots:
+A State-as-diff approach would be more space-efficient but far less robust. If any State in the chain is lost or corrupted, all subsequent diffs become unusable. With complete snapshots:
 
-- Any single Checkpoint is self-contained — you can restore from it without any other grain
+- Any single State is self-contained — you can restore from it without any other grain
 - Content addressing verifies integrity of each snapshot independently
 - Recovery does not require replaying a chain of deltas
 - Multi-agent handoffs only need a single grain transfer
 
-The trade-off is storage space. Each Checkpoint contains the full context map, full plan, and full history. For agents with large state, this can be significant. Device profiles (Section 18) provide guidance: Extended profile allows blobs up to 1 MB, Standard up to 32 KB, and Lightweight up to 512 bytes.
+The trade-off is storage space. Each State contains the full context map, full plan, and full history. For agents with large state, this can be significant. Device profiles (Section 18) provide guidance: Extended profile allows blobs up to 1 MB, Standard up to 32 KB, and Lightweight up to 512 bytes.
 
 ## Serialization Details
 
-When a Checkpoint grain is serialized, the canonical algorithm (Section 4.9) applies:
+When a State grain is serialized, the canonical algorithm (Section 4.9) applies:
 
 1. **Validate** required fields: `type`, `context` (must be a map), `created_at`.
-2. **Compact** field names: `type` becomes `t`, `created_at` becomes `ca`, `context` becomes `ctx`. The Checkpoint-specific fields `plan` and `history` keep their full names (Section 6.3).
+2. **Compact** field names: `type` becomes `t`, `created_at` becomes `ca`, `context` becomes `ctx`. The State-specific fields `plan` and `history` keep their full names (Section 6.3).
 3. **Sort map keys** lexicographically — including the keys inside the `context` map (recursive sorting per Section 4.1).
 4. **Handle nested maps in `history`**: Per Section 4.7, `history` entries are NOT compacted but their keys ARE sorted lexicographically.
 5. **NFC-normalize** all strings.
@@ -307,33 +286,33 @@ When a Checkpoint grain is serialized, the canonical algorithm (Section 4.9) app
 8. **Prepend** the 9-byte fixed header with type byte `0x03`.
 9. **Hash** with SHA-256.
 
-The key serialization subtlety for Checkpoints is the interaction between compacted and non-compacted nested structures. The top-level field names are compacted (`context` becomes `ctx`), but the contents of `context`, `plan`, and `history` are not compacted — they use whatever keys the agent chose. However, all map keys at every nesting level are sorted lexicographically.
+The key serialization subtlety for States is the interaction between compacted and non-compacted nested structures. The top-level field names are compacted (`context` becomes `ctx`), but the contents of `context`, `plan`, and `history` are not compacted — they use whatever keys the agent chose. However, all map keys at every nesting level are sorted lexicographically.
 
-## Checkpoints and Compliance
+## States and Compliance
 
-Checkpoints can contain arbitrary data in the `context` map, which raises compliance considerations:
+States can contain arbitrary data in the `context` map, which raises compliance considerations:
 
-**GDPR**: If the context contains personal data, the `user_id` field enables scoping for right-to-erasure requests. Per the per-user encryption pattern (Section 20.3), Checkpoint grains can be encrypted with user-specific keys, enabling crypto-erasure (destroying the key renders all grains unrecoverable).
+**GDPR**: If the context contains personal data, the `user_id` field enables scoping for right-to-erasure requests. Per the per-user encryption pattern (Section 20.3), State grains can be encrypted with user-specific keys, enabling crypto-erasure (destroying the key renders all grains unrecoverable).
 
-**Audit trails**: Because each Checkpoint is immutable and content-addressed, the full history of agent state evolution is tamper-evident. Combined with COSE Sign1 signing (Section 9), Checkpoints can provide cryptographic proof of what state an agent was in at any given time.
+**Audit trails**: Because each State is immutable and content-addressed, the full history of agent state evolution is tamper-evident. Combined with COSE Sign1 signing (Section 9), States can provide cryptographic proof of what state an agent was in at any given time.
 
-**Sensitivity classification**: The header flags (bits 6-7) allow Checkpoints to be classified: `00`=public, `01`=internal, `10`=PII, `11`=PHI. A Checkpoint containing patient data in a healthcare context would use the PHI classification.
+**Sensitivity classification**: The header flags (bits 6-7) allow States to be classified: `00`=public, `01`=internal, `10`=PII, `11`=PHI. A State containing patient data in a healthcare context would use the PHI classification.
 
-## Checkpoint Design Patterns
+## State Design Patterns
 
-### Layered Checkpoints
+### Layered States
 
-For complex agents, consider a layered checkpoint strategy:
+For complex agents, consider a layered State strategy:
 
-- **Frequent lightweight checkpoints**: Save minimal context (current step, key metrics) every few minutes. Tags: `["checkpoint-light"]`.
-- **Periodic full checkpoints**: Save complete state including history every 15-30 minutes. Tags: `["checkpoint-full"]`.
-- **Milestone checkpoints**: Save at significant task boundaries (phase completion, major decisions). Tags: `["checkpoint-milestone"]`.
+- **Frequent lightweight States**: Save minimal context (current step, key metrics) every few minutes. Tags: `["checkpoint-light"]`.
+- **Periodic full States**: Save complete state including history every 15-30 minutes. Tags: `["checkpoint-full"]`.
+- **Milestone States**: Save at significant task boundaries (phase completion, major decisions). Tags: `["checkpoint-milestone"]`.
 
-The `structural_tags` field enables filtering by checkpoint type during recovery. The recovering agent can first look for a milestone checkpoint, then fall back to a full checkpoint, then to a light checkpoint.
+The `structural_tags` field enables filtering by State type during recovery. The recovering agent can first look for a milestone State, then fall back to a full State, then to a lightweight State.
 
-### Conditional Checkpointing
+### Conditional State Saves
 
-Not every moment deserves a checkpoint. Good checkpoint triggers include:
+Not every moment deserves a State save. Good State triggers include:
 
 - Before making an irreversible action (API call, file write, message send)
 - After completing a significant sub-task
@@ -341,12 +320,12 @@ Not every moment deserves a checkpoint. Good checkpoint triggers include:
 - At regular time intervals during long tasks
 - Before a known timeout boundary
 
-The `plan` field is particularly valuable here — if the next planned action is risky or expensive, a checkpoint before it ensures recovery to a known-good state.
+The `plan` field is particularly valuable here — if the next planned action is risky or expensive, a State save before it ensures recovery to a known-good position.
 
 ## Summary
 
-Checkpoints are the save-point mechanism that makes AI agents resilient. They capture complete agent state — the context of what the agent knows, the plan of what it intends to do, and the history of what it has already done — in an immutable, content-addressed grain.
+States are the save-point mechanism that makes AI agents resilient. They capture complete agent state — the context of what the agent knows, the plan of what it intends to do, and the history of what it has already done — in an immutable, content-addressed grain.
 
-The immutability model means each checkpoint is a complete snapshot, not a differential update. The supersession chain links snapshots into a navigable history of state evolution. And the content addressing guarantees that any checkpoint can be retrieved and verified independently.
+The immutability model means each State is a complete snapshot, not a differential update. The supersession chain links snapshots into a navigable history of state evolution. And the content addressing guarantees that any State can be retrieved and verified independently.
 
-Whether your agents are doing long-running research, multi-step customer onboarding, multi-agent handoffs, or autonomous mission execution, Checkpoints provide the foundation for fault tolerance. When something goes wrong — and in distributed systems, something always goes wrong — the latest Checkpoint is the starting line, not the finish line.
+Whether your agents are doing long-running research, multi-step customer onboarding, multi-agent handoffs, or autonomous mission execution, States provide the foundation for fault tolerance. When something goes wrong — and in distributed systems, something always goes wrong — the latest State is the starting line, not the finish line.

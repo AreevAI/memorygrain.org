@@ -18,14 +18,22 @@
   --code-bg: #f0fdfa;
   --code-border: #99f6e4;
 
-  /* Memory type colors */
-  --fact: #3b82f6;
-  --episode: #14b8a6;
-  --checkpoint: #8b5cf6;
+  /* Grain type colors (v1.2 canonical names + v1.1 aliases) */
+  --belief: #3b82f6;
+  --event: #14b8a6;
+  --state: #8b5cf6;
   --workflow: #f59e0b;
-  --toolcall: #ef4444;
+  --action: #ef4444;
   --observation: #0ea5e9;
   --goal: #f97316;
+  --reasoning: #a855f7;
+  --consensus: #10b981;
+  --consent: #ec4899;
+  /* v1.1 aliases — kept for backwards compatibility */
+  --fact: var(--belief);
+  --episode: var(--event);
+  --checkpoint: var(--state);
+  --toolcall: var(--action);
 }
 
 .dark {
@@ -62,13 +70,21 @@
   --color-code-bg: var(--code-bg);
   --color-code-border: var(--code-border);
 
-  --color-fact: var(--fact);
-  --color-episode: var(--episode);
-  --color-checkpoint: var(--checkpoint);
+  --color-belief: var(--belief);
+  --color-event: var(--event);
+  --color-state: var(--state);
   --color-workflow: var(--workflow);
-  --color-toolcall: var(--toolcall);
+  --color-action: var(--action);
   --color-observation: var(--observation);
   --color-goal: var(--goal);
+  --color-reasoning: var(--reasoning);
+  --color-consensus: var(--consensus);
+  --color-consent: var(--consent);
+  /* v1.1 aliases */
+  --color-fact: var(--belief);
+  --color-episode: var(--event);
+  --color-checkpoint: var(--state);
+  --color-toolcall: var(--action);
 }
 
 /* ─── Base ───────────────────────────────────────────────────── */

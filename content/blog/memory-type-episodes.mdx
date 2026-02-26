@@ -1,61 +1,55 @@
 ---
-title: "Memory Type Deep Dive: Episodes"
-description: "Episodes are the raw, unstructured interaction records in OMS — the input to consolidation that extracts structured Facts. Learn about the Episode memory type, its fields, the consolidation pipeline, and real-world use cases."
+title: "Grain Type Deep Dive: Event"
+description: "OMS v1.2 update: The Episode type is now named Event. Events are the raw, unstructured interaction records in OMS — the input to consolidation that extracts structured Beliefs. Learn about the Event grain type, its fields, the consolidation pipeline, and real-world use cases."
 date: "2026-02-19"
 readTime: "9 min read"
 tags: ["memory-types", "episodes", "interaction-records"]
 ---
+Every conversation an AI agent has, every support ticket it processes, every meeting transcript it ingests — these are raw, messy, unstructured records of what happened. In the Open Memory Specification, these records have a name: **Events**.
 
-Every conversation an AI agent has, every support ticket it processes, every meeting transcript it ingests — these are raw, messy, unstructured records of what happened. In the Open Memory Specification, these records have a name: **Episodes**.
+Events are one of the ten grain types defined in OMS v1.2 (Section 8.2). They serve a specific and deliberate purpose in the memory lifecycle: they capture raw interaction text as-is, without any attempt to structure or interpret it. That interpretation comes later, through a process called **consolidation**, which extracts structured Beliefs from the unstructured event content.
 
-Episodes are one of the seven standard memory types defined in OMS v1.0 (Section 8.2). They serve a specific and deliberate purpose in the memory lifecycle: they capture raw interaction text as-is, without any attempt to structure or interpret it. That interpretation comes later, through a process called **consolidation**, which extracts structured Facts from the unstructured episode content.
+This post covers everything you need to know about the Event grain type: its required and optional fields, how it fits into the consolidation pipeline, how to use content references for multi-modal events, and where Events provide real value in production systems.
 
-This post covers everything you need to know about the Episode memory type: its required and optional fields, how it fits into the consolidation pipeline, how to use content references for multi-modal episodes, and where Episodes provide real value in production systems.
+## What is an Event?
 
-## What is an Episode?
+The spec defines an Event as:
 
-The spec defines an Episode as:
+> Raw, unstructured interaction record. Events are input to consolidation, which extracts structured Beliefs.
 
-> Raw, unstructured interaction record. Episodes are input to consolidation, which extracts structured Facts.
+That single sentence captures the key design insight. Events are not knowledge — they are the **raw material** from which knowledge is extracted. Think of it this way:
 
-That single sentence captures the key design insight. Episodes are not knowledge — they are the **raw material** from which knowledge is extracted. Think of it this way:
+- An **Event** records *what happened*: "The user asked about dark mode settings and said they prefer reduced contrast."
+- A **Belief** records *what was learned*: subject="user", relation="prefers", object="dark mode" with confidence=0.9.
 
-- An **Episode** records *what happened*: "The user asked about dark mode settings and said they prefer reduced contrast."
-- A **Fact** records *what was learned*: subject="user", relation="prefers", object="dark mode" with confidence=0.9.
+The Event is a transcript. The Belief is the takeaway.
 
-The Episode is a transcript. The Fact is the takeaway.
-
-This distinction is fundamental to how OMS models the knowledge lifecycle. Raw interaction data enters the system as Episodes, gets processed through consolidation, and emerges as structured Facts that can be queried, linked, and reasoned about. The original Episode is preserved as an immutable record — an audit trail of where the knowledge came from.
+This distinction is fundamental to how OMS models the knowledge lifecycle. Raw interaction data enters the system as Events, gets processed through consolidation, and emerges as structured Beliefs that can be queried, linked, and reasoned about. The original Event is preserved as an immutable record — an audit trail of where the knowledge came from.
 
 ## Required Fields
 
-The Episode type has a deliberately minimal set of required fields (Section 8.2):
+The Event type has a deliberately minimal set of required fields (Section 8.2):
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `type` | string | Must be `"episode"` |
-| `content` | string | Raw text of the episode (non-empty) |
+| `type` | string | Must be `"event"` |
+| `content` | string | Raw text of the event (non-empty) |
 | `created_at` | int64 | Creation timestamp in epoch milliseconds |
 
-That is it. Three required fields. The `content` field is a non-empty string containing the raw text of the interaction — a conversation transcript, a log entry, a meeting summary, whatever the episode captured. The `created_at` timestamp follows the OMS datetime convention (Section 4.8): Unix epoch milliseconds as an int64.
+That is it. Three required fields. The `content` field is a non-empty string containing the raw text of the interaction — a conversation transcript, a log entry, a meeting summary, whatever the event captured. The `created_at` timestamp follows the OMS datetime convention (Section 4.8): Unix epoch milliseconds as an int64.
 
 ```json
 {
-  "type": "episode",
+  "type": "event",
   "content": "User asked about dark mode settings",
   "created_at": 1768471200000
 }
 ```
 
-This minimal grain is valid. It can be serialized, hashed, stored, and later retrieved. The header byte for Episode is `0x02` (Section 3.1.1, Type enum), so this grain's 9-byte fixed header would begin with `01 00 02` — version 1, no flags set, Episode type.
-
-<Callout type="info">
-The `content` field uses the short key `"content"` in the compacted form (Section 6.2) — it is one of the Episode-specific fields that does not get shortened further. Similarly, `consolidated` stays as `"consolidated"` after compaction.
-</Callout>
-
+This minimal grain is valid. It can be serialized, hashed, stored, and later retrieved. The header byte for Event is `0x02` (Section 3.1.1, Type enum), so this grain's 9-byte fixed header would begin with `01 00 02` — version 1, no flags set, Event type.
 ## Optional Fields
 
-Beyond the three required fields, Episodes support several optional fields that add context and enable richer workflows:
+Beyond the three required fields, Events support several optional fields that add context and enable richer workflows:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -63,7 +57,7 @@ Beyond the three required fields, Episodes support several optional fields that 
 | `author_did` | string | — | DID of the creating agent |
 | `namespace` | string | `"shared"` | Memory partition/category |
 | `importance` | float64 | `0.5` | Importance weighting, range [0.0, 1.0] |
-| `consolidated` | bool | `false` | Whether this episode has been processed |
+| `consolidated` | bool | `false` | Whether this event has been processed |
 | `structural_tags` | array[string] | — | Classification tags |
 | `content_refs` | array[map] | — | References to external multi-modal content |
 
@@ -71,25 +65,25 @@ A few of these deserve closer examination.
 
 ### The `consolidated` Flag
 
-The `consolidated` field is a boolean (default `false`) that marks whether an Episode has been processed through the consolidation pipeline. This is a simple but powerful mechanism for tracking the lifecycle of raw interaction data.
+The `consolidated` field is a boolean (default `false`) that marks whether an Event has been processed through the consolidation pipeline. This is a simple but powerful mechanism for tracking the lifecycle of raw interaction data.
 
-When an Episode is first captured, `consolidated` is absent (meaning `false` per Section 4.5 null omission rules). Once a consolidation process has extracted Facts from the Episode, the consuming system can mark it as consolidated. Since OMS grains are immutable, "marking" means creating a new grain with `consolidated: true` that supersedes the original — the supersession chain tracks the state change.
+When an Event is first captured, `consolidated` is absent (meaning `false` per Section 4.5 null omission rules). Once a consolidation process has extracted Beliefs from the Event, the consuming system can mark it as consolidated. Since OMS grains are immutable, "marking" means creating a new grain with `consolidated: true` that supersedes the original — the supersession chain tracks the state change.
 
 ### The `importance` Field
 
-Episodes default to an importance of `0.5` — notably lower than Facts (which default to `0.7`) and Workflows (also `0.7`). This reflects the intuition that raw interaction data is less immediately valuable than the structured knowledge extracted from it. Importance values range from `0.0` to `1.0` as IEEE 754 float64 values (Section 4.3).
+Events default to an importance of `0.5` — notably lower than Beliefs (which default to `0.7`) and Workflows (also `0.7`). This reflects the intuition that raw interaction data is less immediately valuable than the structured knowledge extracted from it. Importance values range from `0.0` to `1.0` as IEEE 754 float64 values (Section 4.3).
 
 ### The `namespace` Field
 
-The `namespace` defaults to `"shared"`, which means Episodes are visible across the shared memory space unless explicitly partitioned. The first two bytes of SHA-256(namespace) are stored in the fixed header (bytes 3-4) as a routing hint, enabling efficient namespace-based filtering without deserialization.
+The `namespace` defaults to `"shared"`, which means Events are visible across the shared memory space unless explicitly partitioned. The first two bytes of SHA-256(namespace) are stored in the fixed header (bytes 3-4) as a routing hint, enabling efficient namespace-based filtering without deserialization.
 
-## Test Vector: Episode in the Wild
+## Test Vector: Event in the Wild
 
-Section 21.2 of the spec provides a test vector for the Episode type:
+Section 21.2 of the spec provides a test vector for the Event type:
 
 ```json
 {
-  "type": "episode",
+  "type": "event",
   "content": "User asked about dark mode settings",
   "created_at": 1768471200000,
   "namespace": "shared",
@@ -103,27 +97,22 @@ This example includes the three required fields plus three optional fields: `nam
 The header for this grain would be:
 - Byte 0: `0x01` (version)
 - Byte 1: `0x00` (no flags — unsigned, uncompressed, MessagePack, public sensitivity)
-- Byte 2: `0x02` (Episode type)
+- Byte 2: `0x02` (Event type)
 - Bytes 3-4: SHA-256("shared")[0:2] as uint16 big-endian = `0xa4 0xd2`
 - Bytes 5-8: `created_at` in epoch seconds (1768471200000 ms / 1000 = 1768471200) as uint32 big-endian = `0x69 0x68 0xba 0xa0`
 
 The full header: `01 00 02 a4 d2 69 68 ba a0`.
+## The Event-to-Belief Consolidation Pipeline
 
-<Callout type="info">
-The namespace hash bytes `a4 d2` are the same as in the Fact test vector (Section 21.1) because both use namespace `"shared"`. This is by design — the namespace hash is a routing optimization that lets systems partition grains by namespace without deserializing the payload.
-</Callout>
-
-## The Episode-to-Fact Consolidation Pipeline
-
-The most important concept surrounding Episodes is **consolidation** — the process of extracting structured knowledge from unstructured interaction records.
+The most important concept surrounding Events is **consolidation** — the process of extracting structured knowledge from unstructured interaction records.
 
 Here is how the pipeline works:
 
-1. **Capture**: Raw interactions are recorded as Episode grains. The `content` field holds the full text. No interpretation is applied at this stage.
+1. **Capture**: Raw interactions are recorded as Event grains. The `content` field holds the full text. No interpretation is applied at this stage.
 
-2. **Consolidation**: A consolidation process (typically an LLM or pattern-matching engine — the spec deliberately does not prescribe the mechanism) analyzes Episode content and extracts structured Facts.
+2. **Consolidation**: A consolidation process (typically an LLM or pattern-matching engine — the spec deliberately does not prescribe the mechanism) analyzes Event content and extracts structured Beliefs.
 
-3. **Tracking**: Extracted Facts carry a `consolidation_level` field (Section 6.1) that tracks the depth of processing:
+3. **Tracking**: Extracted Beliefs carry a `consolidation_level` field (Section 6.1) that tracks the depth of processing:
 
 | Level | Meaning | Example |
 |-------|---------|---------|
@@ -132,13 +121,13 @@ Here is how the pipeline works:
 | 2 | Pattern | Co-occurrence or correlation detected |
 | 3 | Sequence | Temporal ordering or causal chain |
 
-4. **Provenance**: The extracted Facts link back to their source Episodes through the `derived_from` field (an array of content addresses) and the `provenance_chain` (Section 14.1), which records:
+4. **Provenance**: The extracted Beliefs link back to their source Events through the `derived_from` field (an array of content addresses) and the `provenance_chain` (Section 14.1), which records:
 
 ```json
 {
   "provenance_chain": [
     {
-      "source_hash": "<episode-content-address>",
+      "source_hash": "<event-content-address>",
       "method": "frequency_consolidation",
       "weight": 0.8
     }
@@ -146,18 +135,18 @@ Here is how the pipeline works:
 }
 ```
 
-5. **Marking**: The original Episode is marked with `consolidated: true` (via supersession — a new Episode grain that supersedes the original).
+5. **Marking**: The original Event is marked with `consolidated: true` (via supersession — a new Event grain that supersedes the original).
 
-This pipeline creates a clean separation of concerns. The Episode captures everything faithfully. The consolidation process interprets it. The resulting Facts carry explicit provenance back to their source Episodes. And the immutability of all grains means you can always audit the complete chain from knowledge back to raw data.
+This pipeline creates a clean separation of concerns. The Event captures everything faithfully. The consolidation process interprets it. The resulting Beliefs carry explicit provenance back to their source Events. And the immutability of all grains means you can always audit the complete chain from knowledge back to raw data.
 
 ### A Concrete Example
 
 Consider a customer support agent that processes the following conversation:
 
-**Episode** (captured raw):
+**Event** (captured raw):
 ```json
 {
-  "type": "episode",
+  "type": "event",
   "content": "Customer Jane Doe called about order #4521. Said the package arrived damaged. Wants a replacement sent to her new address at 123 Oak St. Also mentioned she recently changed her last name to Smith.",
   "created_at": 1768471200000,
   "user_id": "jane-doe-001",
@@ -167,61 +156,61 @@ Consider a customer support agent that processes the following conversation:
 }
 ```
 
-After consolidation, this single Episode might produce multiple Facts:
+After consolidation, this single Event might produce multiple Beliefs:
 
-**Fact 1** — Order status:
+**Belief 1** — Order status:
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "order-4521",
   "relation": "status",
   "object": "damaged_on_arrival",
   "confidence": 0.95,
   "source_type": "consolidated",
   "consolidation_level": 0,
-  "derived_from": ["<episode-hash>"]
+  "derived_from": ["<event-hash>"]
 }
 ```
 
-**Fact 2** — Address change:
+**Belief 2** — Address change:
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "jane-doe-001",
   "relation": "address",
   "object": "123 Oak St",
   "confidence": 0.9,
   "source_type": "consolidated",
   "consolidation_level": 0,
-  "derived_from": ["<episode-hash>"]
+  "derived_from": ["<event-hash>"]
 }
 ```
 
-**Fact 3** — Name change:
+**Belief 3** — Name change:
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "jane-doe-001",
   "relation": "last_name",
   "object": "Smith",
   "confidence": 0.85,
   "source_type": "consolidated",
   "consolidation_level": 0,
-  "derived_from": ["<episode-hash>"]
+  "derived_from": ["<event-hash>"]
 }
 ```
 
-Each Fact carries `source_type: "consolidated"` and `derived_from` pointing back to the Episode's content address. The consolidation level is 0 (raw) because these are directly extracted from a single episode, not derived from frequency analysis across multiple episodes.
+Each Belief carries `source_type: "consolidated"` and `derived_from` pointing back to the Event's content address. The consolidation level is 0 (raw) because these are directly extracted from a single event, not derived from frequency analysis across multiple events.
 
-## Multi-Modal Episodes with Content References
+## Multi-Modal Events with Content References
 
-Episodes are not limited to text. The `content_refs` field (Section 7.1) allows an Episode to reference external multi-modal content — audio recordings, images, video, or any other modality. The content itself is never embedded in the grain (Design Principle 1: "References, not blobs"), but the reference includes integrity verification.
+Events are not limited to text. The `content_refs` field (Section 7.1) allows an Event to reference external multi-modal content — audio recordings, images, video, or any other modality. The content itself is never embedded in the grain (Design Principle 1: "References, not blobs"), but the reference includes integrity verification.
 
-For example, a field service episode might reference a photo of damaged equipment:
+For example, a field service event might reference a photo of damaged equipment:
 
 ```json
 {
-  "type": "episode",
+  "type": "event",
   "content": "Inspected transformer T-4401. Visible corrosion on terminals A and B. Recommended immediate replacement.",
   "created_at": 1768471200000,
   "namespace": "field-service",
@@ -241,51 +230,46 @@ For example, a field service episode might reference a photo of damaged equipmen
 The `content_refs` entries use their own field compaction map (Section 7.1) with short keys: `u` for URI, `m` for modality, `mt` for MIME type, `sz` for size_bytes, `ck` for checksum, and `md` for metadata. These are compacted during serialization per Section 4.7 (nested compaction applies to `content_refs`).
 
 When the `has_content_refs` flag (bit 3) is set in the header flags byte, consumers know before deserialization that external content is referenced. This supports the "index without deserialize" design principle.
+## Event vs. Belief: The Core Distinction
 
-<Callout type="security">
-URIs in `content_refs` may point to external resources. Section 20.5 requires that implementations validate URIs (rejecting private IP ranges unless explicitly allowed), verify the `checksum` field after fetching, and never auto-fetch during deserialization. Content fetching should always be on-demand.
-</Callout>
+Understanding the boundary between Events and Beliefs is essential for correct use of OMS:
 
-## Episode vs. Fact: The Core Distinction
-
-Understanding the boundary between Episodes and Facts is essential for correct use of OMS:
-
-| Dimension | Episode | Fact |
-|-----------|---------|------|
+| Dimension | Event | Belief |
+|-----------|-------|--------|
 | Structure | Unstructured text (`content` field) | Structured triple (`subject`, `relation`, `object`) |
 | Purpose | Record what happened | Record what was learned |
 | Default importance | 0.5 | 0.7 |
 | Consolidation role | Input (raw data) | Output (extracted knowledge) |
 | Queryability | Full-text search on `content` | Triple-based queries (SPO index) |
 | Type byte | `0x02` | `0x01` |
-| Required fields | 3 (`type`, `content`, `created_at`) | 7 (`type`, `subject`, `relation`, `object`, `confidence`, `source_type`, `created_at`) |
+| Required fields | 3 (`type`, `content`, `created_at`) | 6 (`type`, `subject`, `relation`, `object`, `confidence`, `created_at`) — source_type optional in v1.2 |
 
-Episodes are intentionally lightweight. They require only a type, content string, and timestamp. Facts require a full semantic triple with confidence and source provenance. This asymmetry is deliberate: capturing raw data should have minimal friction, while creating structured knowledge requires more rigor.
+Events are intentionally lightweight. They require only a type, content string, and timestamp. Beliefs require a full semantic triple with confidence scoring. This asymmetry is deliberate: capturing raw data should have minimal friction, while creating structured knowledge requires more rigor.
 
 ## Industry Use Cases
 
 ### Customer Support Conversation Logs
 
-Every customer interaction — chat, email, phone transcript — becomes an Episode. The `user_id` field ties it to the customer for GDPR scoping. Consolidation extracts Facts about customer preferences, issues, and resolutions. The `namespace` field can partition by team ("support-tier1", "support-tier2") while the `structural_tags` field enables classification ("billing", "technical", "returns").
+Every customer interaction — chat, email, phone transcript — becomes an Event. The `user_id` field ties it to the customer for GDPR scoping. Consolidation extracts Beliefs about customer preferences, issues, and resolutions. The `namespace` field can partition by team ("support-tier1", "support-tier2") while the `structural_tags` field enables classification ("billing", "technical", "returns").
 
 ### Therapy and Clinical Session Records
 
-Clinical session notes can be captured as Episodes with appropriate sensitivity classification. The header flags (bits 6-7) support sensitivity levels: `00`=public, `01`=internal, `10`=PII, `11`=PHI. A therapy session record would use `11` (PHI) in the sensitivity bits. The `content_refs` field can link to audio recordings of sessions when consent is obtained.
+Clinical session notes can be captured as Events with appropriate sensitivity classification. The header flags (bits 6-7) support sensitivity levels: `00`=public, `01`=internal, `10`=PII, `11`=PHI. A therapy session record would use `11` (PHI) in the sensitivity bits. The `content_refs` field can link to audio recordings of sessions when consent is obtained.
 
 ### Field Service Reports
 
-Technicians in the field document inspections, repairs, and findings as Episodes. Multi-modal `content_refs` link to photos, videos, and sensor readings captured during the visit. Consolidation later extracts structured Facts about equipment status, failure patterns, and recommended actions.
+Technicians in the field document inspections, repairs, and findings as Events. Multi-modal `content_refs` link to photos, videos, and sensor readings captured during the visit. Consolidation later extracts structured Beliefs about equipment status, failure patterns, and recommended actions.
 
 ### Meeting Transcripts
 
-Meeting recordings, once transcribed, become Episodes. The raw transcript preserves everything that was said. Consolidation extracts action items (which might become Goals), decisions (Facts), and process changes (Workflows). The `content_refs` field can reference the original audio or video recording.
+Meeting recordings, once transcribed, become Events. The raw transcript preserves everything that was said. Consolidation extracts action items (which might become Goals), decisions (Beliefs), and process changes (Workflows). The `content_refs` field can reference the original audio or video recording.
 
 ## Serialization Details
 
-When an Episode grain is serialized following the canonical algorithm (Section 4.9), the process is:
+When an Event grain is serialized following the canonical algorithm (Section 4.9), the process is:
 
 1. **Validate** required fields: `type`, `content`, `created_at` must all be present and non-empty.
-2. **Compact** field names: `type` becomes `t`, `created_at` becomes `ca`, `namespace` becomes `ns`, `importance` becomes `im`, `author_did` becomes `adid`. The Episode-specific fields `content` and `consolidated` remain unchanged (Section 6.2).
+2. **Compact** field names: `type` becomes `t`, `created_at` becomes `ca`, `namespace` becomes `ns`, `importance` becomes `im`, `author_did` becomes `adid`. The Event-specific fields `content` and `consolidated` remain unchanged (Section 6.2).
 3. **NFC-normalize** all strings.
 4. **Omit null/None values** — absent optional fields are simply not included.
 5. **Sort map keys** lexicographically by UTF-8 bytes.
@@ -293,27 +277,22 @@ When an Episode grain is serialized following the canonical algorithm (Section 4
 7. **Prepend** the 9-byte fixed header.
 8. **Hash** with SHA-256 to produce the content address.
 
-For the test vector Episode, the compacted and sorted keys in the payload would be: `adid`, `ca`, `content`, `im`, `ns`, `t` — six keys in lexicographic order.
+For the test vector Event, the compacted and sorted keys in the payload would be: `adid`, `ca`, `content`, `im`, `ns`, `t` — six keys in lexicographic order.
+## Immutability and the Event Lifecycle
 
-<Callout type="info">
-Remember that per Section 4.5, absent fields are semantically distinct from fields set to their default value. An Episode without an explicit `importance` field is different from one with `importance: 0.5` explicitly set — even though the default is 0.5. The explicit value changes the blob bytes and therefore produces a different content address.
-</Callout>
+Like all OMS grains, Events are immutable. Once created, the binary blob never changes — its content address is its permanent identity. This has important implications for the Event lifecycle:
 
-## Immutability and the Episode Lifecycle
-
-Like all OMS grains, Episodes are immutable. Once created, the binary blob never changes — its content address is its permanent identity. This has important implications for the Episode lifecycle:
-
-1. **Capture**: Episode is created with `consolidated` absent (defaults to false).
-2. **Process**: Consolidation extracts Facts, linking them via `derived_from`.
-3. **Mark**: A new Episode grain is created with `consolidated: true` and the same content, superseding the original. The original's `superseded_by` field (set by the index layer, per Section 15.3) points to the new grain.
-4. **Audit**: The full chain is preserved — original Episode, superseding Episode with `consolidated: true`, and all derived Facts with provenance links.
+1. **Capture**: Event is created with `consolidated` absent (defaults to false).
+2. **Process**: Consolidation extracts Beliefs, linking them via `derived_from`.
+3. **Mark**: A new Event grain is created with `consolidated: true` and the same content, superseding the original. The original's `superseded_by` field (set by the index layer, per Section 15.3) points to the new grain.
+4. **Audit**: The full chain is preserved — original Event, superseding Event with `consolidated: true`, and all derived Beliefs with provenance links.
 
 This immutability model means you never lose data. The original transcript is always recoverable, the consolidation results always traceable, and the entire processing history always auditable.
 
 ## Summary
 
-Episodes are where agent memory begins. They are the raw, unstructured capture of what happened — conversation transcripts, interaction logs, session records, field reports. Their deliberately minimal schema (just type, content, and timestamp) makes them easy to create and hard to get wrong.
+Events are where agent memory begins. They are the raw, unstructured capture of what happened — conversation transcripts, interaction logs, session records, field reports. Their deliberately minimal schema (just type, content, and timestamp) makes them easy to create and hard to get wrong.
 
-The real power of Episodes emerges through their relationship with Facts via the consolidation pipeline. Episodes hold the raw data; consolidation extracts the structured knowledge; provenance chains link everything together. This separation keeps the capture fast, the processing auditable, and the resulting knowledge trustworthy.
+The real power of Events emerges through their relationship with Beliefs via the consolidation pipeline. Events hold the raw data; consolidation extracts the structured knowledge; provenance chains link everything together. This separation keeps the capture fast, the processing auditable, and the resulting knowledge trustworthy.
 
-The next time your AI agent has a conversation, remember: that conversation is an Episode. What the agent learns from it is a Fact. And the chain between them is what makes OMS memory verifiable.
+The next time your AI agent has a conversation, remember: that conversation is an Event. What the agent learns from it is a Belief. And the chain between them is what makes OMS memory verifiable.

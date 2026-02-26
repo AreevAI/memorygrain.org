@@ -222,11 +222,11 @@ These functions examine all bytes regardless of where the first mismatch occurs.
 
 ## Practical Example: Customer Service Agent
 
-Consider a customer service agent that stores user preferences. When a user named Alice interacts with the agent, the system creates a Fact grain:
+Consider a customer service agent that stores user preferences. When a user named Alice interacts with the agent, the system creates a Belief grain:
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "alice-42",
   "relation": "prefers",
   "object": "email notifications for order updates",

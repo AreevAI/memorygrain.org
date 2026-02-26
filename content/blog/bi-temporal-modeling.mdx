@@ -10,7 +10,7 @@ When did Alice start working at Acme Corp? When did the agent *learn* that Alice
 
 These are three different questions with three different answers, and conflating them is a common source of bugs in knowledge systems. Traditional databases track one timestamp per record — usually the write time. But production systems that must answer regulatory, legal, or medical questions need to distinguish between *when something was true in the world* and *when the system knew about it*.
 
-This distinction is called **bi-temporal modeling**, and the Open Memory Specification builds it into every memory grain. Section 15 of the OMS v1.0 specification defines five timestamp fields across two independent time axes, enabling queries that no single-timestamp system can support.
+This distinction is called **bi-temporal modeling**, and the Open Memory Specification builds it into every memory grain. Section 15 of the OMS v1.2 specification defines five timestamp fields across two independent time axes, enabling queries that no single-timestamp system can support.
 
 ## The problem with one timestamp
 
@@ -115,11 +115,11 @@ This is the most powerful query and the one most critical for regulatory complia
 
 ## Worked example: Test Vector 3
 
-Section 21.3 of the specification provides Test Vector 3, a bi-temporal fact that illustrates how the five timestamps work together. The grain represents "Alice works at Acme Corp" with explicit temporal bounds:
+Section 21.3 of the specification provides Test Vector 3, a bi-temporal Belief that illustrates how the five timestamps work together. The grain represents "Alice works at Acme Corp" with explicit temporal bounds:
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "Alice",
   "relation": "works_at",
   "object": "Acme Corp",

@@ -6,7 +6,7 @@ readTime: "16 min read"
 tags: ["implementation", "conformance", "getting-started", "tutorial"]
 ---
 
-You understand the concepts — content addressing, canonical serialization, field compaction, the seven memory types. Now you want to build something. Where do you start?
+You understand the concepts — content addressing, canonical serialization, field compaction, the ten grain types. Now you want to build something. Where do you start?
 
 The OMS v1.0 specification defines three conformance levels, each building on the last. This post walks through all three, then provides a step-by-step guide for implementing Level 1 — the minimum viable OMS implementation — using the spec's test vectors to verify correctness.
 
@@ -21,7 +21,7 @@ Level 1 is sufficient for reading, verifying, and storing grains. It requires si
 1. **Deserialize version byte + canonical MessagePack payload** — Parse the 9-byte fixed header and decode the MessagePack map that follows it.
 2. **Compute and verify SHA-256 content addresses** — Hash the entire blob (header + payload) and compare against a claimed content address.
 3. **Support field compaction (short keys to full names)** — When you encounter a key `"s"` in the payload, you must know it means `"subject"`. When you encounter `"c"`, it means `"confidence"`. The full mapping is in Section 6 of the spec.
-4. **Support all 7 memory types** — Fact, Episode, Checkpoint, Workflow, ToolCall, Observation, and Goal. Your deserializer must handle the required fields for each.
+4. **Support all 10 grain types** — Fact, Episode, Checkpoint, Workflow, ToolCall, Observation, and Goal. Your deserializer must handle the required fields for each.
 5. **Ignore unknown fields** — If you encounter a key that is not in the field compaction mapping, preserve it as-is. Do not error. This is how OMS achieves forward compatibility.
 6. **Constant-time hash comparison** — When verifying content addresses, use a constant-time comparison function, not string equality. This prevents timing attacks where an adversary measures response times to guess hash values byte by byte.
 
@@ -78,7 +78,7 @@ Your parser should:
 1. Check that the blob is at least 10 bytes (9-byte header + minimum 1-byte payload).
 2. Verify byte 0 is `0x01`. If not, reject with `ERR_VERSION`.
 3. Extract the flags byte. The bits tell you about signing, encryption, compression, content refs, embedding refs, CBOR encoding, and sensitivity level.
-4. Extract the type byte. Values `0x01` through `0x07` are the seven standard memory types.
+4. Extract the type byte. Values `0x01` through `0x07` are the ten standard grain types.
 5. Extract the namespace hash (bytes 3-4) and created-at timestamp (bytes 5-8).
 
 ### Step 2: Decode the MessagePack Payload
@@ -113,7 +113,7 @@ Nested compaction applies only to three fields: `content_refs`, `embedding_refs`
 
 ### Step 4: Validate the Type Field
 
-After decompaction, check that the `type` field exists. If absent, reject with `ERR_NO_TYPE`. The value must be one of: `"fact"`, `"episode"`, `"checkpoint"`, `"workflow"`, `"tool_call"`, `"observation"`, or `"goal"`.
+After decompaction, check that the `type` field exists. If absent, reject with `ERR_NO_TYPE`. The value must be one of: `"belief"`, `"event"`, `"state"`, `"workflow"`, `"action"`, `"observation"`, or `"goal"`.
 
 For unknown type values, a Level 1 reader deserializes the grain as an opaque map without schema validation — it does not reject the grain.
 
@@ -153,11 +153,11 @@ const isValid = crypto.timingSafeEqual(
 
 The spec provides Vector 1 as a complete byte-level reference. Let us walk through it.
 
-**Input (a minimal Fact grain):**
+**Input (a minimal Belief grain, using the v1.0 type name `"fact"`; v1.2 canonical name is `"belief"`):**
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "user",
   "relation": "prefers",
   "object": "dark mode",

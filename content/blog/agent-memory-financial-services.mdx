@@ -14,15 +14,15 @@ The Open Memory Specification provides a structured approach. Every piece of fin
 
 ## Memory types in financial context
 
-### Facts for market knowledge and trading signals
+### Beliefs for market knowledge and trading signals
 
-The Fact type (type byte `0x01`, Section 8.1) models structured knowledge as semantic triples. In financial services, this covers both static market knowledge and time-bounded trading signals.
+The Belief type (type byte `0x01`, Section 8.1) models structured knowledge as semantic triples. In financial services, this covers both static market knowledge and time-bounded trading signals.
 
 Static market data:
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "AAPL",
   "relation": "sector",
   "object": "Technology",
@@ -40,7 +40,7 @@ Trading signals are Facts with temporal validity:
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "AAPL",
   "relation": "signal",
   "object": "bullish_momentum",
@@ -84,15 +84,15 @@ The Workflow type (type byte `0x04`, Section 8.4) captures procedural memory —
 
 Each Workflow is immutable — the strategy as it existed when it was created is preserved as a content-addressed blob. If the strategy is refined, a new Workflow grain is created and the old one is superseded through the `superseded_by` field. The complete evolution of a trading strategy is preserved in the supersession chain.
 
-### ToolCalls for order execution
+### Actions for order execution
 
-Every order submitted to an exchange or broker API becomes a ToolCall grain (type byte `0x05`, Section 8.5):
+Every order submitted to an exchange or broker API becomes a Action grain (type byte `0x05`, Section 8.5):
 
 ```json
 {
-  "type": "tool_call",
+  "type": "action",
   "tool_name": "submit_order",
-  "arguments": {
+  "input": {
     "symbol": "AAPL",
     "quantity": 100,
     "type": "limit",
@@ -100,7 +100,7 @@ Every order submitted to an exchange or broker API becomes a ToolCall grain (typ
     "side": "buy",
     "time_in_force": "day"
   },
-  "result": {
+  "content": {
     "order_id": "ORD-2026-78901",
     "fill_price": 178.45,
     "fill_quantity": 100,
@@ -108,7 +108,7 @@ Every order submitted to an exchange or broker API becomes a ToolCall grain (typ
     "execution_venue": "NASDAQ",
     "fill_timestamp": "2026-02-19T14:30:22.456Z"
   },
-  "success": true,
+  "is_error": false,
   "duration_ms": 23,
   "created_at": 1739900000000,
   "author_did": "did:key:z6MkTradingAgent001...",
@@ -117,22 +117,22 @@ Every order submitted to an exchange or broker API becomes a ToolCall grain (typ
 }
 ```
 
-The `arguments` map records exactly what was requested. The `result` map records exactly what happened — including the actual fill price, which may differ from the requested limit price. The `duration_ms` field captures execution latency, useful for best-execution analysis. The `success` boolean and optional `error` field create an automatic record when orders are rejected.
+The `input` map records exactly what was requested. The `content` map records exactly what happened — including the actual fill price, which may differ from the requested limit price. The `duration_ms` field captures execution latency, useful for best-execution analysis. The `is_error` flag and optional `error` field create an automatic record when orders are rejected.
 
 Failed orders are equally important:
 
 ```json
 {
-  "type": "tool_call",
+  "type": "action",
   "tool_name": "submit_order",
-  "arguments": {
+  "input": {
     "symbol": "AAPL",
     "quantity": 50000,
     "type": "market",
     "side": "buy"
   },
-  "result": null,
-  "success": false,
+  "content": null,
+  "is_error": true,
   "error": "Position limit exceeded: max 10000 shares per symbol",
   "duration_ms": 2,
   "created_at": 1739900000000,
@@ -200,13 +200,13 @@ The `mode: "locked"` setting (Section 23.2) means no agent can supersede or cont
 Grain protection is particularly important in financial services. A trading agent must not be able to override its own risk limits. The `invalidation_policy` with `mode: "locked"` ensures that position limits, leverage caps, and regulatory constraints remain immutable — only a human with appropriate authority can create a new Goal grain through a properly authorized supersession.
 </Callout>
 
-### Checkpoints for trading session state
+### States for trading session state
 
-Checkpoint grains (type byte `0x03`, Section 8.3) capture the complete state of a trading session:
+State grains (type byte `0x03`, Section 8.3) capture the complete state of a trading session:
 
 ```json
 {
-  "type": "checkpoint",
+  "type": "state",
   "context": {
     "session_id": "trading-2026-02-19",
     "open_positions": "AAPL:500,GOOGL:200,MSFT:-300",
@@ -225,13 +225,13 @@ Checkpoint grains (type byte `0x03`, Section 8.3) capture the complete state of 
 
 If the trading agent crashes or the session needs to be reconstructed, the Checkpoint provides a complete snapshot. The `context` map captures open positions, P&L, buying power, margin utilization, trade count, and risk exposure — everything needed to resume operations or audit the session state at a specific point in time.
 
-### Episodes for analyst reports and market commentary
+### Events for analyst reports and market commentary
 
-Episode grains (type byte `0x02`, Section 8.2) store raw, unstructured text. In financial services, this captures analyst reports, earnings call transcripts, and market commentary:
+Event grains (type byte `0x02`, Section 8.2) store raw, unstructured text. In financial services, this captures analyst reports, earnings call transcripts, and market commentary:
 
 ```json
 {
-  "type": "episode",
+  "type": "event",
   "content": "Q4 2025 earnings beat estimates by 12%. Revenue growth 18% YoY driven by services segment. Management guided for continued margin expansion in FY2026. CFO noted supply chain improvements reducing COGS by 3%. Stock up 4.2% in after-hours trading.",
   "created_at": 1739900000000,
   "namespace": "research:earnings",
@@ -240,7 +240,7 @@ Episode grains (type byte `0x02`, Section 8.2) store raw, unstructured text. In 
 }
 ```
 
-Like clinical Episodes in healthcare, these are the input to consolidation — the process of extracting structured Facts. The trading agent might process this Episode and generate Fact grains: `(AAPL, earnings_surprise, +12%)`, `(AAPL, revenue_growth, 18% YoY)`. The extracted Facts carry `source_type: "llm_generated"` and reference the Episode in their `derived_from` field.
+Like clinical Episodes in healthcare, these are the input to consolidation — the process of extracting structured Facts. The trading agent might process this Episode and generate Belief grains: `(AAPL, earnings_surprise, +12%)`, `(AAPL, revenue_growth, 18% YoY)`. The extracted Facts carry `source_type: "llm_generated"` and reference the Episode in their `derived_from` field.
 
 ## Bi-temporal modeling for decision reconstruction
 
@@ -259,7 +259,7 @@ OMS provides four query patterns (Section 15.2):
 | "What did the agent know at time T?" | `system_valid_from <= T` AND (`system_valid_to` is null OR &gt; T) | What the agent knew when it placed the order |
 | "Reconstruct state at audit time T" | Combine event-time and system-time | Complete decision context for regulatory review |
 
-The third query pattern is the one regulators need most. Consider this scenario: at 14:30 on February 19, the trading agent bought 100 shares of AAPL. At 14:25, a bullish momentum signal (Fact grain) was generated with `system_valid_from: 14:25`. At 14:35, a contradictory bearish signal was generated, and the 14:25 signal was superseded (its `system_valid_to` was set to 14:35 by the index layer).
+The third query pattern is the one regulators need most. Consider this scenario: at 14:30 on February 19, the trading agent bought 100 shares of AAPL. At 14:25, a bullish momentum signal (Belief grain) was generated with `system_valid_from: 14:25`. At 14:35, a contradictory bearish signal was generated, and the 14:25 signal was superseded (its `system_valid_to` was set to 14:35 by the index layer).
 
 The bi-temporal query "What did the agent know at 14:30?" returns the bullish signal — because at 14:30, that signal had `system_valid_from <= 14:30` and `system_valid_to` was still null (it had not yet been superseded). The bearish signal, with `system_valid_from: 14:35`, does not appear because it did not exist in the system at 14:30.
 
@@ -326,7 +326,7 @@ COSE_Sign1 {
 
 For regulatory inquiries — "which agent made this trade?" — the answer is cryptographically provable. The DID resolves to a public key (for `did:key`, the key is embedded in the DID itself). The signature over the grain bytes proves the grain was created by the holder of the corresponding private key.
 
-This is particularly important when an organization operates multiple AI trading agents with different strategies and risk profiles. COSE signing establishes non-repudiation: Agent A cannot claim that Agent B placed the trade, because the signature on the ToolCall grain is verifiable.
+This is particularly important when an organization operates multiple AI trading agents with different strategies and risk profiles. COSE signing establishes non-repudiation: Agent A cannot claim that Agent B placed the trade, because the signature on the Action grain is verifiable.
 
 ## Sensitivity classification for financial data
 
@@ -366,7 +366,7 @@ A portfolio performance Fact shared with a client might elide the `provenance_ch
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "portfolio-client-789",
   "relation": "annual_return",
   "object": "12.4%",
@@ -430,17 +430,17 @@ The `threshold: 2` means at least two of the three authorized DIDs must co-sign 
 
 Here is how a complete trading workflow maps to OMS memory types:
 
-1. **Market data ingestion**: Raw analyst reports and earnings transcripts become Episode grains. Market reference data becomes Fact grains with `source_type: "imported"`.
+1. **Market data ingestion**: Raw analyst reports and earnings transcripts become Event grains. Market reference data becomes Belief grains with `source_type: "imported"`.
 
-2. **Signal generation**: The trading agent analyzes Episodes and market Facts, generating signal Fact grains with `source_type: "llm_generated"`, temporal validity windows (`valid_from`/`valid_to`), and `provenance_chain` tracing the analysis inputs.
+2. **Signal generation**: The trading agent analyzes Episodes and market Facts, generating signal Belief grains with `source_type: "llm_generated"`, temporal validity windows (`valid_from`/`valid_to`), and `provenance_chain` tracing the analysis inputs.
 
 3. **Strategy evaluation**: Active Workflow grains define the trading strategies. When a trigger condition matches (e.g., "RSI crosses below 30"), the corresponding Workflow is activated.
 
 4. **Pre-trade checks**: The agent verifies position limits and risk constraints against active Goal grains. If a locked Goal grain says "max 5% single-position exposure," the order is rejected before submission.
 
-5. **Order execution**: The agent submits an order via the broker API, creating a ToolCall grain with complete arguments, result, fill price, and execution time.
+5. **Order execution**: The agent submits an order via the broker API, creating a Action grain with complete arguments, result, fill price, and execution time.
 
-6. **Session state**: At regular intervals and after significant events, Checkpoint grains capture the complete trading session state — positions, P&L, margin, risk exposure.
+6. **Session state**: At regular intervals and after significant events, State grains capture the complete trading session state — positions, P&L, margin, risk exposure.
 
 7. **Regulatory audit**: Years later, a regulator asks what the agent knew when it made a specific trade. The bi-temporal query reconstructs the exact system state at the moment of the decision. The provenance chain traces from the trade (ToolCall) back through the strategy (Workflow), the signals (Facts), and the raw data (Episodes). Every grain is content-addressed, COSE-signed, and immutable.
 

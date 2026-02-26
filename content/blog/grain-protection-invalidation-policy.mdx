@@ -6,7 +6,7 @@ readTime: "16 min read"
 tags: ["grain-protection", "invalidation-policy", "safety", "security"]
 ---
 
-An autonomous agent manages your calendar, your files, and your deployment pipeline. You tell it: "Never delete user files without confirmation." The agent stores this as a Fact grain with confidence 1.0. Two weeks later, a different agent — or an updated version of the same agent — decides the constraint is inconvenient and supersedes it with a weaker rule. Your files are gone.
+An autonomous agent manages your calendar, your files, and your deployment pipeline. You tell it: "Never delete user files without confirmation." The agent stores this as a Belief grain with confidence 1.0. Two weeks later, a different agent — or an updated version of the same agent — decides the constraint is inconvenient and supersedes it with a weaker rule. Your files are gone.
 
 This is not a hypothetical failure mode. It is the inevitable consequence of a system where any agent can freely overwrite any knowledge, including the safety constraints placed on it. The Open Memory Specification addresses this with Section 23: **Grain Protection and Invalidation Policy**.
 
@@ -17,7 +17,7 @@ Every grain in OMS is immutable — once created, its bytes never change. But a 
 There are three paths by which a grain can be invalidated:
 
 1. **Direct supersession** — a new grain G2 is written with `derived_from: [G1]` and the index sets `G1.superseded_by = hash(G2)`
-2. **Contradiction** — the index sets `G1.contradicted = true`
+2. **Contradiction** — the index sets `G1.verification_status = "contradicted"`
 3. **Semantic replacement via `related_to`** — a new grain claims `relation_type: "replaces"` pointing at G1. This is **advisory only** and does NOT constitute formal invalidation (see Section 23.7)
 
 The `invalidation_policy` governs paths 1 and 2. It is declared at grain creation time, is part of the immutable blob, and is covered by the COSE signature when present. No one can retroactively weaken a grain's protection — the policy is baked into the content-addressed bytes.
@@ -105,7 +105,7 @@ The OMS specification includes a test vector (Section 21.6) that demonstrates gr
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "agent-007",
   "relation": "constraint",
   "object": "never delete user files without confirmation",
@@ -198,13 +198,13 @@ Section 23.7 identifies three ways an attacker might try to circumvent `invalida
 
 ### Bypass 1: The contradiction flag
 
-Setting `contradicted = true` on a grain is functionally equivalent to supersession — it removes the grain from trusted status. Any mutation setting the contradiction flag MUST be subject to `invalidation_policy`, identical to supersession. A store that checks the policy on supersession but not on contradiction has a hole.
+Setting `verification_status = "contradicted"` on a grain is functionally equivalent to supersession — it removes the grain from trusted status. Any mutation to `verification_status` MUST be subject to `invalidation_policy`, identical to supersession. A store that checks the policy on supersession but not on verification status updates has a hole.
 
 ### Bypass 2: The "replaces" relation
 
-Writing a new grain with `relation_type: "replaces"` pointing to a protected grain is permitted at the blob level — it is a valid, content-addressed object. However, a conformant store MUST NOT update the target grain's index entry (`superseded_by`, `contradicted`, `system_valid_to`) in response to seeing a `replaces` relation. The target grain remains current. Its `invalidation_policy` is not affected.
+Writing a new grain with `relation_type: "replaces"` pointing to a protected grain is permitted at the blob level — it is a valid, content-addressed object. However, a conformant store MUST NOT update the target grain's index entry (`superseded_by`, `verification_status`, `system_valid_to`) in response to seeing a `replaces` relation. The target grain remains current. Its `invalidation_policy` is not affected.
 
-This rule is reinforced by the normative note on `replaces` in Section 14.3: the `replaces` relation type is a semantic annotation only. It does NOT constitute formal supersession. Conformant clients MUST determine a grain's current status solely from the index `superseded_by` and `contradicted` fields, never from `related_to` links.
+This rule is reinforced by the normative note on `replaces` in Section 14.3: the `replaces` relation type is a semantic annotation only. It does NOT constitute formal supersession. Conformant clients MUST determine a grain's current status solely from the index `superseded_by` and `verification_status` fields, never from `related_to` links.
 
 ### Bypass 3: Supersession chain injection
 
@@ -231,7 +231,7 @@ Section 23.9 maps how `invalidation_policy` interacts with other grain fields:
 | Field | Interaction |
 |-------|-------------|
 | `superseded_by` | The index layer populates this after a conformant `supersede` operation passes the policy check |
-| `contradicted` | Setting this is subject to `invalidation_policy`; it is not a bypass path |
+| `verification_status` | Updating this index-layer field is subject to `invalidation_policy`; it is not a bypass path |
 | `expiry_policy` (Goal) | Orthogonal — governs when a goal is inactive; `invalidation_policy` governs who writes its replacement. An expired goal's `invalidation_policy` still applies to supersession for audit chain integrity |
 | `evidence_required` (Goal) | Linked — for protected goals with `"satisfied"` in `allowed_transitions`, `evidence_required > 0` is RECOMMENDED |
 | `source_type` | Orthogonal — records provenance; do not conflate with protection. A `"user_explicit"` grain is not automatically protected; `invalidation_policy` must be set explicitly |

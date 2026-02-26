@@ -6,11 +6,11 @@ readTime: "12 min read"
 tags: ["field-compaction", "optimization", "binary-format", "technical"]
 ---
 
-A Fact grain in the Open Memory Specification has fields like `subject`, `relation`, `object`, `confidence`, `source_type`, `created_at`, `author_did`, and `namespace`. Those are clear, readable names — exactly what you want when designing a schema. But when you are serializing millions of grains into compact binary blobs, every byte counts.
+A Belief grain in the Open Memory Specification has fields like `subject`, `relation`, `object`, `confidence`, `source_type`, `created_at`, `author_did`, and `namespace`. Those are clear, readable names — exactly what you want when designing a schema. But when you are serializing millions of grains into compact binary blobs, every byte counts.
 
 The string `"confidence"` is 10 bytes in UTF-8. The string `"c"` is 1 byte. Multiply that saving across every field in every grain in a store with millions of entries, and field compaction becomes a significant optimization.
 
-Section 6 of the OMS v1.0 specification defines a **bijective mapping** — a one-to-one, reversible correspondence — between human-readable field names and short keys. Serializers replace full names with short keys before encoding. Deserializers reverse the mapping after decoding. The grain's logical structure is preserved exactly; only the wire representation changes.
+Section 6 of the OMS v1.2 specification defines a **bijective mapping** — a one-to-one, reversible correspondence — between human-readable field names and short keys. Serializers replace full names with short keys before encoding. Deserializers reverse the mapping after decoding. The grain's logical structure is preserved exactly; only the wire representation changes.
 
 ## How Compaction Works
 
@@ -24,11 +24,11 @@ Because the mapping is bijective (every full name maps to exactly one short key,
 
 ## Core Fields (Section 6.1)
 
-The core field map applies to all seven memory types. Here is the complete table:
+The core field map applies to all ten grain types. Here is the complete table:
 
 | Full Name | Short Key | Type | Description |
 |-----------|-----------|------|-------------|
-| `type` | `t` | string | Memory type: "fact", "episode", etc. |
+| `type` | `t` | string | Grain type: "belief", "event", "state", "action", etc. |
 | `subject` | `s` | string | Entity being described (RDF subject) |
 | `relation` | `r` | string | Semantic relationship (RDF predicate) |
 | `object` | `o` | string | Value or target (RDF object) |
@@ -42,7 +42,6 @@ The core field map applies to all seven memory types. Here is the complete table
 | `system_valid_to` | `svt` | int64 | When grain was superseded in system |
 | `context` | `ctx` | map | Contextual metadata (string to string) |
 | `superseded_by` | `sb` | string | Content address of superseding grain |
-| `contradicted` | `ct` | bool | Whether this grain is contradicted |
 | `importance` | `im` | float64 | Importance weighting [0.0, 1.0] |
 | `author_did` | `adid` | string | DID of creating agent |
 | `namespace` | `ns` | string | Memory partition/category |
@@ -64,29 +63,29 @@ The core field map applies to all seven memory types. Here is the complete table
 | `supersession_justification` | `sj` | string | Required when superseding a soft-locked grain |
 | `supersession_auth` | `sa` | array | COSE signatures authorizing quorum supersession |
 
-That is 34 core field mappings. Some short keys are mnemonic (`t` for type, `s` for subject, `c` for confidence), while others use abbreviations (`adid` for author_did, `svf` for system_valid_from). The mapping is normative — implementations MUST NOT invent their own short keys.
+That is 33 core field mappings (the `contradicted` / `ct` field was removed in v1.2 — use `verification_status` in the index layer instead). Some short keys are mnemonic (`t` for type, `s` for subject, `c` for confidence), while others use abbreviations (`adid` for author_did, `svf` for system_valid_from). The mapping is normative — implementations MUST NOT invent their own short keys.
 
 ## Type-Specific Fields
 
 Beyond the core fields, each memory type defines additional fields with their own compaction mappings.
 
-### Episode (Section 6.2)
+### Event (Section 6.2)
 
 | Full Name | Short Key | Type |
 |-----------|-----------|------|
 | `content` | `content` | string |
 | `consolidated` | `consolidated` | bool |
 
-Note that Episode fields retain their full names as short keys. The names are already concise enough that compaction provides no benefit.
+Note that Event fields retain their full names as short keys. The names are already concise enough that compaction provides no benefit.
 
-### Checkpoint (Section 6.3)
+### State (Section 6.3)
 
 | Full Name | Short Key | Type |
 |-----------|-----------|------|
 | `plan` | `plan` | array[string] |
 | `history` | `history` | array[map] |
 
-Like Episode, Checkpoint fields are already short and retain their names.
+Like Event, State fields are already short and retain their names.
 
 ### Workflow (Section 6.4)
 
@@ -97,30 +96,33 @@ Like Episode, Checkpoint fields are already short and retain their names.
 
 Again, these field names are short enough that the mapping is an identity function.
 
-### ToolCall (Section 6.5)
+### Action (Section 6.5)
 
-| Full Name | Short Key | Type |
-|-----------|-----------|------|
-| `tool_name` | `tn` | string |
-| `arguments` | `args` | map |
-| `result` | `res` | any |
-| `success` | `ok` | bool |
-| `error` | `err` | string |
-| `duration_ms` | `dur` | int |
-| `parent_task_id` | `ptid` | string |
+| Full Name | Short Key | Type | Notes |
+|-----------|-----------|------|-------|
+| `tool_name` | `tn` | string | |
+| `input` | `inp` | map | v1.2 (replaces `arguments`/`args`, removed) |
+| `content` | `cnt` | any | v1.2 (replaces `result`/`res`, removed) |
+| `is_error` | `iserr` | bool | v1.2 (replaces `success`/`ok`, removed; polarity inverted) |
+| `action_phase` | `aphase` | string | v1.2 new: `"definition"` \| `"call"` \| `"result"` |
+| `tool_call_id` | `tcid` | string | v1.2 new |
+| `error_type` | `etype` | string | v1.2 new |
+| `error` | `err` | string | |
+| `duration_ms` | `dur` | int | |
+| `parent_task_id` | `ptid` | string | |
 
-ToolCall fields see meaningful compaction. `tool_name` (9 bytes) becomes `tn` (2 bytes). `arguments` (9 bytes) becomes `args` (4 bytes). `success` (7 bytes) becomes `ok` (2 bytes). For agents that make thousands of tool calls, this adds up.
+Action fields see meaningful compaction. `tool_name` (9 bytes) becomes `tn` (2 bytes). `input` (5 bytes) becomes `inp` (3 bytes). Note: the old `arguments`/`args`, `result`/`res`, and `success`/`ok` short keys were **removed** in v1.2 — implementations emitting those keys are non-conformant.
 
 ### Observation (Section 6.6)
 
 | Full Name | Short Key | Type | Note |
 |-----------|-----------|------|------|
-| `observer_id` | `oid` | string | v1.0 `sensor_id` / `sid` accepted as deprecated alias |
-| `observer_type` | `otype` | string | v1.0 `sensor_type` / `stype` accepted as deprecated alias |
+| `observer_id` | `oid` | string | |
+| `observer_type` | `otype` | string | |
 | `frame_id` | `fid` | string | |
 | `sync_group` | `sg` | string | |
 
-Observation grains from high-frequency sensor data (LiDAR, cameras, IMUs) and cognitive agents benefit from compaction because they are produced in large volumes. Deserializers encountering the deprecated short keys `sid` or `stype` MUST map them to `observer_id` and `observer_type` respectively.
+Observation grains from high-frequency sensor data (LiDAR, cameras, IMUs) and cognitive agents benefit from compaction because they are produced in large volumes. The v1.0 short keys `sid` and `stype` (for `sensor_id` and `sensor_type`) were removed in v1.2 — use `oid` and `otype` exclusively.
 
 ### Goal (Section 6.7)
 
@@ -149,13 +151,13 @@ Sixteen Goal-specific mappings. Fields like `satisfaction_evidence` (23 bytes) c
 
 ## Before and After: A Compaction Example
 
-To see the impact, consider a Fact grain before and after field compaction.
+To see the impact, consider a Belief grain before and after field compaction.
 
 **Before compaction (human-readable):**
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "Alice",
   "relation": "works_at",
   "object": "ACME Corp",
@@ -173,7 +175,7 @@ To see the impact, consider a Fact grain before and after field compaction.
 
 ```json
 {
-  "t": "fact",
+  "t": "belief",
   "s": "Alice",
   "r": "works_at",
   "o": "ACME Corp",

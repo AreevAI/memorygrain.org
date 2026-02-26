@@ -19,16 +19,16 @@ type GrainCard = {
 
 const cards: GrainCard[] = [
   {
-    type: 'Fact',
+    type: 'Belief',
     typeHex: '0x01',
-    color: 'var(--fact)',
+    color: 'var(--belief)',
     agent: 'HealthPulse',
     company: 'MediCorp',
     description:
       'Extracted from lab panel analysis. Dietary and allergy agents query this grain before making food recommendations.',
     hash: 'a7f3e812…9c21',
     payload: {
-      type: 'fact',
+      type: 'belief',
       subject: 'user:john-smith',
       relation: 'diagnosed_condition',
       object: 'lactose_intolerance',
@@ -44,16 +44,17 @@ const cards: GrainCard[] = [
     ],
   },
   {
-    type: 'Episode',
+    type: 'Event',
     typeHex: '0x02',
-    color: 'var(--episode)',
+    color: 'var(--event)',
     agent: 'AutoPilot',
     company: 'DrivAI',
     description:
       'Raw interaction record logged after a safety-critical event. Insurance and route-planning agents consume this for risk scoring.',
     hash: 'c4e9d5a1…b702',
     payload: {
-      type: 'episode',
+      type: 'event',
+      role: 'assistant',
       content:
         'Emergency braking on Hwy 101 MP-42 at 97 km/h \u2014 pedestrian detected, collision avoided.',
       created_at: 1740000023000,
@@ -120,20 +121,20 @@ const cards: GrainCard[] = [
     ],
   },
   {
-    type: 'ToolCall',
+    type: 'Action',
     typeHex: '0x05',
-    color: 'var(--toolcall)',
+    color: 'var(--action)',
     agent: 'WealthSense',
     company: 'FinEdge',
     description:
       'Full input/output audit trail preserved after a portfolio rebalance execution. Tax and compliance agents reference the record.',
     hash: '7b21ea63…d0f8',
     payload: {
-      type: 'tool_call',
+      type: 'action',
       tool_name: 'portfolio.rebalance',
-      arguments: { account: '401k-primary', target_bonds: 0.4, strategy: 'tax_loss_harvest' },
-      result: { status: 'executed', trades: 3, net_change_pct: -0.12 },
-      success: true,
+      input: { account: '401k-primary', target_bonds: 0.4, strategy: 'tax_loss_harvest' },
+      content: { status: 'executed', trades: 3, net_change_pct: -0.12 },
+      is_error: false,
       duration_ms: 847,
       created_at: 1740012800000,
       namespace: 'finance:trading',
@@ -168,16 +169,16 @@ const cards: GrainCard[] = [
     ],
   },
   {
-    type: 'Checkpoint',
+    type: 'State',
     typeHex: '0x03',
-    color: 'var(--checkpoint)',
+    color: 'var(--state)',
     agent: 'EduMentor',
     company: 'LearnPath',
     description:
       'Agent state snapshot with acquired skills and planned next steps. HR credentialing agents verify competencies on job change.',
     hash: '92ab1d07…f653',
     payload: {
-      type: 'checkpoint',
+      type: 'state',
       context: {
         course: 'applied_ml_foundations',
         chapter: 7,
@@ -191,6 +192,77 @@ const cards: GrainCard[] = [
     readers: [
       { agent: 'HireBot', use: 'credential verification' },
       { agent: 'CareerCoach', use: 'upskill planning' },
+    ],
+  },
+  {
+    type: 'Reasoning',
+    typeHex: '0x08',
+    color: 'var(--reasoning)',
+    agent: 'DiagnoseAI',
+    company: 'MediCorp',
+    description:
+      'Inference chain and thought audit trail captured from an LLM diagnostic session. Enables human review before the conclusion drives automated treatment decisions.',
+    hash: 'd3a91c55…8f02',
+    payload: {
+      type: 'reasoning',
+      premises: ['hr_elevated_3_nights', 'spo2_dip_below_94pct'],
+      conclusion: 'possible_sleep_apnea',
+      inference_method: 'abductive',
+      requires_human_review: true,
+      created_at: 1740024000000,
+      namespace: 'health:diagnostics',
+    },
+    readers: [
+      { agent: 'HealthPulse', use: 'clinical review queue' },
+      { agent: 'InsureAI', use: 'risk assessment' },
+    ],
+  },
+  {
+    type: 'Consensus',
+    typeHex: '0x09',
+    color: 'var(--consensus)',
+    agent: 'RiskCommittee',
+    company: 'FinEdge',
+    description:
+      'Three compliance agents independently assessed a high-value trading decision. A quorum reached agreement — the result is immutable and auditable across jurisdictions.',
+    hash: '5c2f8a14…7d91',
+    payload: {
+      type: 'consensus',
+      participating_observers: ['risk-ai-1', 'compliance-ai-2', 'audit-ai-3'],
+      threshold: 2,
+      agreement_count: 3,
+      dissent_count: 0,
+      agreed_content: { verdict: 'approved', risk_score: 0.18 },
+      created_at: 1740022400000,
+      namespace: 'finance:compliance',
+    },
+    readers: [
+      { agent: 'AuditBot', use: 'multi-agent evidence' },
+      { agent: 'RegBot', use: 'jurisdiction filing' },
+    ],
+  },
+  {
+    type: 'Consent',
+    typeHex: '0x0A',
+    color: 'var(--consent)',
+    agent: 'PrivacyVault',
+    company: 'TrustLayer',
+    description:
+      'User grants HealthPulse permission to retain biometric readings for 12 months. Consent grain is DID-scoped and purpose-bounded — revoke it to trigger cascading erasure.',
+    hash: 'b8e204f1…3c90',
+    payload: {
+      type: 'consent',
+      subject_did: 'did:key:z6MkjRag…',
+      grantee_did: 'did:web:healthpulse.io',
+      scope: ['health:biometrics:read', 'health:biometrics:retain'],
+      basis: 'explicit_consent',
+      jurisdiction: 'EU',
+      is_withdrawal: false,
+      created_at: 1740028800000,
+    },
+    readers: [
+      { agent: 'CompliBot', use: 'GDPR evidence' },
+      { agent: 'ErasureBot', use: 'deletion scoping' },
     ],
   },
 ]
@@ -214,7 +286,7 @@ const C = {
   key: 'var(--accent)',
   str: 'var(--workflow)',
   num: 'var(--observation)',
-  bool: 'var(--checkpoint)',
+  bool: 'var(--state)',
   punct: 'var(--fg-secondary)',
 }
 

@@ -1,18 +1,17 @@
 ---
-title: "Memory Type Deep Dive: Facts"
-description: "A comprehensive guide to the Fact memory type in OMS — the semantic triple model, required and optional fields, confidence scoring, bi-temporal validity, protected facts, consolidation levels, and real-world applications."
+title: "Grain Type Deep Dive: Belief"
+description: "OMS v1.2 update: The Fact type is now named Belief. A comprehensive guide to the Belief grain type in OMS — the semantic triple model, required and optional fields, confidence scoring, bi-temporal validity, protected beliefs, consolidation levels, and real-world applications."
 date: "2026-02-19"
 readTime: "12 min read"
 tags: ["memory-types", "facts", "knowledge-graph", "semantic-triple"]
 ---
+Of the ten grain types defined by the Open Memory Specification, the Belief is the most versatile and the most frequently used. It is the type you reach for when an agent needs to record a piece of structured knowledge: a user preference, a relationship between entities, a measurement, a rule, a diagnosis. The Belief type is the knowledge graph primitive of OMS.
 
-Of the seven memory types defined by the Open Memory Specification, the Fact is the most versatile and the most frequently used. It is the type you reach for when an agent needs to record a piece of structured knowledge: a user preference, a relationship between entities, a measurement, a rule, a diagnosis. The Fact type is the knowledge graph primitive of OMS.
-
-This post covers everything you need to know about Facts: the semantic triple model at their core, every required and optional field defined in Section 8.1 of the spec, confidence scoring, temporal modeling, protection policies, and practical examples drawn from the spec's test vectors.
+This post covers everything you need to know about Beliefs: the semantic triple model at their core, every required and optional field defined in Section 8.1 of the spec, confidence scoring, temporal modeling, protection policies, and practical examples drawn from the spec's test vectors.
 
 ## The Semantic Triple Model
 
-At its core, a Fact grain is a semantic triple — a subject, a relation, and an object. This model comes from the Resource Description Framework (RDF), the W3C standard for representing information about resources on the web.
+At its core, a Belief grain is a semantic triple — a subject, a relation, and an object. This model comes from the Resource Description Framework (RDF), the W3C standard for representing information about resources on the web.
 
 The OMS specification defines the RDF mapping explicitly:
 
@@ -29,35 +28,35 @@ In RDF terms, the subject is the entity being described, the relation (predicate
 | `agent-007` | `constraint` | `never delete user files without confirmation` |
 | `server-room` | `temperature` | `22.5C` |
 
-This triple model is simple enough to represent a vast range of knowledge, from user preferences to organizational relationships to safety constraints. That simplicity is deliberate. The spec's design note for the Fact type states:
+This triple model is simple enough to represent a vast range of knowledge, from user preferences to organizational relationships to safety constraints. That simplicity is deliberate. The spec's design note for the Belief type states:
 
-> The Fact type intentionally serves as a broad knowledge representation primitive, accommodating optional fields for temporal validity, bi-temporal system tracking, consolidation history, confidence, and cross-links. This allows simple grains (subject, relation, object, confidence) to coexist with richly annotated ones in the same store without separate type hierarchies.
+> The Belief type intentionally serves as a broad knowledge representation primitive, accommodating optional fields for temporal validity, bi-temporal system tracking, consolidation history, confidence, and cross-links. This allows simple grains (subject, relation, object, confidence) to coexist with richly annotated ones in the same store without separate type hierarchies.
 
-A Fact that says "user prefers dark mode" and a Fact that says "Alice works at Acme Corp, effective January 1 2025 through December 31 2025, as reported by the HR system on January 16 2025" are both Facts. They use the same type byte (`0x01`), the same required fields, and the same serialization rules. The difference is only in how many optional fields each one populates.
+A Belief that says "user prefers dark mode" and a Belief that says "Alice works at Acme Corp, effective January 1 2025 through December 31 2025, as reported by the HR system on January 16 2025" are both Beliefs. They use the same type byte (`0x01`), the same required fields, and the same serialization rules. The difference is only in how many optional fields each one populates.
 
 ## Required Fields
 
-Every Fact grain MUST include these seven fields:
+Every Belief grain MUST include these fields. In OMS v1.2, `source_type` is optional (it was required in v1.0):
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `type` | string | Always `"fact"` |
-| `subject` | string | Non-empty. The entity being described. |
-| `relation` | string | Non-empty. The semantic relationship. |
-| `object` | string | Non-empty. The value or target entity. |
-| `confidence` | float64 | Range [0.0, 1.0]. Credibility score. |
-| `source_type` | string | Non-empty. Provenance origin. |
-| `created_at` | int64 | Epoch milliseconds. Creation timestamp. |
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | Yes | Always `"belief"` |
+| `subject` | string | Yes | Non-empty. The entity being described. |
+| `relation` | string | Yes | Non-empty. The semantic relationship. |
+| `object` | string or map | Yes | Non-empty. The value or target entity. Accepts a map in v1.2. |
+| `confidence` | float64 | Yes | Range [0.0, 1.0]. Credibility score. |
+| `source_type` | string | No (v1.2) | Provenance origin. Optional in v1.2; was required in v1.0. |
+| `created_at` | int64 | Yes | Epoch milliseconds. Creation timestamp. |
 
-That is the minimum viable Fact. Seven fields. Subject, relation, object form the semantic triple. Confidence scores how certain the knowledge is. Source type records where it came from. Created_at anchors it in time. Type identifies it as a Fact.
+That is the minimum viable Belief. Subject, relation, object form the semantic triple. Confidence scores how certain the knowledge is. Source type, when provided, records where it came from. Created_at anchors it in time. Type identifies it as a Belief.
 
 ### A Minimal Example: Test Vector 1
 
-Section 21.1 provides a minimal Fact grain as the first test vector:
+Section 21.1 provides a minimal Belief grain as the first test vector:
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "user",
   "relation": "prefers",
   "object": "dark mode",
@@ -69,7 +68,7 @@ Section 21.1 provides a minimal Fact grain as the first test vector:
 }
 ```
 
-This grain records that a user prefers dark mode, with 0.9 confidence, explicitly stated by the user. It also includes two optional fields: `namespace` (set to "shared") and `author_did` (identifying the creating agent via a W3C Decentralized Identifier).
+This grain records that a user prefers dark mode, with 0.9 confidence, explicitly stated by the user. It also includes three optional fields: `source_type` (provenance origin), `namespace` (set to "shared"), and `author_did` (identifying the creating agent via a W3C Decentralized Identifier).
 
 After canonical serialization and hashing, this grain has the content address:
 
@@ -87,61 +86,58 @@ Some practical guidelines for confidence values:
 
 | Confidence | Typical Meaning |
 |-----------|-----------------|
-| 1.0 | Absolute certainty (user-stated constraint, mathematical fact) |
+| 1.0 | Absolute certainty (user-stated constraint, mathematical belief) |
 | 0.9-0.99 | High confidence (direct user statement, verified data) |
 | 0.7-0.89 | Moderate confidence (inferred from strong evidence) |
 | 0.5-0.69 | Low-moderate confidence (pattern-based inference) |
 | 0.1-0.49 | Low confidence (weak signal, tentative observation) |
 | 0.0 | No confidence (placeholder, to be determined) |
 
-Test Vector 1 uses `0.9` because the fact was explicitly stated by the user (`source_type: "user_explicit"`). Test Vector 3 uses `0.95` for a bi-temporal employment fact. Test Vector 6 uses `1.0` for a safety constraint.
-
-<Callout type="info">
-Confidence is a property of the grain at creation time. Because grains are immutable, confidence does not change. If new evidence adjusts confidence, a new grain is created with the updated value, and the old grain is marked via `superseded_by`.
-</Callout>
-
+Test Vector 1 uses `0.9` because the belief was explicitly stated by the user (`source_type: "user_explicit"`). Test Vector 3 uses `0.95` for a bi-temporal employment belief. Test Vector 6 uses `1.0` for a safety constraint.
 ## Source Type: The Open Enum
 
-The `source_type` field records the provenance origin of the fact. It is an open enum — the spec defines common values but does not restrict implementations to only these:
+The `source_type` field records the provenance origin of the belief. It is an open enum — the spec defines common values but does not restrict implementations to only these — and in v1.2 it is optional for Belief grains:
 
 | Source Type | Meaning |
 |-------------|---------|
-| `user_explicit` | User directly stated this fact |
-| `consolidated` | Derived from consolidation of multiple episodes or facts |
+| `user_explicit` | User directly stated this belief |
+| `consolidated` | Derived from consolidation of multiple events or beliefs |
 | `llm_generated` | Inferred or generated by a language model |
 | `sensor` | Produced by a sensor or measurement device |
 | `imported` | Imported from an external system |
 | `agent_inferred` | Inferred by an autonomous agent's reasoning |
 | `system` | Generated by the system itself (metadata, configuration) |
+| `established_knowledge` | Widely accepted universal truth — physical constants, scientific laws, geographic facts. SHOULD set `confidence: 1.0`, SHOULD omit `valid_to`, SHOULD use `invalidation_policy.mode: "locked"` |
+| `axiomatic` | Definitionally or logically true — mathematical axioms, tautologies. Same SHOULD rules as `established_knowledge` |
 
-Source type is critical for downstream consumers. An agent deciding whether to act on a Fact will weight a `user_explicit` fact differently from an `llm_generated` one. A compliance system may require that certain actions only be triggered by `user_explicit` facts. A consolidation engine may treat `sensor` facts differently from `agent_inferred` ones.
+Source type is critical for downstream consumers. An agent deciding whether to act on a Belief will weight a `user_explicit` belief differently from an `llm_generated` one. A compliance system may require that certain actions only be triggered by `user_explicit` beliefs. A consolidation engine may treat `sensor` beliefs differently from `agent_inferred` ones.
 
 ## Optional Fields: The Full Toolkit
 
-The Fact type defines a rich set of optional fields that accommodate everything from simple preferences to richly annotated bi-temporal knowledge with full provenance chains. Implementations SHOULD populate only the fields appropriate to their use case and treat unused optional fields as absent.
+The Belief type defines a rich set of optional fields that accommodate everything from simple preferences to richly annotated bi-temporal knowledge with full provenance chains. Implementations SHOULD populate only the fields appropriate to their use case and treat unused optional fields as absent.
 
 ### Temporal Modeling
 
-Facts can model time in two distinct ways, following the bi-temporal data modeling pattern used in temporal databases.
+Beliefs can model time in two distinct ways, following the bi-temporal data modeling pattern used in temporal databases.
 
-**`temporal_type`** — Either `"state"` or `"observation"` (default: `"observation"`). A state fact represents an ongoing condition ("Alice works at Acme Corp"). An observation fact represents a point-in-time measurement or event ("server temperature was 22.5C").
+**`temporal_type`** — Either `"state"` or `"observation"` (default: `"observation"`). A state belief represents an ongoing condition ("Alice works at Acme Corp"). An observation belief represents a point-in-time measurement or event ("server temperature was 22.5C").
 
-**`valid_from` / `valid_to`** (int64, epoch ms) — When the fact was true in the real world. This is sometimes called "valid time" or "application time" in temporal database literature. For example, "Alice works at Acme Corp" might have `valid_from` of January 1, 2025 and `valid_to` of December 31, 2025.
+**`valid_from` / `valid_to`** (int64, epoch ms) — When the belief was true in the real world. This is sometimes called "valid time" or "application time" in temporal database literature. For example, "Alice works at Acme Corp" might have `valid_from` of January 1, 2025 and `valid_to` of December 31, 2025.
 
-**`system_valid_from` / `system_valid_to`** (int64, epoch ms) — When the fact was active in the system. This is "transaction time" — the period during which the system considered this fact to be current. `system_valid_to` is typically set when the grain is superseded.
+**`system_valid_from` / `system_valid_to`** (int64, epoch ms) — When the belief was active in the system. This is "transaction time" — the period during which the system considered this belief to be current. `system_valid_to` is typically set when the grain is superseded.
 
 The distinction between valid time and system time is powerful. It answers two fundamentally different questions:
 
-- **Valid time:** "When was this fact true in the real world?"
-- **System time:** "When did our system know about (and act on) this fact?"
+- **Valid time:** "When was this belief true in the real world?"
+- **System time:** "When did our system know about (and act on) this belief?"
 
 ### A Bi-Temporal Example: Test Vector 3
 
-Section 21.3 provides a bi-temporal Fact:
+Section 21.3 provides a bi-temporal Belief:
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "Alice",
   "relation": "works_at",
   "object": "Acme Corp",
@@ -164,17 +160,19 @@ Breaking down the timestamps:
 | `valid_to` | 1767225600000 | 2026-01-01T00:00:00Z |
 | `system_valid_from` | 1737000000000 | 2025-01-16T04:00:00Z |
 
-This tells a precise story: Alice's employment at Acme Corp is valid from January 1, 2025 through the end of the year (valid_to is the start of January 1, 2026, marking the exclusive upper bound), and the system became aware of this fact on January 16, 2025 (system time). The fact has no `system_valid_to`, meaning it is still considered current in the system.
+This tells a precise story: Alice's employment at Acme Corp is valid from January 1, 2025 through the end of the year (valid_to is the start of January 1, 2026, marking the exclusive upper bound), and the system became aware of this belief on January 16, 2025 (system time). The belief has no `system_valid_to`, meaning it is still considered current in the system.
 
 If Alice leaves Acme Corp early, a new grain would supersede this one. The original grain's `system_valid_to` would be set (by the index layer) to the timestamp of supersession, while the `valid_to` of the new grain would reflect when Alice actually left. The two timelines evolve independently.
 
+Note that in this example `source_type` is still included — it is optional in v1.2 but providing it is always recommended when provenance is known.
+
 ### Knowledge Management Fields
 
-**`context`** (map string->string) — A flexible key-value map for contextual metadata. This could include the conversation ID where the fact was learned, the application that produced it, or any domain-specific metadata that does not warrant its own field.
+**`context`** (map string->string) — A flexible key-value map for contextual metadata. This could include the conversation ID where the belief was learned, the application that produced it, or any domain-specific metadata that does not warrant its own field.
 
 **`superseded_by`** (string) — The content address of a grain that replaces this one. When set, this grain is no longer the current version of this knowledge. The supersession chain is the mechanism for knowledge evolution in an immutable system.
 
-**`contradicted`** (bool, default false) — Whether this grain has been contradicted. Distinct from supersession: a contradicted fact is not replaced by a better version, it is marked as wrong.
+**`verification_status`** (string) — Index-layer field managed by the store (not embedded in the blob). Values: `"unverified"` (default), `"verified"`, `"contradicted"`, `"disputed"`. Distinct from supersession: a contradicted belief is not replaced by a better version, its `verification_status` is updated by the store to `"contradicted"`. Because this field lives in the index layer it is NOT part of the content address or COSE signature.
 
 **`importance`** (float64, [0.0, 1.0], default 0.7) — A weighting score for retrieval prioritization. An agent with limited context window space can use importance to decide which facts to include.
 
@@ -186,22 +184,22 @@ If Alice leaves Acme Corp early, a new grain would supersede this one. The origi
 
 **`author_did`** (string) — The DID (Decentralized Identifier) of the creating agent. This enables cryptographic verification of authorship without a central authority.
 
-**`structural_tags`** (array[string]) — Classification tags for organizing and filtering facts. Unlike the semantic triple (which represents meaning), tags represent categories: `["preference", "ui"]`, `["medical", "diagnosis"]`, `["phi:blood-type"]`.
+**`structural_tags`** (array[string]) — Classification tags for organizing and filtering beliefs. Unlike the semantic triple (which represents meaning), tags represent categories: `["preference", "ui"]`, `["medical", "diagnosis"]`, `["phi:blood-type"]`.
 
 ### Consolidation and Feedback
 
-**`consolidation_level`** (int, [0, 3]) — Tracks how refined a fact is:
+**`consolidation_level`** (int, [0, 3]) — Tracks how refined a belief is:
 
 | Level | Name | Meaning |
 |-------|------|---------|
 | 0 | Raw | Direct observation or statement, no consolidation |
 | 1 | Frequency | Consolidated from repeated occurrences |
-| 2 | Pattern | Consolidated from identified patterns across facts |
+| 2 | Pattern | Consolidated from identified patterns across beliefs |
 | 3 | Sequence | Consolidated from temporal or causal sequences |
 
-**`success_count` / `failure_count`** (int, non-negative) — Feedback counters tracking how many times the fact was successfully or unsuccessfully used in downstream tasks. These enable reinforcement-style learning: facts that consistently lead to good outcomes have their success_count incremented; facts that lead to errors have their failure_count incremented.
+**`success_count` / `failure_count`** (int, non-negative) — Feedback counters tracking how many times the belief was successfully or unsuccessfully used in downstream tasks. These enable reinforcement-style learning: beliefs that consistently lead to good outcomes have their success_count incremented; beliefs that lead to errors have their failure_count incremented.
 
-**`derived_from`** (array[string]) — An array of content addresses identifying the parent grains from which this fact was derived. This is the structural backbone of provenance tracking.
+**`derived_from`** (array[string]) — An array of content addresses identifying the parent grains from which this belief was derived. This is the structural backbone of provenance tracking.
 
 ### Provenance Chain
 
@@ -217,17 +215,17 @@ If Alice leaves Acme Corp early, a new grain would supersede this one. The origi
 
 Each entry records which source grain was used, what method produced the derivation, and how much weight that source carried. This is more detailed than `derived_from` (which records only the parent hashes) and enables rich audit trails.
 
-## Protected Facts: Invalidation Policy
+## Protected Beliefs: Invalidation Policy
 
-Some facts are too important to be casually overridden. Section 23 defines the `invalidation_policy` field, which governs who can supersede or contradict a grain.
+Some beliefs are too important to be casually overridden. Section 23 defines the `invalidation_policy` field, which governs who can supersede or contradict a grain.
 
 ### Test Vector 6: A Safety Constraint
 
-Section 21.6 provides an example of a protected Fact:
+Section 21.6 provides an example of a protected Belief:
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "agent-007",
   "relation": "constraint",
   "object": "never delete user files without confirmation",
@@ -252,7 +250,7 @@ The `invalidation_policy` with `mode: "locked"` means that no supersession or co
 
 ### Protection Modes
 
-The spec defines six modes for invalidation policies:
+The spec defines eight modes for invalidation policies:
 
 | Mode | Behavior |
 |------|----------|
@@ -262,16 +260,13 @@ The spec defines six modes for invalidation policies:
 | `quorum` | Superseding grain MUST carry `supersession_auth` with at least `threshold` valid COSE signatures from `authorized` DIDs. |
 | `delegated` | Only DIDs listed in `authorized` may invalidate. Superseding grain MUST be COSE-signed by one of those DIDs. |
 | `timed` | Behaves as `locked` until `locked_until` epoch; then reverts to `fallback_mode`. |
-
-<Callout type="security">
-The spec enforces a fail-closed rule: parsers and stores MUST treat unknown `mode` values as `"locked"`. This prevents an agent from crafting a novel mode value that an older implementation silently accepts as permissive.
-</Callout>
-
+| `hold` | Litigation hold — blocks all erasure until explicitly lifted by an authorized DID. Takes precedence over all GDPR/CCPA erasure requests. |
+| `consent_cascade` | Auto-erasure within ≤ 30 days when the linked Consent grain (referenced by `consent_ref`) is revoked. |
 Protection is declared at grain creation time and is part of the immutable blob. When the grain is COSE-signed, the protection policy is covered by the signature, making it tamper-evident.
 
 ## The Design Philosophy: One Type, Many Uses
 
-The Fact type's breadth is a conscious design choice. The spec's design note acknowledges this directly:
+The Belief type's breadth is a conscious design choice. The spec's design note acknowledges this directly:
 
 > This allows simple grains (subject, relation, object, confidence) to coexist with richly annotated ones in the same store without separate type hierarchies. Implementations SHOULD populate only the fields appropriate to their use case and treat unused optional fields as absent.
 
@@ -288,7 +283,7 @@ This means the same store, the same serialization code, and the same query infra
 }
 ```
 
-**Medical diagnoses** — Bi-temporal facts with provenance chains and PHI tagging:
+**Medical diagnoses** — Bi-temporal beliefs with provenance chains and PHI tagging:
 ```json
 {
   "subject": "patient-A",
@@ -305,7 +300,7 @@ This means the same store, the same serialization code, and the same query infra
 }
 ```
 
-**Regulatory rules** — Protected facts with locked invalidation policies:
+**Regulatory rules** — Protected beliefs with locked invalidation policies:
 ```json
 {
   "subject": "trading-system",
@@ -318,7 +313,7 @@ This means the same store, the same serialization code, and the same query infra
 }
 ```
 
-**Agent-inferred knowledge** — Consolidated facts with derivation trails and feedback counters:
+**Agent-inferred knowledge** — Consolidated beliefs with derivation trails and feedback counters:
 ```json
 {
   "subject": "user",
@@ -333,7 +328,7 @@ This means the same store, the same serialization code, and the same query infra
 }
 ```
 
-**Product specifications** — Imported facts from external systems with content references:
+**Product specifications** — Imported beliefs from external systems with content references:
 ```json
 {
   "subject": "widget-X100",
@@ -348,11 +343,11 @@ This means the same store, the same serialization code, and the same query infra
 }
 ```
 
-All of these are valid Fact grains. They share the same type byte (`0x01`), the same seven required fields, and the same canonical serialization. The optional fields allow each to carry exactly the metadata it needs — no more, no less.
+All of these are valid Belief grains. They share the same type byte (`0x01`), the same required fields, and the same canonical serialization. The optional fields allow each to carry exactly the metadata it needs — no more, no less.
 
 ## Field Compaction in Practice
 
-When a Fact is serialized, human-readable field names are replaced by short keys to minimize blob size. The mapping (from Section 6.1) is applied before MessagePack encoding:
+When a Belief is serialized, human-readable field names are replaced by short keys to minimize blob size. The mapping (from Section 6.1) is applied before MessagePack encoding:
 
 | Full Name | Short Key |
 |-----------|-----------|
@@ -367,7 +362,7 @@ When a Fact is serialized, human-readable field names are replaced by short keys
 | `valid_from` | `vf` |
 | `valid_to` | `vt` |
 | `superseded_by` | `sb` |
-| `contradicted` | `ct` |
+| `verification_status` | index-layer (not compacted) |
 | `importance` | `im` |
 | `namespace` | `ns` |
 | `user_id` | `user` |
@@ -376,37 +371,37 @@ When a Fact is serialized, human-readable field names are replaced by short keys
 | `consolidation_level` | `cl` |
 | `invalidation_policy` | `ip` |
 
-After compaction, the keys are sorted lexicographically for canonical serialization. For Vector 6 (the protected fact), the compacted key order is: `c`, `ca`, `ip`, `ns`, `o`, `r`, `s`, `st`, `t`. The nested `invalidation_policy` map is also sorted: `authorized` before `mode`.
+After compaction, the keys are sorted lexicographically for canonical serialization. For Vector 6 (the protected belief), the compacted key order is: `c`, `ca`, `ip`, `ns`, `o`, `r`, `s`, `st`, `t`. The nested `invalidation_policy` map is also sorted: `authorized` before `mode`.
 
-## Lifecycle of a Fact
+## Lifecycle of a Belief
 
-Because grains are immutable, the lifecycle of a Fact is expressed through chains of grains rather than mutations to a single record:
+Because grains are immutable, the lifecycle of a Belief is expressed through chains of grains rather than mutations to a single record:
 
-1. **Creation** — A new Fact grain is serialized and stored. Its content address becomes its permanent identity.
+1. **Creation** — A new Belief grain is serialized and stored. Its content address becomes its permanent identity.
 
-2. **Supersession** — When knowledge changes, a new Fact is created. The old Fact's `superseded_by` field is set (by the index layer) to the new Fact's content address. The old grain's bytes never change.
+2. **Supersession** — When knowledge changes, a new Belief is created. The old Belief's `superseded_by` field is set (by the index layer) to the new Belief's content address. The old grain's bytes never change.
 
-3. **Contradiction** — If a Fact is discovered to be wrong (not just outdated), the index sets `contradicted = true`. The original bytes remain unchanged.
+3. **Contradiction** — If a Belief is discovered to be wrong (not just outdated), the store updates `verification_status` to `"contradicted"` in the index layer. The original blob bytes remain unchanged — this field is NOT embedded in the grain.
 
-4. **Consolidation** — Multiple raw Facts (level 0) may be consolidated into a higher-level Fact (level 1, 2, or 3). The consolidated Fact records its sources via `derived_from` and `provenance_chain`.
+4. **Consolidation** — Multiple raw Beliefs (level 0) may be consolidated into a higher-level Belief (level 1, 2, or 3). The consolidated Belief records its sources via `derived_from` and `provenance_chain`.
 
-5. **Feedback** — As the Fact is used in downstream tasks, `success_count` and `failure_count` are tracked. Because grains are immutable, these counters exist on the latest grain in the supersession chain.
+5. **Feedback** — As the Belief is used in downstream tasks, `success_count` and `failure_count` are tracked. Because grains are immutable, these counters exist on the latest grain in the supersession chain.
 
-This lifecycle model ensures a complete audit trail. You can trace any current Fact back through its supersession chain, seeing every version, every confidence change, and every derivation.
+This lifecycle model ensures a complete audit trail. You can trace any current Belief back through its supersession chain, seeing every version, every confidence change, and every derivation.
 
 ## Summary
 
-The Fact type is the workhorse of OMS. Its semantic triple model provides natural knowledge graph compatibility. Its seven required fields keep the minimum viable grain small. Its extensive optional fields support temporal modeling, provenance tracking, consolidation, feedback, and protection without requiring type hierarchies or schema extensions.
+The Belief type is the workhorse of OMS. Its semantic triple model provides natural knowledge graph compatibility. Its required fields keep the minimum viable grain small. Its extensive optional fields support temporal modeling, provenance tracking, consolidation, feedback, and protection without requiring type hierarchies or schema extensions.
 
 | Aspect | Detail |
 |--------|--------|
 | **Core model** | Semantic triple: subject-relation-object (RDF: `<grain:subject> <grain:relation> "grain:object" .`) |
-| **Required fields** | 7: type, subject, relation, object, confidence, source_type, created_at |
+| **Required fields** | type, subject, relation, object, confidence, created_at (source_type is optional in v1.2) |
 | **Confidence** | float64 in [0.0, 1.0], IEEE 754 double precision |
-| **Source types** | Open enum: user_explicit, consolidated, llm_generated, sensor, imported, agent_inferred, system |
+| **Source types** | Open enum (optional): user_explicit, consolidated, llm_generated, sensor, imported, agent_inferred, system, established_knowledge, axiomatic |
 | **Temporal model** | Bi-temporal: valid_from/valid_to (real world) + system_valid_from/system_valid_to (system knowledge) |
 | **Consolidation** | 4 levels: 0=raw, 1=frequency, 2=pattern, 3=sequence |
-| **Protection** | invalidation_policy with 6 modes: open, soft_locked, locked, quorum, delegated, timed |
+| **Protection** | invalidation_policy with 8 modes: open, soft_locked, locked, quorum, delegated, timed, hold, consent_cascade |
 | **Type byte** | `0x01` in the 9-byte header |
 
-For details on how the content address of a Fact grain is computed, including the role of the 9-byte header and temporal uniqueness, see [Content Addressing with SHA-256](/blog/content-addressing-sha256-memory-identity).
+For details on how the content address of a Belief grain is computed, including the role of the 9-byte header and temporal uniqueness, see [Content Addressing with SHA-256](/blog/content-addressing-sha256-memory-identity).

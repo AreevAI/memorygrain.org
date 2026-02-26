@@ -232,7 +232,7 @@ A health assistant agent creates a grain recording a patient's medication:
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "patient-789",
   "relation": "takes",
   "object": "metformin 500mg twice daily",
@@ -254,7 +254,7 @@ A customer service agent stores a user's contact preferences:
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "alice-42",
   "relation": "prefers",
   "object": "email for shipping notifications",
@@ -276,7 +276,7 @@ A financial agent records a transaction detail:
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "transaction-9182",
   "relation": "involves",
   "object": "card ending 4242",

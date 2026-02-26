@@ -8,17 +8,17 @@ tags: ["education", "research", "knowledge-graph", "citations", "industry"]
 
 Educational AI agents face a challenge that sets them apart from most other agent types: they need to build structured knowledge incrementally, track a learner's progress over time, maintain rigorous citation trails back to source materials, and — in research settings — ensure that every conclusion is reproducible from the original data. These are not nice-to-have features. They are fundamental requirements for any system trusted with teaching and scholarship.
 
-The Open Memory Specification addresses each of these requirements through its core memory types and cross-linking mechanisms. This post maps OMS to education and research, showing how Fact grains form knowledge graph triples, provenance chains serve as citation trails, Episodes capture student interactions, Goals track learning objectives, and embedding references enable semantic search across accumulated knowledge.
+The Open Memory Specification addresses each of these requirements through its core grain types and cross-linking mechanisms. This post maps OMS to education and research, showing how Belief grains form knowledge graph triples, provenance chains serve as citation trails, Events capture student interactions, Goals track learning objectives, and embedding references enable semantic search across accumulated knowledge.
 
-## Facts as knowledge graph triples
+## Beliefs as knowledge graph triples
 
-The Fact memory type (Section 8.1) is a structured knowledge claim modeled as a semantic triple: subject-relation-object. This maps directly to the nodes and edges of a knowledge graph.
+The Belief grain type (Section 8.1) is a structured knowledge claim modeled as a semantic triple: subject-relation-object. This maps directly to the nodes and edges of a knowledge graph.
 
 Consider the complete example grain from Appendix F of the spec:
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "machine-learning",
   "relation": "is_subset_of",
   "object": "artificial-intelligence",
@@ -48,11 +48,11 @@ This grain establishes that "machine-learning is_subset_of artificial-intelligen
 
 ### Building a course knowledge graph
 
-A course knowledge graph is built by accumulating Fact grains where concepts serve as subjects and objects, and relationships serve as relations. The subject-relation-object model from Section 8.1 maps naturally to knowledge graph nodes and edges:
+A course knowledge graph is built by accumulating Belief grains where concepts serve as subjects and objects, and relationships serve as relations. The subject-relation-object model from Section 8.1 maps naturally to knowledge graph nodes and edges:
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "linear-algebra",
   "relation": "prerequisite_for",
   "object": "machine-learning",
@@ -67,7 +67,7 @@ A course knowledge graph is built by accumulating Fact grains where concepts ser
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "gradient-descent",
   "relation": "is_subset_of",
   "object": "optimization-algorithms",
@@ -81,7 +81,7 @@ A course knowledge graph is built by accumulating Fact grains where concepts ser
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "neural-networks",
   "relation": "related_to",
   "object": "gradient-descent",
@@ -93,7 +93,7 @@ A course knowledge graph is built by accumulating Fact grains where concepts ser
 }
 ```
 
-Each Fact grain is a knowledge graph edge. The `subject` and `object` are nodes. The `relation` is the edge label. The `confidence` field (float64, range [0.0, 1.0] per Section 8.1) indicates how certain we are about the relationship. The `structural_tags` field (Section 6.1) provides topic classification for filtering and browsing.
+Each Belief grain is a knowledge graph edge. The `subject` and `object` are nodes. The `relation` is the edge label. The `confidence` field (float64, range [0.0, 1.0] per Section 8.1) indicates how certain we are about the relationship. The `structural_tags` field (Section 6.1) provides topic classification for filtering and browsing.
 
 The OMS spec notes in Section 8.1 that the Fact type follows RDF mapping: `<grain:subject> <grain:relation> "grain:object" .` This means any OMS knowledge graph can be exported to standard RDF/SPARQL systems for interoperability with existing educational knowledge bases.
 
@@ -111,7 +111,7 @@ Every derived Fact carries a `provenance_chain` — an array of entries, each wi
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "spaced-repetition",
   "relation": "improves",
   "object": "long-term-retention",
@@ -157,7 +157,7 @@ A research finding that is supported by multiple independent studies can express
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "transformer-attention",
   "relation": "outperforms",
   "object": "recurrent-models-on-long-sequences",
@@ -204,7 +204,7 @@ Every tutoring conversation, question-answer session, and lab notebook entry is 
 
 ```json
 {
-  "type": "episode",
+  "type": "event",
   "content": "Student asked: 'Why does gradient descent sometimes get stuck in local minima?' Tutor explained saddle points, learning rate schedules, and the difference between convex and non-convex optimization. Student followed up with a question about Adam optimizer.",
   "created_at": 1768471200000,
   "user_id": "student-bob-042",
@@ -229,7 +229,7 @@ From the tutoring session above, consolidation might extract:
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "student-bob-042",
   "relation": "has_difficulty_with",
   "object": "local-minima-in-gradient-descent",
@@ -255,7 +255,7 @@ Lab sessions and lecture recordings are not just text. The `content_refs` field 
 
 ```json
 {
-  "type": "episode",
+  "type": "event",
   "content": "Week 5 lecture on convolutional neural networks. Covered kernel operations, pooling layers, and feature hierarchies. Live coding demo of LeNet-5 implementation.",
   "created_at": 1768471200000,
   "namespace": "course:cs101:fall2026",
@@ -411,7 +411,7 @@ Each grain can carry an `embedding_refs` array:
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "backpropagation",
   "relation": "is_algorithm_for",
   "object": "training-neural-networks",
@@ -473,36 +473,36 @@ Study 2 (Episode):
   content_refs: [{modality: "document", uri: "cas://sha256:..."}]
 ```
 
-Every conclusion (Fact) traces through the provenance chain to the analysis methods (ToolCalls) and source data (Episodes, Observations). The ToolCall grain records exactly what analysis was run (`tool_name`, `arguments`), whether it succeeded (`success`), and what the result was (`result`). Content references on the Episode grains point to the raw experimental data with SHA-256 checksums for integrity.
+Every conclusion (Belief) traces through the provenance chain to the analysis methods (Actions) and source data (Events, Observations). The Action grain records exactly what analysis was run (`tool_name`, `input`), whether it errored (`is_error`), and what the result was (`content`). Content references on the Event grains point to the raw experimental data with SHA-256 checksums for integrity.
 
-**Immutability** ensures that none of these grains can be modified after creation. The original data, the analysis method, and the conclusion are all permanent records. If the analysis needs to be re-run with different parameters, a new ToolCall grain is created — it does not replace the old one. If the conclusion changes, a new Fact grain supersedes the previous one through the supersession chain. The complete history is always available.
+**Immutability** ensures that none of these grains can be modified after creation. The original data, the analysis method, and the conclusion are all permanent records. If the analysis needs to be re-run with different parameters, a new Action grain is created — it does not replace the old one. If the conclusion changes, a new Belief grain supersedes the previous one through the supersession chain. The complete history is always available.
 
 <Callout type="warning">
 Content addressing ensures byte-identical replication — the same data serialized at the same timestamp on any conformant implementation produces the same content address. But per Section 5.5, two grains with identical semantic content but different `created_at` timestamps produce different content addresses. For reproducibility, this means the original grain's content address is the canonical reference, not a re-serialization.
 </Callout>
 
-### ToolCalls as method records
+### Actions as method records
 
-The ToolCall memory type (Section 8.5) is particularly valuable for research reproducibility. Every computational step — statistical tests, model training runs, data transformations — is recorded as a ToolCall grain:
+The Action grain type (Section 8.5) is particularly valuable for research reproducibility. Every computational step — statistical tests, model training runs, data transformations — is recorded as an Action grain:
 
 ```json
 {
-  "type": "tool_call",
+  "type": "action",
   "tool_name": "train_classifier",
-  "arguments": {
+  "input": {
     "model": "logistic_regression",
     "features": ["study_hours", "practice_score", "attendance"],
     "target": "exam_pass",
     "train_split": 0.8,
     "random_seed": 42
   },
-  "result": {
+  "content": {
     "accuracy": 0.87,
     "precision": 0.85,
     "recall": 0.89,
     "f1": 0.87
   },
-  "success": true,
+  "is_error": false,
   "duration_ms": 4500,
   "created_at": 1768471200000,
   "namespace": "research:lab:nlp",
@@ -530,13 +530,13 @@ Namespace separation also has compliance implications. A student's personal data
 
 Here is how the pieces fit together across a semester.
 
-**Week 1**: The course knowledge graph is seeded with Fact grains — concept definitions, prerequisite relationships, topic classifications. Each grain carries `structural_tags` for topic navigation and `context` maps for source attribution (textbook, chapter, section).
+**Week 1**: The course knowledge graph is seeded with Belief grains — concept definitions, prerequisite relationships, topic classifications. Each grain carries `structural_tags` for topic navigation and `context` maps for source attribution (textbook, chapter, section).
 
 **Weeks 2-14**: As students interact with the AI tutor, Episodes capture every tutoring session, question-answer exchange, and lab notebook entry. The `consolidated` field tracks which episodes have been processed. Consolidation extracts Facts about student understanding — what they know, what they struggle with, what misconceptions they hold.
 
-**Throughout**: Goal grains track learning objectives at course, module, and lesson levels. Progress updates flow through the supersession chain. Assessment results become ToolCall grains and Observation grains that serve as `satisfaction_evidence` for goal completion.
+**Throughout**: Goal grains track learning objectives at course, module, and lesson levels. Progress updates flow through the supersession chain. Assessment results become Action grains and Observation grains that serve as `satisfaction_evidence` for goal completion.
 
-**Research component**: Students conducting research have their experimental data captured as Episodes with content references to raw data files. Analysis steps are recorded as ToolCall grains. Conclusions become Facts with provenance chains tracing back through every analysis to the original data.
+**Research component**: Students conducting research have their experimental data captured as Events with content references to raw data files. Analysis steps are recorded as Action grains. Conclusions become Beliefs with provenance chains tracing back through every analysis to the original data.
 
 **Semantic search**: Embedding references across the knowledge graph enable "find concepts similar to X" queries, helping students discover connections they might not have found through keyword search alone.
 

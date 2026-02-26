@@ -10,7 +10,7 @@ An autonomous vehicle is a machine that must remember what it sensed, what it de
 
 The challenge for AV memory is not just volume. It is structure. A LiDAR scan taken at time T must be temporally aligned with the camera frame taken at the same physical moment. A braking decision must be traceable to the specific sensor readings that triggered it. A learned driving pattern — "slow down when approaching a school zone" — must be distinct from a transient observation and carry different lifecycle semantics. And all of this must work on hardware ranging from microcontrollers on sensor modules to GPU-equipped onboard computers to cloud-based post-processing clusters.
 
-The Open Memory Specification addresses these requirements through its seven memory types, device profiles, content references for large binary data, and the 9-byte fixed header that enables efficient filtering at every layer of the compute stack.
+The Open Memory Specification addresses these requirements through its ten grain types, device profiles, content references for large binary data, and the 9-byte fixed header that enables efficient filtering at every layer of the compute stack.
 
 ## Observations: the sensor data backbone
 
@@ -138,11 +138,11 @@ The `sync_group` field solves a fundamental problem in sensor fusion: temporal a
 
 ## Checkpoints for mission state
 
-A Checkpoint grain (type byte `0x03`) captures the vehicle's complete operational state at a point in time. This is the AV equivalent of a game save — if the planning system crashes or needs to recover, it restores from the last Checkpoint.
+A State grain (type byte `0x03`) captures the vehicle's complete operational state at a point in time. This is the AV equivalent of a game save — if the planning system crashes or needs to recover, it restores from the last Checkpoint.
 
 ```json
 {
-  "type": "checkpoint",
+  "type": "state",
   "context": {
     "position_lat": "37.7749",
     "position_lon": "-122.4194",
@@ -171,27 +171,27 @@ A Checkpoint grain (type byte `0x03`) captures the vehicle's complete operationa
 
 The `context` map captures everything needed to understand the vehicle's current state: position, heading, speed, route, passengers, charge level, and autonomy mode. The `plan` array holds the immediate planned actions. The `history` array records recent action history — what the vehicle did and why.
 
-## ToolCalls for actuator commands
+## Actions for actuator commands
 
-Every physical action the vehicle takes — steering, braking, acceleration — is an actuator command that can be recorded as a ToolCall grain (type byte `0x05`):
+Every physical action the vehicle takes — steering, braking, acceleration — is an actuator command that can be recorded as a Action grain (type byte `0x05`):
 
 ```json
 {
-  "type": "tool_call",
+  "type": "action",
   "tool_name": "brake_controller",
-  "arguments": {
+  "input": {
     "deceleration_mps2": 3.5,
     "reason": "pedestrian_detected",
     "trigger_observation": "sha256:c4d5e6f7...",
     "urgency": "emergency"
   },
-  "result": {
+  "content": {
     "actual_deceleration_mps2": 3.4,
     "response_time_ms": 12,
     "abs_engaged": true,
     "speed_after_mps": 0.0
   },
-  "success": true,
+  "is_error": false,
   "duration_ms": 2800,
   "created_at": 1739900000000,
   "namespace": "av:control",
@@ -199,24 +199,24 @@ Every physical action the vehicle takes — steering, braking, acceleration — 
 }
 ```
 
-The `arguments` map includes a `trigger_observation` field — the content address of the Observation grain that triggered the braking decision. This creates a direct, cryptographically verifiable link between sensor data and vehicle action. An accident investigator can follow the chain: Observation grain (pedestrian detected) triggered ToolCall grain (emergency braking) with measured result (vehicle stopped).
+The `arguments` map includes a `trigger_observation` field — the content address of the Observation grain that triggered the braking decision. This creates a direct, cryptographically verifiable link between sensor data and vehicle action. An accident investigator can follow the chain: Observation grain (pedestrian detected) triggered Action grain (emergency braking) with measured result (vehicle stopped).
 
 Steering commands follow the same pattern:
 
 ```json
 {
-  "type": "tool_call",
+  "type": "action",
   "tool_name": "steering_controller",
-  "arguments": {
+  "input": {
     "target_angle_deg": -15.3,
     "reason": "lane_change",
     "target_lane": "left"
   },
-  "result": {
+  "content": {
     "actual_angle_deg": -15.1,
     "maneuver_complete": true
   },
-  "success": true,
+  "is_error": false,
   "duration_ms": 3200,
   "created_at": 1739900000000,
   "namespace": "av:control"
@@ -298,11 +298,11 @@ Workflows are distinct from Goals in a critical way: a Workflow describes *how* 
 
 ## Facts for map knowledge
 
-Persistent map knowledge — traffic signal types, road characteristics, speed limits — can be modeled as Fact grains:
+Persistent map knowledge — traffic signal types, road characteristics, speed limits — can be modeled as Belief grains:
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "intersection_42",
   "relation": "has_traffic_signal",
   "object": "3-phase",
@@ -314,7 +314,7 @@ Persistent map knowledge — traffic signal types, road characteristics, speed l
 }
 ```
 
-The semantic triple model (`subject`-`relation`-`object`) maps naturally to map knowledge. The `valid_from` field records when this map knowledge became true — useful because traffic infrastructure changes over time. When a traffic signal is replaced or a road is reconfigured, a new Fact grain supersedes the old one through the supersession chain.
+The semantic triple model (`subject`-`relation`-`object`) maps naturally to map knowledge. The `valid_from` field records when this map knowledge became true — useful because traffic infrastructure changes over time. When a traffic signal is replaced or a road is reconfigured, a new Belief grain supersedes the old one through the supersession chain.
 
 ## Device profiles: edge to cloud
 
@@ -341,7 +341,7 @@ A sensor MCU might emit Observation grains with just the essential fields — se
 - Encryption: AES-256-GCM
 - Vector search: optional
 
-The onboard computer handles sensor fusion, planning, and decision-making. It processes Observation grains from edge sensors, creates ToolCall grains for actuator commands, and maintains Checkpoint grains for state recovery. At 32 KB, grains can carry full content references, provenance chains, and cross-links.
+The onboard computer handles sensor fusion, planning, and decision-making. It processes Observation grains from edge sensors, creates Action grains for actuator commands, and maintains State grains for state recovery. At 32 KB, grains can carry full content references, provenance chains, and cross-links.
 
 ### Extended profile for cloud post-processing
 
@@ -369,7 +369,7 @@ Bytes 3-4: Namespace hash (uint16 big-endian)
 Bytes 5-8: Created-at (uint32 epoch seconds)
 ```
 
-The type byte at offset 2 enables O(1) filtering: a router can separate Observation grains from ToolCall grains, Goal grains from Checkpoint grains, by reading a single byte. No MessagePack deserialization required. In an AV processing pipeline that handles thousands of grains per second, this matters.
+The type byte at offset 2 enables O(1) filtering: a router can separate Observation grains from Action grains, Goal grains from State grains, by reading a single byte. No MessagePack deserialization required. In an AV processing pipeline that handles thousands of grains per second, this matters.
 
 The namespace hash (bytes 3-4) provides 65,536 routing buckets. A namespace like `"av:perception"` and `"av:control"` hash to different uint16 values, enabling fast routing to appropriate processing modules without examining the payload. The specification is clear (Section 3.1.1): this is a routing hint only, not a security mechanism. The full namespace string in the payload remains authoritative.
 
@@ -382,14 +382,14 @@ Every decision an autonomous vehicle makes is traceable through the OMS provenan
 Consider a braking event during an accident investigation. The investigator can reconstruct the decision chain:
 
 1. **Observation grains** with the sync group from the moment of the event — LiDAR, camera, radar, IMU, all temporally aligned
-2. **ToolCall grains** for the braking command — what deceleration was requested, what was achieved, and the content address of the triggering Observation
-3. **Checkpoint grains** before and after the event — the vehicle's complete state, route, and speed
+2. **Action grains** for the braking command — what deceleration was requested, what was achieved, and the content address of the triggering Observation
+3. **State grains** before and after the event — the vehicle's complete state, route, and speed
 4. **Goal grains** that were active at the time — what was the vehicle trying to achieve, and what safety constraints were in effect
 5. **Workflow grains** that were triggered — what behavioral procedure was the vehicle executing
 
 Each grain is immutable and content-addressed. The content address — the SHA-256 hash of the complete blob — proves integrity. If any byte has been modified, the hash will not match. If the grains were COSE-signed (Section 9), the investigator can verify exactly which software version or agent instance created each grain by resolving the `author_did` to its public key.
 
-The `provenance_chain` in each grain traces derivation. A ToolCall grain's arguments might reference specific Observation content addresses, creating a cryptographically verifiable link between sensor input and control output. Combined with the hash-chained audit log at the store level (Level 3 conformance, Section 17.3), this provides the kind of tamper-evident decision record that regulatory bodies require.
+The `provenance_chain` in each grain traces derivation. A Action grain's arguments might reference specific Observation content addresses, creating a cryptographically verifiable link between sensor input and control output. Combined with the hash-chained audit log at the store level (Level 3 conformance, Section 17.3), this provides the kind of tamper-evident decision record that regulatory bodies require.
 
 NHTSA's event data recorder requirements are evolving to capture more data over longer pre-crash windows — the December 2024 final rule increased recording duration from 5 seconds at 2 Hz to 20 seconds at 10 Hz. OMS provides a structured, standardized format for this expanded data capture, where each sensor reading, decision, and action is a separate, content-addressed, verifiable grain rather than a proprietary binary dump.
 
@@ -398,7 +398,7 @@ NHTSA's event data recorder requirements are evolving to capture more data over 
 The OMS architecture for autonomous vehicles spans the full compute stack:
 
 1. **Edge sensors** emit Lightweight-profile Observation grains at high frequency, using `sync_group` for temporal alignment and `frame_id` for spatial context
-2. **Onboard compute** fuses sensor data, creates Standard-profile ToolCall grains for actuator commands, maintains Checkpoint grains for state recovery, and enforces locked Goal grains for safety constraints
+2. **Onboard compute** fuses sensor data, creates Standard-profile Action grains for actuator commands, maintains State grains for state recovery, and enforces locked Goal grains for safety constraints
 3. **Cloud infrastructure** processes Extended-profile grains for fleet analytics, regulatory reporting, and training data extraction, with full provenance chains and hash-chained audit trails
 4. **Regulatory review** follows the content-addressed provenance chain from any decision back to the specific sensor readings that informed it
 

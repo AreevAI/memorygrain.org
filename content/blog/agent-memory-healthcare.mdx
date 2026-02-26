@@ -12,9 +12,9 @@ The challenge is not just storing this data. It is storing it in a format that i
 
 The Open Memory Specification provides a standards-based approach. Every piece of clinical knowledge — a vital reading, a diagnosis, a treatment goal, a lab order — becomes an immutable, content-addressed memory grain with built-in compliance primitives. This post maps OMS to healthcare workflows, showing how each memory type serves a specific clinical function, how PHI protection works at the binary level, and how HIPAA's technical safeguard requirements align with OMS capabilities.
 
-## The seven memory types in clinical context
+## The ten grain types in clinical context
 
-OMS defines seven memory types (Section 8), each with a type byte in the 9-byte fixed header that enables O(1) filtering without payload deserialization. In a healthcare system, every type has a natural clinical role.
+OMS defines ten grain types (Section 8), each with a type byte in the 9-byte fixed header that enables O(1) filtering without payload deserialization. In a healthcare system, every type has a natural clinical role.
 
 ### Observations for vitals and sensor data
 
@@ -64,13 +64,13 @@ The `observer_type` field accommodates any clinical measurement — `"heart_rate
 
 The content reference schema (Section 7.1) keeps the grain compact — the 50 MB DICOM image is referenced by URI and integrity-checked via its SHA-256 checksum, never embedded in the grain itself. This follows OMS Design Principle 1: "References, not blobs."
 
-### Facts for diagnoses and clinical knowledge
+### Beliefs for diagnoses and clinical knowledge
 
-The Fact type (type byte `0x01`) models structured knowledge as semantic triples. Clinical diagnoses map naturally:
+The Belief type (type byte `0x01`) models structured knowledge as semantic triples. Clinical diagnoses map naturally:
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "patient-456",
   "relation": "diagnosed_with",
   "object": "Type 2 Diabetes Mellitus",
@@ -92,13 +92,13 @@ The `confidence` field is critical in clinical contexts. A diagnosis confirmed b
 
 Drug allergies, family history, and medication records all follow the same pattern: `subject="patient-456"`, `relation="allergic_to"`, `object="Penicillin"`, with appropriate confidence and source type.
 
-### Episodes for clinical encounters
+### Events for clinical encounters
 
-Episode grains (type byte `0x02`) store raw, unstructured text — perfect for clinical notes and consultation transcripts:
+Event grains (type byte `0x02`) store raw, unstructured text — perfect for clinical notes and consultation transcripts:
 
 ```json
 {
-  "type": "episode",
+  "type": "event",
   "content": "Patient presents with persistent cough for 3 weeks. No fever. Non-smoker. Chest X-ray clear. Prescribed short course of codeine-based cough suppressant. Follow-up in 2 weeks if symptoms persist.",
   "created_at": 1739900000000,
   "user_id": "patient-456",
@@ -108,7 +108,7 @@ Episode grains (type byte `0x02`) store raw, unstructured text — perfect for c
 }
 ```
 
-Episodes are the input to consolidation — the process of extracting structured Facts from unstructured text. A clinical AI agent might process this Episode and generate Fact grains: `(patient-456, has_symptom, persistent_cough)`, `(patient-456, prescribed, codeine_cough_suppressant)`. The extracted Facts would carry `source_type: "llm_generated"` and reference the Episode in their `derived_from` field.
+Episodes are the input to consolidation — the process of extracting structured Facts from unstructured text. A clinical AI agent might process this Episode and generate Belief grains: `(patient-456, has_symptom, persistent_cough)`, `(patient-456, prescribed, codeine_cough_suppressant)`. The extracted Facts would carry `source_type: "llm_generated"` and reference the Episode in their `derived_from` field.
 
 ### Goals for treatment plans
 
@@ -143,26 +143,26 @@ The Goal type (type byte `0x07`) has lifecycle semantics that map directly to tr
 
 Goal state transitions — `active` to `satisfied`, `active` to `failed`, `active` to `suspended` — each create a new immutable grain in the supersession chain (Section 8.7). When the patient achieves target HbA1c, the agent creates a new Goal grain with `goal_state: "satisfied"` and `satisfaction_evidence` pointing to the Observation grains with the lab results that prove it. The `priority` field (integer 1-5, where 1 is critical) maps to treatment urgency.
 
-### ToolCalls for lab orders and prescriptions
+### Actions for lab orders and prescriptions
 
-Every interaction with external clinical systems — lab order submissions, prescription fills, EHR API queries — becomes a ToolCall grain (type byte `0x05`):
+Every interaction with external clinical systems — lab order submissions, prescription fills, EHR API queries — becomes a Action grain (type byte `0x05`):
 
 ```json
 {
-  "type": "tool_call",
+  "type": "action",
   "tool_name": "lab_order_api",
-  "arguments": {
+  "input": {
     "patient_id": "patient-456",
     "test": "HbA1c",
     "priority": "routine",
     "ordering_provider": "dr-smith-789"
   },
-  "result": {
+  "content": {
     "order_id": "LAB-2026-78901",
     "status": "submitted",
     "estimated_completion": "2026-02-21T14:00:00Z"
   },
-  "success": true,
+  "is_error": false,
   "duration_ms": 340,
   "created_at": 1739900000000,
   "namespace": "endocrinology:orders",
@@ -170,15 +170,15 @@ Every interaction with external clinical systems — lab order submissions, pres
 }
 ```
 
-The `duration_ms` field tracks API response times — useful for monitoring EHR integration performance. The `success` boolean and optional `error` field create an automatic record when orders fail, enabling systematic analysis of integration failures.
+The `duration_ms` field tracks API response times — useful for monitoring EHR integration performance. The `is_error` flag and optional `error` field create an automatic record when orders fail, enabling systematic analysis of integration failures.
 
-### Checkpoints for care plan state
+### States for care plan state
 
-Checkpoint grains (type byte `0x03`) capture the complete state of a care plan at a point in time:
+State grains (type byte `0x03`) capture the complete state of a care plan at a point in time:
 
 ```json
 {
-  "type": "checkpoint",
+  "type": "state",
   "context": {
     "active_diagnoses": "type_2_diabetes,hypertension",
     "current_medications": "metformin_500mg_bid,lisinopril_10mg_daily",
@@ -273,11 +273,11 @@ The OMS specification notes (Section 20.2) that encrypting a grain changes its c
 
 When a primary care physician refers a patient to a specialist, the specialist needs the diagnosis and relevant clinical data — but not necessarily the patient's identity, insurance information, or the referring provider's internal system details. HIPAA's minimum necessary standard (45 CFR Section 164.502(b)) requires that covered entities limit PHI disclosure to the minimum necessary to accomplish the intended purpose.
 
-OMS selective disclosure (Section 10) enables exactly this. The referring system can share a Fact grain about the diagnosis while eliding the `subject` (patient identity) and `user_id` fields:
+OMS selective disclosure (Section 10) enables exactly this. The referring system can share a Belief grain about the diagnosis while eliding the `subject` (patient identity) and `user_id` fields:
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "relation": "diagnosed_with",
   "object": "Type 2 Diabetes Mellitus",
   "confidence": 0.92,
@@ -340,16 +340,16 @@ The `.mg` file footer contains a SHA-256 checksum over the entire file (header +
 
 Consider a complete clinical workflow modeled in OMS:
 
-1. **Patient check-in**: The clinical agent creates a Checkpoint grain capturing current care plan state
+1. **Patient check-in**: The clinical agent creates a State grain capturing current care plan state
 2. **Vitals collection**: Blood pressure, heart rate, and temperature become Observation grains with appropriate `observer_type` values
-3. **Clinical encounter**: The consultation is recorded as an Episode grain with the raw clinical notes
-4. **Diagnosis update**: The agent generates or confirms Fact grains with `relation: "diagnosed_with"`, linking to the Observation and Episode grains via `derived_from`
-5. **Lab order**: The agent calls the lab order API, creating a ToolCall grain with the order details and result
+3. **Clinical encounter**: The consultation is recorded as an Event grain with the raw clinical notes
+4. **Diagnosis update**: The agent generates or confirms Belief grains with `relation: "diagnosed_with"`, linking to the Observation and Event grains via `derived_from`
+5. **Lab order**: The agent calls the lab order API, creating a Action grain with the order details and result
 6. **Treatment plan**: Recovery targets become Goal grains with `criteria_structured` for machine-evaluable success conditions and `priority` for treatment urgency
 7. **Specialist referral**: A selectively disclosed subset of grains is shared with the specialist — diagnosis Facts with patient identity elided
 
 Every grain in this workflow is immutable, content-addressed, and carries sensitivity bits set to `11` (PHI). Every grain has a `user_id` enabling per-patient encryption and crypto-erasure. Every grain's provenance is traceable. And every grain can be exported in a `.mg` file for portability.
 
-This is not a hypothetical architecture. It is a direct application of the seven memory types, the sensitivity classification system, the per-user encryption pattern, the selective disclosure mechanism, and the bi-temporal model — all defined in the OMS v1.0 specification with precise binary formats and validation rules.
+This is not a hypothetical architecture. It is a direct application of the ten grain types, the sensitivity classification system, the per-user encryption pattern, the selective disclosure mechanism, and the bi-temporal model — all defined in the OMS v1.2 specification with precise binary formats and validation rules.
 
 Healthcare AI agents need memory that is as carefully designed as the clinical decisions they support. OMS provides the standard for building it.

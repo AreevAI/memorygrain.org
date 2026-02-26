@@ -110,7 +110,7 @@ A fact grain stating "The server is running Ubuntu 22.04" and another stating "T
 The `replaces` relation type is the most restricted of the eleven, and its normative treatment is essential to understanding OMS security.
 
 <Callout type="security">
-The `replaces` relation type is a semantic annotation only. It does NOT constitute formal supersession and MUST NOT cause a conformant store to update the target grain's index entry (`superseded_by`, `contradicted`, `system_valid_to`). Conformant clients MUST determine a grain's current status solely from the index `superseded_by` and `contradicted` fields, never from `related_to` links.
+The `replaces` relation type is a semantic annotation only. It does NOT constitute formal supersession and MUST NOT cause a conformant store to update the target grain's index entry (`superseded_by`, `verification_status`, `system_valid_to`). Conformant clients MUST determine a grain's current status solely from the index `superseded_by` and `verification_status` fields, never from `related_to` links.
 </Callout>
 
 This rule exists because `replaces` would otherwise be a bypass path for `invalidation_policy` (Section 23.7). Consider a grain with `mode: "locked"` — no supersession or contradiction is permitted. If an agent could write a new grain with `relation_type: "replaces"` pointing at the locked grain, and a store treated that as supersession, the lock would be meaningless.
@@ -130,11 +130,11 @@ Together, they answer different questions:
 - **`derived_from`** answers: "What grains was this derived from?" — a list of parent content addresses
 - **`provenance_chain`** answers: "How was each source used, and to what degree?" — method and weight for each contribution
 
-Consider a consolidated Fact grain that was produced by analyzing three Episode grains and extracting a common pattern. The `derived_from` field lists the three episode hashes. The `provenance_chain` provides the detail:
+Consider a consolidated Belief grain that was produced by analyzing three Event grains and extracting a common pattern. The `derived_from` field lists the three episode hashes. The `provenance_chain` provides the detail:
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "user",
   "relation": "prefers",
   "object": "morning meetings over afternoon meetings",
@@ -158,9 +158,9 @@ The `derived_from` array tells you the parents. The `provenance_chain` tells you
 
 ## Building knowledge graphs
 
-The combination of semantic triples in Fact grains and typed cross-links in `related_to` creates a rich graph structure.
+The combination of semantic triples in Belief grains and typed cross-links in `related_to` creates a rich graph structure.
 
-Each Fact grain is a semantic triple: `subject` - `relation` - `object`. This maps directly to RDF (Section 8.1): `<grain:subject> <grain:relation> "grain:object" .` The grain itself is a node in the knowledge graph, and its semantic triple defines an edge between the subject entity and the object entity.
+Each Belief grain is a semantic triple: `subject` - `relation` - `object`. This maps directly to RDF (Section 8.1): `<grain:subject> <grain:relation> "grain:object" .` The grain itself is a node in the knowledge graph, and its semantic triple defines an edge between the subject entity and the object entity.
 
 The `related_to` field adds a second layer of edges — not between entities, but between grains themselves. Grain A `elaborates` grain B. Grain C `supports` grain D. Grain E `contradicts` grain F. These are typed, weighted edges in a grain-level knowledge graph.
 
@@ -180,7 +180,7 @@ Section 21.4 of the specification provides a test vector demonstrating cross-lin
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "Bob",
   "relation": "manages",
   "object": "Project Alpha",

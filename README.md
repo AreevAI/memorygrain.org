@@ -152,7 +152,7 @@ python3 verify_hashes.py
 ## Related Repositories
 
 - **Specification:** [openmemoryspec/oms](https://github.com/openmemoryspec/oms) — the OMS v1.0 specification
-- **Website:** [ariv-ai/memorygrain.org](https://github.com/ariv-ai/memorygrain.org) — this repository
+- **Website:** [AreevAI/memorygrain.org](https://github.com/AreevAI/memorygrain.org) — this repository
 
 ## License
 

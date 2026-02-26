@@ -59,7 +59,7 @@ export default function AboutPage() {
 
           <h2>The .mg Container Definition</h2>
           <p>
-            OMS spans 24 sections covering blob layout, canonical serialization, content addressing, field compaction, memory types, cryptographic signing (COSE Sign1), selective disclosure, the .mg file format, identity (W3C DIDs), sensitivity classification, provenance, temporal modeling, conformance levels, device profiles, grain protection, and security considerations.
+            OMS v1.2 spans 28 sections and 7 appendices covering blob layout, canonical serialization, content addressing, field compaction, ten grain types, cryptographic signing (COSE Sign1), selective disclosure, the .mg file format, identity (W3C DIDs), sensitivity classification, provenance, temporal modeling, conformance levels, device profiles, grain protection, observer type registry, query conventions, domain profile extensions (healthcare, legal, finance, robotics, science, consumer), and security considerations.
           </p>
           <p>
             <Link href="/spec">Read the full OM specification →</Link>
@@ -83,8 +83,18 @@ export default function AboutPage() {
               <tbody>
                 <tr>
                   <td><code>1.0</code></td>
-                  <td>2026-02-17</td>
-                  <td>Initial publication — 9-byte fixed header, canonical serialization, content addressing, seven memory types (incl. Goal 0x07), COSE signing, selective disclosure, .mg container files, W3C DIDs, sensitivity bits, reg: tag vocabulary, provenance, temporal modeling, conformance levels, device profiles</td>
+                  <td>2026-02-19</td>
+                  <td>Initial publication — 9-byte fixed header, canonical serialization, content addressing, seven memory types (Fact, Episode, Checkpoint, Workflow, ToolCall, Observation, Goal), COSE signing, selective disclosure, .mg container files, W3C DIDs, sensitivity bits, provenance, temporal modeling, conformance levels, device profiles</td>
+                </tr>
+                <tr>
+                  <td><code>1.1</code></td>
+                  <td>2026-02-20</td>
+                  <td>Generalized Observer model — renamed sensor_id→observer_id (oid), sensor_type→observer_type (otype); four new Observation fields; Observer Type Registry (§24); Observation Mode (§25) and Scope (§26) registries</td>
+                </tr>
+                <tr>
+                  <td><code>1.2</code></td>
+                  <td>2026-02-23</td>
+                  <td>Ten grain types — type renames (Fact→Belief, Episode→Event, Checkpoint→State, ToolCall→Action); three new types (Reasoning 0x08, Consensus 0x09, Consent 0x0A); Immutability Boundary; mg: relation vocabulary (21 relations); Domain Profile Extensions (Appendix A–G); Action phase model; Query Conventions (§28); HIPAA PHI tag normalization; Goal delegation scope fields; retention_policy; recall_priority; hold and consent_cascade invalidation modes</td>
                 </tr>
               </tbody>
             </table>

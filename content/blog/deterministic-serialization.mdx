@@ -8,13 +8,13 @@ tags: ["serialization", "canonical", "deterministic", "technical"]
 
 The entire integrity model of the Open Memory Specification rests on a single guarantee: **two independent implementations, given identical input, must produce identical bytes**. If the bytes are identical, the SHA-256 content address is identical. If the content address is identical, grains can be verified, deduplicated, and linked across any system, any language, any platform.
 
-This is not a nice-to-have. It is the foundation. And achieving it requires a precise set of canonical serialization rules defined in Section 4 of the OMS v1.0 specification.
+This is not a nice-to-have. It is the foundation. And achieving it requires a precise set of canonical serialization rules defined in Section 4 of the OMS v1.2 specification.
 
 This post walks through every rule in detail.
 
 ## Why Determinism Matters
 
-Consider two agents — one written in Python, one in Rust — that both create the same Fact grain: "Alice works at ACME Corp." If the Python serializer encodes map keys in insertion order and the Rust serializer encodes them alphabetically, they produce different bytes. Different bytes mean different SHA-256 hashes. Different hashes mean two "identical" facts that cannot be recognized as the same grain.
+Consider two agents — one written in Python, one in Rust — that both create the same Belief grain: "Alice works at ACME Corp." If the Python serializer encodes map keys in insertion order and the Rust serializer encodes them alphabetically, they produce different bytes. Different bytes mean different SHA-256 hashes. Different hashes mean two "identical" facts that cannot be recognized as the same grain.
 
 Content addressing breaks. Deduplication breaks. Provenance chains that reference grains by hash become disconnected. The entire system degrades into platform-specific silos — the exact problem OMS was designed to solve.
 

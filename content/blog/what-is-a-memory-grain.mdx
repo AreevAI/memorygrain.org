@@ -1,6 +1,6 @@
 ---
 title: "What Is a Memory Grain?"
-description: "The memory grain is the atomic unit of agent knowledge in the Open Memory Specification. This post covers the seven memory types, the immutability model, content addressing, the .mg container capabilities, and the ten design principles that shape the format."
+description: "The memory grain is the atomic unit of agent knowledge in the Open Memory Specification. This post covers the ten grain types, the immutability model, content addressing, the .mg container capabilities, and the ten design principles that shape the format."
 date: "2026-02-19"
 readTime: "11 min read"
 tags: ["memory-grain", "fundamentals", "architecture"]
@@ -34,17 +34,17 @@ This content address serves five roles simultaneously (Section 5.4):
 
 Two agents on different continents, running different implementations, in different programming languages, that independently learn the same fact at the same timestamp will produce byte-identical blobs with the same content address. This is not a coincidence — it is a direct consequence of canonical serialization.
 
-## Seven memory types
+## Ten grain types (v1.2)
 
-Every grain carries a `type` field indicating what kind of knowledge it represents. OMS v1.0 defines seven standard types, each with its own required and optional fields. The type is also encoded in byte 2 of the fixed header, enabling O(1) filtering without deserializing the payload.
+Every grain carries a `type` field indicating what kind of knowledge it represents. OMS v1.0 defines ten standard grain types, each with its own required and optional fields. The type is also encoded in byte 2 of the fixed header, enabling O(1) filtering without deserializing the payload.
 
-### Fact (0x01)
+### Belief (0x01)
 
 A structured knowledge claim modeled as a semantic triple: subject-relation-object with confidence and temporal validity.
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "user",
   "relation": "prefers",
   "object": "dark mode",
@@ -56,13 +56,13 @@ A structured knowledge claim modeled as a semantic triple: subject-relation-obje
 
 Facts are the core knowledge representation primitive. The subject-relation-object model maps naturally to knowledge graphs (RDF triples: `<grain:subject> <grain:relation> "grain:object" .`). Confidence scores range from 0.0 to 1.0, expressing how credible the claim is. Required fields: `type`, `subject`, `relation`, `object`, `confidence`, `source_type`, `created_at`.
 
-### Episode (0x02)
+### Event (0x02)
 
-A raw, unstructured interaction record. Episodes are the input to consolidation — the process of extracting structured Facts from unstructured text.
+A raw, unstructured interaction record. Episodes are the input to consolidation — the process of extracting structured Beliefs from unstructured text.
 
 ```json
 {
-  "type": "episode",
+  "type": "event",
   "content": "User asked about dark mode settings",
   "created_at": 1768471200000
 }
@@ -70,13 +70,13 @@ A raw, unstructured interaction record. Episodes are the input to consolidation 
 
 Episodes are intentionally minimal. Required fields are just `type`, `content`, and `created_at`. The optional `consolidated` boolean tracks whether the episode has been processed into structured knowledge.
 
-### Checkpoint (0x03)
+### State (0x03)
 
 An agent state snapshot for save and restore. The `context` map captures the agent's current state; optional `plan` and `history` fields record planned actions and action history.
 
 ```json
 {
-  "type": "checkpoint",
+  "type": "state",
   "context": {"current_task": "analyze_report", "step": 3},
   "created_at": 1768471200000
 }
@@ -99,22 +99,22 @@ Procedural memory — a learned sequence of actions triggered by a specific cond
 
 Workflows capture how to do things, not what is true. Required fields: `type`, `steps` (non-empty array), `trigger` (non-empty string), `created_at`.
 
-### ToolCall (0x05)
+### Action (0x05)
 
 A record of a tool or function invocation and its result.
 
 ```json
 {
-  "type": "tool_call",
+  "type": "action",
   "tool_name": "web_search",
-  "arguments": {"query": "OMS specification"},
-  "result": {"hits": 42},
-  "success": true,
+  "input": {"query": "OMS specification"},
+  "content": {"hits": 42},
+  "is_error": false,
   "created_at": 1768471200000
 }
 ```
 
-ToolCall grains provide a complete audit trail of what an agent did, what arguments it passed, what came back, and whether it succeeded. Optional fields include `duration_ms` for execution time and `error` for failure messages.
+Action grains provide a complete audit trail of what an agent did, what arguments it passed, what came back, and whether it succeeded. Optional fields include `duration_ms` for execution time and `error` for failure messages.
 
 ### Observation (0x06)
 
@@ -283,6 +283,6 @@ The `.mg` file format mirrors familiar paradigms: `.sqlite` is a database file c
 
 A memory grain is simple in concept and precise in specification. It is one piece of knowledge, encoded deterministically, identified by its content hash, carrying its own provenance, compliance metadata, and temporal validity. It is never modified — only superseded. It is never locked to a platform — only addressed by its hash.
 
-The seven types cover the range of agent knowledge: declarative facts, raw interactions, state snapshots, procedural steps, tool invocations, sensor readings, and explicit objectives. The ten design principles ensure the format stays compact, interoperable, verifiable, and compliant.
+The ten grain types cover the range of agent knowledge: declarative facts, raw interactions, state snapshots, procedural steps, tool invocations, sensor readings, and explicit objectives. The ten design principles ensure the format stays compact, interoperable, verifiable, and compliant.
 
 For the byte-level details of how a grain is actually encoded — the 9-byte header, the flags bitfield, the namespace hash, and the MessagePack payload — see [Anatomy of a .mg Blob](/blog/anatomy-of-a-mg-blob). For the broader context of why persistent memory matters for production AI agents, see [Why AI Agents Need Persistent Memory](/blog/why-ai-agents-need-persistent-memory).

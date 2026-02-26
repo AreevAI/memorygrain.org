@@ -5,22 +5,22 @@ const useCases = [
     icon: <Bot size={28} aria-hidden="true" />,
     title: 'AI Agents',
     description:
-      'Persistent, verifiable memory for LLM-powered agents. Facts are extracted from episodes, signed by the agent, and version-controlled for full auditability.',
-    features: ['Episode → Fact consolidation', 'Provenance chains', 'Multi-agent sharing'],
+      'Persistent, verifiable memory for LLM-powered agents. Beliefs are extracted from Events, signed by the agent, and version-controlled for full auditability.',
+    features: ['Event → Belief consolidation', 'Provenance chains', 'Multi-agent sharing'],
   },
   {
     icon: <Car size={28} aria-hidden="true" />,
     title: 'Autonomous Vehicles',
     description:
-      'Every sensor reading, routing decision, and incident checkpoint is an immutable grain. Bi-temporal queries reconstruct the exact decision state at any moment.',
-    features: ['Lidar Observations', 'Route Fact grains', 'Incident reconstruction'],
+      'Every sensor reading, routing decision, and incident state is an immutable grain. Bi-temporal queries reconstruct the exact decision state at any moment.',
+    features: ['Lidar Observations', 'Route Belief grains', 'Incident reconstruction'],
   },
   {
     icon: <Cpu size={28} aria-hidden="true" />,
     title: 'Robotics',
     description:
-      'Robots log every action as a signed ToolCall grain. Knowledge transfers between robot units without a central server — via content-addressed grains.',
-    features: ['ToolCall audit trail', 'Cross-robot learning', 'COSE-signed actions'],
+      'Robots log every action as a signed Action grain. Knowledge transfers between robot units without a central server — via content-addressed grains.',
+    features: ['Action audit trail', 'Cross-robot learning', 'COSE-signed actions'],
   },
   {
     icon: <Antenna size={28} aria-hidden="true" />,
@@ -97,7 +97,7 @@ export function UseCases() {
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {features.map((f) => (
                   <li key={f} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8125rem', color: 'var(--fg-muted)' }}>
-                    <Check size={12} aria-hidden="true" style={{ color: 'var(--episode)', flexShrink: 0 }} />
+                    <Check size={12} aria-hidden="true" style={{ color: 'var(--event)', flexShrink: 0 }} />
                     {f}
                   </li>
                 ))}

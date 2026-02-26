@@ -10,17 +10,16 @@ const levels = [
       'Deserialize and verify grain blobs',
       'Compute & verify SHA-256 content addresses',
       'Field compaction (short keys ↔ full names)',
-      'All seven memory types',
+      'All ten grain types (0x01–0x0A)',
       'Ignore unknown fields',
       'Constant-time hash comparison',
-      'Accept deprecated sid/stype short keys (v1.1)',
     ],
   },
   {
     num: 2,
     label: 'Full Implementation',
     target: 'Agent frameworks, edge gateways',
-    color: 'var(--fact)',
+    color: 'var(--belief)',
     features: [
       'All Level 1 requirements',
       'Serialize (canonical MessagePack)',
@@ -37,7 +36,7 @@ const levels = [
     num: 3,
     label: 'Production Store',
     target: 'Enterprise deployments, cloud platforms',
-    color: 'var(--checkpoint)',
+    color: 'var(--state)',
     features: [
       'All Level 2 requirements',
       'Persistent backend (filesystem, S3, DB)',

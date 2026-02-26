@@ -29,7 +29,7 @@ export function HowItWorks() {
               <h3 style={{ fontWeight: 600, color: 'var(--fg)', fontSize: '1.0625rem' }}>Write a grain</h3>
             </div>
             <p style={{ fontSize: '0.875rem', color: 'var(--fg-secondary)', lineHeight: 1.65, marginBottom: '0.875rem' }}>
-              Create any of seven memory types — Fact, Episode, Checkpoint, Workflow, ToolCall, Observation, or Goal — with your structured data.
+              Create any of ten grain types — Belief, Event, State, Workflow, Action, Observation, Goal, Reasoning, Consensus, or Consent — with your structured data.
             </p>
             <pre
               aria-label="Example fact grain JSON"
@@ -58,7 +58,7 @@ export function HowItWorks() {
           {/* Step 2 */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1rem' }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: '50%', background: 'var(--checkpoint)', color: '#fff', fontWeight: 700, fontSize: '0.875rem', flexShrink: 0 }}>2</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: '50%', background: 'var(--state)', color: '#fff', fontWeight: 700, fontSize: '0.875rem', flexShrink: 0 }}>2</span>
               <h3 style={{ fontWeight: 600, color: 'var(--fg)', fontSize: '1.0625rem' }}>Serialize & hash</h3>
             </div>
             <p style={{ fontSize: '0.875rem', color: 'var(--fg-secondary)', lineHeight: 1.65, marginBottom: '0.875rem' }}>
@@ -81,14 +81,14 @@ export function HowItWorks() {
               <div style={{ color: 'var(--accent)', wordBreak: 'break-all' }}>
                 4eed1d6bdfb34bfc<br />f2dd157482fc70af
               </div>
-              <div style={{ color: 'var(--episode)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>→ content address <Check size={12} aria-hidden="true" /></div>
+              <div style={{ color: 'var(--event)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>→ content address <Check size={12} aria-hidden="true" /></div>
             </div>
           </div>
 
           {/* Step 3 */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1rem' }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: '50%', background: 'var(--episode)', color: '#fff', fontWeight: 700, fontSize: '0.875rem', flexShrink: 0 }}>3</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: '50%', background: 'var(--event)', color: '#fff', fontWeight: 700, fontSize: '0.875rem', flexShrink: 0 }}>3</span>
               <h3 style={{ fontWeight: 600, color: 'var(--fg)', fontSize: '1.0625rem' }}>Store anywhere</h3>
             </div>
             <p style={{ fontSize: '0.875rem', color: 'var(--fg-secondary)', lineHeight: 1.65, marginBottom: '0.875rem' }}>

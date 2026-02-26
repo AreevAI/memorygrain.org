@@ -145,11 +145,11 @@ When the `has_content_refs` flag (bit 3) is set in the grain's header flags byte
 
 ## Facts for equipment knowledge
 
-Raw Observations are valuable for real-time monitoring, but the lasting value comes from what agents learn from them. Equipment knowledge is captured as Fact grains:
+Raw Observations are valuable for real-time monitoring, but the lasting value comes from what agents learn from them. Equipment knowledge is captured as Belief grains:
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "CNC-machine-7",
   "relation": "requires_maintenance",
   "object": "spindle_bearing_replacement",
@@ -177,7 +177,7 @@ The `source_type` of `"agent_inferred"` (Section 6.1) indicates this knowledge w
 
 This provenance is critical in manufacturing. When a maintenance recommendation turns out to be correct, the full chain from raw sensor data to inference is available. When it turns out to be wrong, the same chain enables root-cause analysis of the false positive.
 
-The `confidence` field tracks how certain the agent is. An initial inference at 0.85 might rise to 0.95 as additional sensor readings corroborate the pattern, or drop to 0.4 if subsequent data contradicts it. Each confidence update creates a new Fact grain that supersedes the previous one — the supersession chain preserves the full evolution of the agent's belief.
+The `confidence` field tracks how certain the agent is. An initial inference at 0.85 might rise to 0.95 as additional sensor readings corroborate the pattern, or drop to 0.4 if subsequent data contradicts it. Each confidence update creates a new Belief grain that supersedes the previous one — the supersession chain preserves the full evolution of the agent's belief.
 
 ## Workflows for learned standard operating procedures
 
@@ -228,7 +228,7 @@ Shift handoff is a critical moment in manufacturing. The Checkpoint type (Sectio
 
 ```json
 {
-  "type": "checkpoint",
+  "type": "state",
   "context": {
     "current_batch": "batch-2026-0115-A",
     "parts_completed": "847",
@@ -254,7 +254,7 @@ Shift handoff is a critical moment in manufacturing. The Checkpoint type (Sectio
 }
 ```
 
-The `context` map captures the current state. The `plan` array lists pending actions. The `history` array records what happened during the shift. An incoming shift operator — human or AI — gets the full picture in a single Checkpoint grain.
+The `context` map captures the current state. The `plan` array lists pending actions. The `history` array records what happened during the shift. An incoming shift operator — human or AI — gets the full picture in a single State grain.
 
 ## Goals for production targets
 
@@ -284,17 +284,17 @@ Production targets are natural Goal grains, with `criteria_structured` (Section 
 
 The `criteria_structured` schema (Section 8.7) supports `metric`, `operator` (one of `"lt"`, `"gt"`, `"lte"`, `"gte"`, `"eq"`, `"neq"`), `threshold`, `window_ms` (measurement evaluation window), and `measurement_ns` (the namespace or system to query). The `window_ms` of 86400000 (24 hours) means the defect rate is evaluated over a rolling daily window.
 
-## ToolCalls for PLC commands and SCADA APIs
+## Actions for PLC commands and SCADA APIs
 
-When an agent issues commands to programmable logic controllers (PLCs) or makes SCADA API calls, these are recorded as ToolCall grains:
+When an agent issues commands to programmable logic controllers (PLCs) or makes SCADA API calls, these are recorded as Action grains:
 
 ```json
 {
-  "type": "tool_call",
+  "type": "action",
   "tool_name": "plc_set_spindle_speed",
-  "arguments": {"machine_id": "CNC-machine-7", "target_rpm": 8000, "ramp_time_ms": 5000},
-  "result": {"status": "acknowledged", "actual_rpm": 8000, "settled_at_ms": 1768471205000},
-  "success": true,
+  "input": {"machine_id": "CNC-machine-7", "target_rpm": 8000, "ramp_time_ms": 5000},
+  "content": {"status": "acknowledged", "actual_rpm": 8000, "settled_at_ms": 1768471205000},
+  "is_error": false,
   "duration_ms": 5230,
   "created_at": 1768471200000,
   "namespace": "factory:building-a:line-3"
@@ -303,11 +303,11 @@ When an agent issues commands to programmable logic controllers (PLCs) or makes 
 
 ```json
 {
-  "type": "tool_call",
+  "type": "action",
   "tool_name": "scada_query_historical",
-  "arguments": {"machine_id": "CNC-machine-7", "metric": "vibration", "window_hours": 48},
-  "result": {"data_points": 172800, "max_value": "5.1mm/s", "avg_value": "2.3mm/s", "trend": "increasing"},
-  "success": true,
+  "input": {"machine_id": "CNC-machine-7", "metric": "vibration", "window_hours": 48},
+  "content": {"data_points": 172800, "max_value": "5.1mm/s", "avg_value": "2.3mm/s", "trend": "increasing"},
+  "is_error": false,
   "duration_ms": 890,
   "created_at": 1768471200000,
   "namespace": "factory:building-a:line-3"
@@ -371,7 +371,7 @@ The cloud tier uses the Extended profile (Section 18.1):
 - **Encryption:** AES-256-GCM
 - **Full feature set**
 
-Cloud analytics can store large Checkpoint grains with full production state, maintain extensive provenance chains linking thousands of Observations to derived Facts, and run embedding-based similarity search across the entire grain corpus.
+Cloud analytics can store large State grains with full production state, maintain extensive provenance chains linking thousands of Observations to derived Facts, and run embedding-based similarity search across the entire grain corpus.
 
 ## Content refs for inspection images
 
@@ -419,9 +419,9 @@ The full predictive maintenance workflow chains OMS memory types together:
 
 **Step 2 — Detect.** An edge agent monitors Observation streams and detects anomalies: vibration exceeding baseline, temperature trending upward, correlated readings across multiple sensors. These anomalies are themselves Observations with elevated `importance`.
 
-**Step 3 — Infer.** The agent creates Fact grains representing equipment knowledge: `subject="CNC-machine-7"`, `relation="requires_maintenance"`, `object="spindle_bearing_replacement"`. The `source_type` is `"agent_inferred"` and `confidence` reflects the strength of the evidence. The `derived_from` array points to the specific Observation grains.
+**Step 3 — Infer.** The agent creates Belief grains representing equipment knowledge: `subject="CNC-machine-7"`, `relation="requires_maintenance"`, `object="spindle_bearing_replacement"`. The `source_type` is `"agent_inferred"` and `confidence` reflects the strength of the evidence. The `derived_from` array points to the specific Observation grains.
 
-**Step 4 — Track confidence.** As additional sensor data arrives, the agent updates its belief. Each update creates a new Fact grain that supersedes the previous one. Confidence rises (corroborating data) or falls (contradicting data). The supersession chain preserves the complete evolution of the prediction.
+**Step 4 — Track confidence.** As additional sensor data arrives, the agent updates its belief. Each update creates a new Belief grain that supersedes the previous one. Confidence rises (corroborating data) or falls (contradicting data). The supersession chain preserves the complete evolution of the prediction.
 
 **Step 5 — Learn procedures.** When maintenance is performed — either by a human operator or an automated system — the agent records the procedure as a Workflow grain. Over time, repeated observations of similar procedures refine the Workflow through supersession.
 

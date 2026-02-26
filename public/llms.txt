@@ -2,7 +2,7 @@
 
 > The open standard for immutable, content-addressed memory grains.
 > Built for AI agents, autonomous vehicles, robots, and IoT systems.
-> Version 1.1 · Standards Track · OWFa 1.0 · February 2026
+> Version 1.2 · Standards Track · OWFa 1.0 · February 2026
 
 ## What is the .mg format?
 
@@ -20,7 +20,7 @@ Each memory grain is:
 ## Key Concepts
 
 - **Content address**: SHA-256(blob bytes) = 64-character lowercase hex string
-- **Memory grain**: Atomic knowledge unit — one fact, episode, observation, etc.
+- **Memory grain**: Atomic knowledge unit — one belief, event, observation, etc.
 - **Grain container**: .mg file — portable unit containing indexed grains with checksum
 - **Canonical serialization**: Sorted keys, NFC strings, null omission, deterministic bytes
 - **Field compaction**: Short keys (e.g., `t`=type, `s`=subject) reduce storage
@@ -28,33 +28,47 @@ Each memory grain is:
 - **COSE**: CBOR Object Signing and Encryption (RFC 9052) — signing standard
 - **Selective disclosure**: Hide sensitive fields while proving they exist
 - **Crypto-erasure**: Destroy per-user HKDF key → O(1) GDPR erasure
+- **Immutability boundary**: Blob (immutable, hashed) vs. Index layer (mutable status fields)
 
-## Seven Memory Types
+## Ten Grain Types (OMS v1.2)
 
-| Type | Byte | Description |
-|------|------|-------------|
-| Fact | 0x01 | Semantic triple: subject–relation–object with confidence score |
-| Episode | 0x02 | Raw interaction record (conversation, log entry) |
-| Checkpoint | 0x03 | Agent state snapshot for save/restore |
-| Workflow | 0x04 | Learned action sequence with trigger |
-| ToolCall | 0x05 | Function invocation with arguments, result, success |
-| Observation | 0x06 | Observer reading — physical sensors, AI cognitive agents, or humans |
-| Goal | 0x07 | Desired outcome with priority, status, and success criteria |
+| Type | Byte | Description | v1.1 Name |
+|------|------|-------------|-----------|
+| Belief | 0x01 | Semantic triple: subject–relation–object with confidence score | Fact |
+| Event | 0x02 | Timestamped interaction record (message, log entry, utterance) | Episode |
+| State | 0x03 | Agent state snapshot for save/restore | Checkpoint |
+| Workflow | 0x04 | Learned action sequence with trigger | Workflow |
+| Action | 0x05 | Tool invocation, code execution, or computer-use record | ToolCall |
+| Observation | 0x06 | Observer reading — physical sensors, AI agents, or humans | Observation |
+| Goal | 0x07 | Desired outcome with priority, status, and success criteria | Goal |
+| Reasoning | 0x08 | Inference chain and thought audit trail (new in v1.2) | — |
+| Consensus | 0x09 | Multi-agent agreement record (new in v1.2) | — |
+| Consent | 0x0A | Permission grant or withdrawal — DID-scoped, purpose-bounded (new in v1.2) | — |
 
-## Binary Format (v1.0 Header)
+All v1.1 type names are accepted by readers (backwards-compatible). Writers MUST emit v1.2 canonical names.
+
+## Binary Format (v1.2 Header)
 
 ```
 Byte 0: Version = 0x01
 Byte 1: Flags = [signed|encrypted|compressed|has_content_refs|has_embedding_refs|cbor_encoding|sensitivity(2 bits)]
-Byte 2: Type = 0x01..0x07 (Fact..Goal)
+Byte 2: Type = 0x01..0x0A (Belief..Consent); 0x0B–0xEF reserved; 0xF0–0xFF domain profile types
 Bytes 3-4: Namespace hash = first two bytes of SHA-256(namespace), uint16 big-endian
-Bytes 5-8: Created-at = uint32 epoch seconds (big-endian)
+Bytes 5-8: Created-at = uint32 epoch seconds (coarse routing hint; authoritative timestamp in payload)
 Bytes 9+: MessagePack or CBOR payload (canonical, sorted keys, NFC strings, nulls omitted)
 ```
 
+## Immutability Boundary (new in v1.2)
+
+Grains have two layers with different mutability guarantees:
+- **Blob** (immutable): 9-byte fixed header + payload — covered by content address and COSE signature
+- **Index** (mutable): Status/access fields managed by the store — NOT part of the hash or signature
+
+Index-layer fields: `superseded_by`, `system_valid_to`, `verification_status`, `access_count`, `last_accessed_at`
+
 ## Compliance
 
-- **GDPR Art. 17**: Crypto-erasure — destroy HKDF(master_key, user_id) key → data unrecoverable
+- **GDPR Art. 17**: Crypto-erasure — destroy HKDF(master_key, user_id) key → data unrecoverable. Consent grains scope erasure.
 - **HIPAA PHI**: Sensitivity bits 11 = PHI; structural_tags prefix `phi:` for field-level tagging
 - **CCPA**: Selective disclosure hides PII fields while proving they exist
 - **SOX**: Immutable grains + hash-chained audit log = tamper-evident audit trail
@@ -73,11 +87,11 @@ Full specification: https://memorygrain.org/spec/
 
 - GitHub organization: https://github.com/openmemoryspec/
 - Specification repo: https://github.com/openmemoryspec/oms
-- Website repo: https://github.com/ariv-ai/memorygrain.org
+- Website repo: https://github.com/AreevAI/memorygrain.org
 
 ## Pages
 
-- https://memorygrain.org/ — Home, use cases, memory types, conformance levels
+- https://memorygrain.org/ — Home, use cases, grain types, conformance levels
 - https://memorygrain.org/spec/ — Full OM specification with ABNF grammar and test vectors
 - https://memorygrain.org/blog/ — Technical deep dives into the .mg format
 - https://memorygrain.org/about/ — About, license, contributing

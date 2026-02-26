@@ -12,7 +12,7 @@ This property — content addressing — is the foundation on which OMS builds i
 
 ## The Formula
 
-Section 5 of the OMS v1.0 specification defines content addressing in a single line:
+Section 5 of the OMS v1.2 specification defines content addressing in a single line:
 
 ```
 content_address = lowercase_hex(SHA-256(complete_blob_bytes))
@@ -51,7 +51,7 @@ Current cryptanalytic research has not reduced the practical security margin of 
 
 ## A Concrete Example: Vector 1
 
-The best way to understand content addressing is to trace through a real example. Test Vector 1 from Section 21.1 defines a minimal Fact grain:
+The best way to understand content addressing is to trace through a real example. Test Vector 1 from Section 21.1 defines a minimal Belief grain (shown here using the v1.0 type name `"fact"`; in OMS v1.2 the canonical name is `"belief"`):
 
 ```json
 {

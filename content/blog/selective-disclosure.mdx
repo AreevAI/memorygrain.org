@@ -18,13 +18,13 @@ This approach has a critical property: the receiver can independently verify any
 
 ## The elision model in practice
 
-Section 10.1 of the spec illustrates the model with a concrete example. Consider a Fact grain recording that Alice works at ACME Corp:
+Section 10.1 of the spec illustrates the model with a concrete example. Consider a Belief grain recording that Alice works at ACME Corp:
 
 **Full grain** (held by the creator):
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "Alice",
   "relation": "works_at",
   "object": "ACME Corp",
@@ -40,7 +40,7 @@ This grain contains two fields that might be sensitive in a sharing scenario: `u
 
 ```json
 {
-  "type": "fact",
+  "type": "belief",
   "subject": "Alice",
   "relation": "works_at",
   "object": "ACME Corp",

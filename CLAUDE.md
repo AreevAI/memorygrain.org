@@ -86,4 +86,4 @@ When content, pages, or spec details change, the following files **must** be upd
 The project lives under the `openmemoryspec` GitHub organization:
 - Organization: `https://github.com/openmemoryspec/`
 - Specification repo: `https://github.com/openmemoryspec/oms`
-- Website repo: `https://github.com/ariv-ai/memorygrain.org`
+- Website repo: `https://github.com/AreevAI/memorygrain.org`
