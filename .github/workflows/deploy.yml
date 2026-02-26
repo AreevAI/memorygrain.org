@@ -30,6 +30,12 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
+      - name: Fetch OMS Specification
+        run: |
+          mkdir -p docs
+          curl -fsSL https://raw.githubusercontent.com/openmemoryspec/oms/refs/heads/main/SPECIFICATION.md \
+            -o docs/oms-specification.md
+
       - name: Install dependencies
         run: npm ci
 

@@ -69,7 +69,7 @@ export function Header() {
           {/* Right side */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <a
-              href="https://github.com/openmemoryspec/"
+              href="https://github.com/openmemoryspec/oms"
               target="_blank"
               rel="noopener noreferrer"
               aria-label="View on GitHub"
