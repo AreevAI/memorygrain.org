@@ -56,10 +56,10 @@ export function Footer() {
               Blog
             </p>
             {[
-              { href: '/blog/cose-sign', label: 'COSE Sign1 Deep Dive' },
-              { href: '/blog/header-bytes', label: '9-Byte Header Explained' },
-              { href: '/blog/portability', label: 'Portability & Version Control' },
-              { href: '/blog/autonomous-vehicles', label: 'Autonomous Vehicles' },
+              { href: '/blog/signing-memory-grains-cose-dids', label: 'COSE Sign1 Deep Dive' },
+              { href: '/blog/anatomy-of-a-mg-blob', label: 'Anatomy of a .mg Blob' },
+              { href: '/blog/open-standard-vendor-lockin', label: 'Open Standard vs Vendor Lock-in' },
+              { href: '/blog/agent-memory-autonomous-vehicles', label: 'Autonomous Vehicles' },
             ].map(({ href, label }) => (
               <Link key={href} href={href} style={{ display: 'block', fontSize: '0.8125rem', color: 'var(--fg-secondary)', textDecoration: 'none', marginBottom: '0.375rem' }}>
                 {label}
@@ -113,10 +113,10 @@ export function Footer() {
             </a>
             .
           </p>
-          <p style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>
-            v1.2 · Standards Track · Hosted by{' '}
-            <a href="https://arivai.dev" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
-              arivai.dev
+          <p style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)' }}>
+            Backed by{' '}
+            <a href="https://areev.ai" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
+              areev.ai
             </a>
           </p>
         </div>

@@ -5,18 +5,18 @@
 /* ─── Design Tokens ─────────────────────────────────────────── */
 :root {
   --bg: #ffffff;
-  --surface: #f0fdfa;
-  --elevated: #ccfbf1;
+  --surface: #f0f7ff;
+  --elevated: #d6eeff;
   --fg: #0f172a;
   --fg-secondary: #475569;
   --fg-muted: #94a3b8;
-  --border: #b2e8e0;
-  --border-subtle: #e0f9f5;
-  --accent: #0d9488;
-  --accent-hover: #0f766e;
-  --accent-light: #ccfbf1;
-  --code-bg: #f0fdfa;
-  --code-border: #99f6e4;
+  --border: #a0d0e8;
+  --border-subtle: #e0f0f8;
+  --accent: #0088AA;
+  --accent-hover: #005577;
+  --accent-light: #d6eeff;
+  --code-bg: #f0f7ff;
+  --code-border: #80d0e8;
 
   /* Grain type colors (v1.2 canonical names + v1.1 aliases) */
   --belief: #3b82f6;
@@ -37,19 +37,19 @@
 }
 
 .dark {
-  --bg: #091110;
-  --surface: #101e1c;
-  --elevated: #182b28;
-  --fg: #f0fdfa;
+  --bg: #000A1A;
+  --surface: #0A1A2A;
+  --elevated: #142838;
+  --fg: #f0f8ff;
   --fg-secondary: #94a3b8;
-  --fg-muted: #4a7a74;
-  --border: #1e3a36;
-  --border-subtle: #142e2a;
-  --accent: #2dd4bf;
-  --accent-hover: #5eead4;
-  --accent-light: #0d2e2a;
-  --code-bg: #0c1a18;
-  --code-border: #1e3a36;
+  --fg-muted: #4A7A8F;
+  --border: #1A3040;
+  --border-subtle: #102030;
+  --accent: #00BBD6;
+  --accent-hover: #00E5FF;
+  --accent-light: #0A2030;
+  --code-bg: #081520;
+  --code-border: #1A3040;
 }
 
 @theme {
@@ -112,7 +112,7 @@ body {
 }
 
 ::selection {
-  background: rgba(13, 148, 136, 0.2);
+  background: rgba(0, 136, 170, 0.2);
 }
 
 /* ─── Focus ──────────────────────────────────────────────────── */

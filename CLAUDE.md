@@ -87,3 +87,41 @@ The project lives under the `openmemoryspec` GitHub organization:
 - Organization: `https://github.com/openmemoryspec/`
 - Specification repo: `https://github.com/openmemoryspec/oms`
 - Website repo: `https://github.com/AreevAI/memorygrain.org`
+
+### Brand Colors (Navy-to-Cyan Palette)
+
+The memorygrain brand uses a navy-to-cyan gradient palette aligned with the areev parent brand.
+
+**Icon gradient (4 squares, light → dark):**
+
+| Square | Hex | Position |
+|--------|-----|----------|
+| Bright Cyan | `#00E5FF` | Top-left |
+| Bright Teal | `#00BBD6` | Top-right |
+| Medium Teal | `#0088AA` | Bottom-left |
+| Deep Teal | `#005577` | Bottom-right |
+
+**Text colors:**
+
+| Token | Hex | Usage |
+|-------|-----|-------|
+| Dark Text | `#001830` | Wordmark + tagline on light backgrounds |
+| White | `#FFFFFF` | Wordmark + tagline on dark backgrounds |
+
+**CSS design tokens** (defined in `app/globals.css`):
+
+| Mode | `--accent` | `--accent-hover` | `--bg` |
+|------|-----------|-----------------|--------|
+| Light | `#0088AA` | `#005577` | `#ffffff` |
+| Dark | `#00BBD6` | `#00E5FF` | `#000A1A` |
+
+**Typography:** Space Grotesk 600 (wordmark), Inter (body), JetBrains Mono (code)
+
+**Logo files** (in `public/`):
+- `logo-header.svg` / `logo-header-dark.svg` — horizontal lockup (icon + "MemoryGrain")
+- `logo-tagline.svg` / `logo-tagline-dark.svg` — with ".mg — open memory format"
+- `favicon.svg` — 4-square icon only
+
+**Editable source:** `/Users/sathish/mg/marketing/memorygrain/logo/mem-logo.pen` (Pencil format)
+
+**Do NOT use old teal-green colors** (`#99F6E4`, `#5EEAD4`, `#2DD4BF`, `#0D9488`). The brand has moved to navy-to-cyan.

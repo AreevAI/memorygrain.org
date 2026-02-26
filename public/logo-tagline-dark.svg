@@ -1,14 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 48" fill="none">
   <!-- Icon: 4 grain squares -->
-  <rect x="0" y="2" width="20" height="20" rx="5" fill="#99F6E4"/>
-  <rect x="24" y="2" width="20" height="20" rx="5" fill="#5EEAD4"/>
-  <rect x="0" y="26" width="20" height="20" rx="5" fill="#2DD4BF"/>
-  <rect x="24" y="26" width="20" height="20" rx="5" fill="#0D9488"/>
-  <!-- Wordmark: Memory Grain with M/G highlighted -->
-  <text y="28" font-family="'Space Grotesk', system-ui, -apple-system, sans-serif" font-size="32" letter-spacing="-0.5">
-    <tspan x="58" font-weight="700" fill="#5EEAD4">M</tspan><tspan font-weight="600" fill="#FFFFFF">emory</tspan>
-    <tspan dx="6" font-weight="700" fill="#5EEAD4">G</tspan><tspan font-weight="600" fill="#FFFFFF">rain</tspan>
+  <rect x="0" y="2" width="20" height="20" rx="5" fill="#00E5FF"/>
+  <rect x="24" y="2" width="20" height="20" rx="5" fill="#00BBD6"/>
+  <rect x="0" y="26" width="20" height="20" rx="5" fill="#0088AA"/>
+  <rect x="24" y="26" width="20" height="20" rx="5" fill="#005577"/>
+  <!-- Wordmark: uniform color -->
+  <text y="28" font-family="'Space Grotesk', system-ui, -apple-system, sans-serif" font-size="32" font-weight="600" letter-spacing="-0.5" fill="#FFFFFF">
+    <tspan x="58">Memory</tspan><tspan dx="6">Grain</tspan>
   </text>
   <!-- Tagline -->
-  <text x="58" y="46" font-family="'Inter', system-ui, -apple-system, sans-serif" font-size="16" letter-spacing="0.5" fill="#94A3B8">.mg — open memory format</text>
+  <text x="58" y="46" font-family="'Inter', system-ui, -apple-system, sans-serif" font-size="16" letter-spacing="0" fill="#FFFFFF">.mg — open memory format</text>
 </svg>

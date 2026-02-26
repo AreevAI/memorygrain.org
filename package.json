@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "predev": "mkdir -p docs && curl -fsSL https://raw.githubusercontent.com/openmemoryspec/oms/refs/heads/main/SPECIFICATION.md -o docs/oms-specification.md",
     "dev": "next dev --turbopack -p 4022",
     "build": "next build && node scripts/generate-rss.js",
     "start": "next start",
@@ -29,6 +30,6 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "tailwindcss": "^4.0.0",
-    "typescript": "^5.7.0"
+    "typescript": "5.9.3"
   }
 }
