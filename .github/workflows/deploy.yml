@@ -9,19 +9,17 @@ jobs:
   trigger:
     runs-on: ubuntu-latest
     steps:
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@v1
+      - uses: actions/create-github-app-token@v1
+        id: token
         with:
-          app-id: ${{ secrets.DEVOPS_CHECKOUT_APP_ID }}
-          private-key: ${{ secrets.DEVOPS_CHECKOUT_APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.MG_TRIGGER_APP_ID }}
+          private-key: ${{ secrets.MG_TRIGGER_APP_KEY }}
           owner: mindgryd
           repositories: devops
 
-      - name: Trigger Atlas deploy
-        run: |
-          curl -X POST \
-            -H "Authorization: Bearer ${{ steps.app-token.outputs.token }}" \
-            -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/mindgryd/devops/dispatches \
-            -d "{\"event_type\":\"deploy-memorygrain\",\"client_payload\":{\"ref\":\"${{ github.ref }}\",\"sha\":\"${{ github.sha }}\"}}"
+      - uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ steps.token.outputs.token }}
+          repository: mindgryd/devops
+          event-type: deploy-memorygrain
+          client-payload: '{"ref":"${{ github.ref }}","sha":"${{ github.sha }}"}'
