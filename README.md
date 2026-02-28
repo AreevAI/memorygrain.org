@@ -23,7 +23,7 @@ Every grain begins with a 9-byte fixed header:
 ```
 Byte 0:     Version (0x01)
 Byte 1:     Flags (signed|encrypted|compressed|has_content_refs|has_embedding_refs|cbor_encoding|sensitivity[2 bits])
-Byte 2:     Type (0x01–0x07)
+Byte 2:     Type (0x01–0x0A)
 Bytes 3–4:  Namespace hash (first 2 bytes of SHA-256(namespace), uint16 big-endian)
 Bytes 5–8:  Created-at (uint32 epoch seconds, big-endian)
 Byte 9+:    MessagePack or CBOR payload
@@ -33,13 +33,16 @@ Byte 9+:    MessagePack or CBOR payload
 
 | Type ID | Name | Description |
 |---------|------|-------------|
-| `0x01` | Fact | Structured knowledge claim (subject–relation–object) |
-| `0x02` | Episode | Raw, unstructured interaction record |
-| `0x03` | Checkpoint | Agent state snapshot |
-| `0x04` | Workflow | Procedural memory — learned action sequences |
-| `0x05` | ToolCall | Tool/function invocation record |
-| `0x06` | Observation | Sensor reading or environmental measurement |
+| `0x01` | Belief | Structured knowledge claim — subject-relation-object with confidence |
+| `0x02` | Event | Timestamped interaction record (message, log entry, utterance) |
+| `0x03` | State | Agent state snapshot for save/restore |
+| `0x04` | Workflow | Procedural memory — learned action sequences with trigger |
+| `0x05` | Action | Tool invocation, code execution, or computer-use record |
+| `0x06` | Observation | Observer reading — physical sensors, AI agents, or humans |
 | `0x07` | Goal | Explicit objective with lifecycle semantics |
+| `0x08` | Reasoning | Inference chain and thought audit trail |
+| `0x09` | Consensus | Multi-agent agreement record |
+| `0x0A` | Consent | Permission grant or withdrawal — DID-scoped, purpose-bounded |
 
 ### Conformance Levels
 
@@ -66,7 +69,7 @@ This is a **Next.js 15 static export** site (`output: 'export'`). No API routes,
 | Route | Description |
 |-------|-------------|
 | `/` | Homepage — overview, use cases, memory types, conformance levels |
-| `/spec/` | Full OMS v1.0 specification with sidebar TOC |
+| `/spec/` | Full OMS v1.3 specification with sidebar TOC |
 | `/blog/` | Technical blog with MDX posts |
 | `/about/` | About OMS, design principles, license, contributing |
 
@@ -151,7 +154,7 @@ python3 verify_hashes.py
 
 ## Related Repositories
 
-- **Specification:** [openmemoryspec/oms](https://github.com/openmemoryspec/oms) — the OMS v1.0 specification
+- **Specification:** [openmemoryspec/oms](https://github.com/openmemoryspec/oms) — the OMS v1.3 specification
 - **Website:** [AreevAI/memorygrain.org](https://github.com/AreevAI/memorygrain.org) — this repository
 
 ## License

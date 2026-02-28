@@ -2,7 +2,7 @@
 
 > The open standard for immutable, content-addressed memory grains.
 > Built for AI agents, autonomous vehicles, robots, and IoT systems.
-> Version 1.2 - Standards Track - OWFa 1.0 - February 2026
+> Version 1.3 - Standards Track - OWFa 1.0 - February 2026
 
 ## What is the .mg format?
 
@@ -30,7 +30,7 @@ Each memory grain is:
 - **Crypto-erasure**: Destroy per-user HKDF key -> O(1) GDPR erasure
 - **Immutability boundary**: Blob (immutable, hashed) vs. Index layer (mutable status fields)
 
-## Ten Grain Types (OMS v1.2)
+## Ten Grain Types (OMS v1.3)
 
 | Type | Byte | Description | v1.1 Name |
 |------|------|-------------|-----------|
@@ -45,9 +45,9 @@ Each memory grain is:
 | Consensus | 0x09 | Multi-agent agreement record (new in v1.2) |  -  |
 | Consent | 0x0A | Permission grant or withdrawal  -  DID-scoped, purpose-bounded (new in v1.2) |  -  |
 
-All v1.1 type names are accepted by readers (backwards-compatible). Writers MUST emit v1.2 canonical names.
+All v1.1 type names are accepted by readers (backwards-compatible). Writers MUST emit v1.3 canonical names.
 
-## Binary Format (v1.2 Header)
+## Binary Format (v1.3 Header)
 
 ```
 Byte 0: Version = 0x01

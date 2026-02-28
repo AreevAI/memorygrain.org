@@ -61,6 +61,10 @@ The `error_type` field is only meaningful when `is_error` is `true`. It carries 
 
 The `duration_ms` field records how long the action took in wall-clock milliseconds. This is a simple integer, not a float — millisecond precision is sufficient for action timing, and integers avoid the deterministic serialization complexities that floating-point values introduce.
 
+<Callout type="info">
+**New in OMS v1.3:** The `output_schema` field allows Action definition grains (`action_phase: "definition"`) to declare a JSON Schema (draft-07) describing the action's return value. This enables consumers to validate action results structurally and supports the new Integration Domain Profile's trigger/action pipeline.
+</Callout>
+
 ## Field Compaction Keys
 
 OMS uses field compaction to minimize blob size. Human-readable field names are mapped to short keys before serialization. The Action-specific compaction keys, defined in Section 6.5, are:

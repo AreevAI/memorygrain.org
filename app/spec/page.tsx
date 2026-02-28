@@ -13,7 +13,7 @@ import { buildMetadata } from '@/lib/metadata'
 export const metadata: Metadata = buildMetadata({
   title: 'OM Specification',
   description:
-    'The Open Memory Specification (OMS) v1.2: Memory Grain (.mg) Container Definition. Ten cognitive grain types (Belief, Event, State, Workflow, Action, Observation, Goal, Reasoning, Consensus, Consent), agent-builder primitives, domain profiles, and query conventions.',
+    'The Open Memory Specification (OMS) v1.3: Memory Grain (.mg) Container Definition. Ten cognitive grain types (Belief, Event, State, Workflow, Action, Observation, Goal, Reasoning, Consensus, Consent), agent-builder primitives, domain profiles, and query conventions.',
 })
 
 async function getSpecHtml(): Promise<string> {

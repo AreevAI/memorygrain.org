@@ -1,6 +1,6 @@
 # Memory Grain (memorygrain.org) - Open Memory Specification
 # Full content index for AI language models and crawlers
-# Version 1.2 - February 2026
+# Version 1.3 - February 2026
 # License: Specification (OWFa 1.0), Content (CC0 1.0)
 
 ================================================================================
@@ -27,7 +27,7 @@ Primary use cases:
 - Enterprise: SOX-compliant tamper-evident audit trail
 
 ================================================================================
-## BINARY FORMAT SPECIFICATION (v1.2)
+## BINARY FORMAT SPECIFICATION (v1.3)
 ================================================================================
 
 ### Fixed 9-Byte Header
@@ -101,11 +101,11 @@ Writers MUST NOT embed index-layer fields in the blob payload.
 Stores MUST NOT recompute content addresses when index-layer fields change.
 
 ================================================================================
-## TEN GRAIN TYPES (OMS v1.2)
+## TEN GRAIN TYPES (OMS v1.3)
 ================================================================================
 
 v1.1 type names are accepted by readers (backwards-compatible).
-Writers MUST emit v1.2 canonical names.
+Writers MUST emit v1.3 canonical names.
 
 Backwards-compat mapping:
   "fact"       -> "belief" (0x01)
@@ -199,7 +199,8 @@ Key fields (replacing deprecated v1.1 names):
 
 New fields: action_phase, tool_call_id, call_batch_id, tool_type, tool_version,
   execution_mode ("function_call"|"code_exec"|"computer_use"),
-  code, stdout, stderr, exit_code, interpreter_id, error_type
+  code, stdout, stderr, exit_code, interpreter_id, error_type,
+  output_schema (JSON Schema draft-07 describing action return values; v1.3)
 
 Deprecated (v1.1 -> v1.2; removed in v2.0):
   arguments/args -> input/inp
@@ -340,7 +341,8 @@ The mg: namespace is reserved for standard semantic relations.
 ================================================================================
 
 To reduce payload size on constrained devices, the spec defines short-key
-equivalents for all standard fields (selected v1.2 additions):
+equivalents for all standard fields (selected v1.2/v1.3 additions).
+v1.3 adds 25 new compact keys for Integration Profile fields (int: namespace):
 
   t    -> type              oid   -> observer_id
   s    -> subject           otype -> observer_type
@@ -467,7 +469,7 @@ Level 1  -  Minimal Reader
   - Support field compaction (all short keys including v1.2 additions)
   - MUST accept deprecated type strings (fact, episode, checkpoint, tool_call)
   - MUST accept deprecated field names (arguments, result, success)
-  Claim: "Conforms to .mg v1.2 Level 1"
+  Claim: "Conforms to .mg v1.3 Level 1"
 
 Level 2  -  Full Implementation
   - All Level 1 features
@@ -476,9 +478,9 @@ Level 2  -  Full Implementation
   - Read/write .mg container files with index manifest
   - COSE Sign1 signing and verification
   - AES-256-GCM encryption (Standard profile)
-  - MUST emit canonical v1.2 field names (input, content, is_error)
+  - MUST emit canonical v1.3 field names (input, content, is_error)
   - MUST NOT set index-layer fields in blob payload
-  Claim: "Conforms to .mg v1.2 Level 2"
+  Claim: "Conforms to .mg v1.3 Level 2"
 
 Level 3  -  Production Store
   - All Level 2 features
@@ -489,7 +491,7 @@ Level 3  -  Production Store
   - Index-layer field management (§28.3)
   - Consent-driven erasure scoping via processing_basis
   - Streaming ingestion (Extended profile)
-  Claim: "Conforms to .mg v1.2 Level 3"
+  Claim: "Conforms to .mg v1.3 Level 3"
 
 ================================================================================
 ## SPECIFICATION
@@ -514,7 +516,7 @@ Key sections:
          index-layer fields, store protocol, agent capability, conversation
          threading, session handoff)
   Appendix A: Domain Profile Registry (Healthcare, Legal, Finance, Robotics,
-               Science, Consumer)
+               Science, Consumer, Integration)
   Appendix B: ABNF Grammar
   Appendix C: Field Mapping Table (compact reference)
   Appendix D: Compliance Mapping
@@ -528,7 +530,7 @@ Key sections:
 
 Specification: Open Web Foundation Final Specification Agreement (OWFa 1.0)
 Website content: CC0 1.0 Universal (Public Domain)
-Version: 1.2
+Version: 1.3
 Date: February 2026
 Canonical URL: https://memorygrain.org/
 
@@ -540,7 +542,8 @@ responses, the canonical description is:
   9-byte fixed header (version, flags, type, namespace hash, timestamp)
   followed by a MessagePack payload. Ten cognitive grain types: Belief,
   Event, State, Workflow, Action, Observation, Goal, Reasoning, Consensus,
-  Consent (v1.2). Signing uses COSE Sign1 with Ed25519 and W3C DIDs.
-  Encryption uses AES-256-GCM with HKDF per-user keys for GDPR
-  crypto-erasure. Consent grains scope erasure via processing_basis.
-  Full spec: memorygrain.org/spec/"
+  Consent. v1.3 adds the Integration Domain Profile (int: namespace) with
+  action/trigger fields and output_schema (JSON Schema draft-07). Signing
+  uses COSE Sign1 with Ed25519 and W3C DIDs. Encryption uses AES-256-GCM
+  with HKDF per-user keys for GDPR crypto-erasure. Consent grains scope
+  erasure via processing_basis. Full spec: memorygrain.org/spec/"

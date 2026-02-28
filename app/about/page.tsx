@@ -59,7 +59,7 @@ export default function AboutPage() {
 
           <h2>The .mg Container Definition</h2>
           <p>
-            OMS v1.2 spans 28 sections and 7 appendices covering blob layout, canonical serialization, content addressing, field compaction, ten grain types, cryptographic signing (COSE Sign1), selective disclosure, the .mg file format, identity (W3C DIDs), sensitivity classification, provenance, temporal modeling, conformance levels, device profiles, grain protection, observer type registry, query conventions, domain profile extensions (healthcare, legal, finance, robotics, science, consumer), and security considerations.
+            OMS v1.3 spans 28 sections and 7 appendices covering blob layout, canonical serialization, content addressing, field compaction, ten grain types, cryptographic signing (COSE Sign1), selective disclosure, the .mg file format, identity (W3C DIDs), sensitivity classification, provenance, temporal modeling, conformance levels, device profiles, grain protection, observer type registry, query conventions, domain profile extensions (healthcare, legal, finance, robotics, science, consumer, integration), and security considerations.
           </p>
           <p>
             <Link href="/spec">Read the full OM specification →</Link>
@@ -95,6 +95,11 @@ export default function AboutPage() {
                   <td><code>1.2</code></td>
                   <td>2026-02-23</td>
                   <td>Ten grain types — type renames (Fact→Belief, Episode→Event, Checkpoint→State, ToolCall→Action); three new types (Reasoning 0x08, Consensus 0x09, Consent 0x0A); Immutability Boundary; mg: relation vocabulary (21 relations); Domain Profile Extensions (Appendix A–G); Action phase model; Query Conventions (§28); HIPAA PHI tag normalization; Goal delegation scope fields; retention_policy; recall_priority; hold and consent_cascade invalidation modes</td>
+                </tr>
+                <tr>
+                  <td><code>1.3</code></td>
+                  <td>2026-02-28</td>
+                  <td>Integration Domain Profile (int: namespace, Appendix A.7) with 25 action/trigger fields; Action output_schema field (JSON Schema draft-07); Trigger Definitions via Observation Grains (§27.6); Consensus Grain for Action Definition Validation (§27.7); 25 new compact keys; 5 compact key collision fixes</td>
                 </tr>
               </tbody>
             </table>

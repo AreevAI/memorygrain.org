@@ -310,3 +310,7 @@ Field compaction is one of those specification features that is unglamorous but 
 The rules are strict — serializers MUST compact, deserializers MUST expand, unknown keys MUST be preserved, and the mapping MUST NOT be modified. These constraints ensure that every compliant implementation produces identical bytes for the same grain, maintaining the deterministic serialization guarantee that underpins content addressing.
 
 Combined with the canonical serialization rules (Section 4) and the nested compaction boundaries (Sections 4.7, 7.1, 7.2, 14.2), field compaction completes the picture of how OMS transforms a human-friendly data structure into a compact, deterministic, content-addressable binary blob.
+
+<Callout type="info">
+**OMS v1.3 update:** The Integration Domain Profile (Appendix A.7) adds 25 new compact keys for action and trigger fields in the `int:` namespace, including keys for `output_schema`, trigger conditions, and action pipeline metadata. Five compact key collisions from v1.2 were also resolved. See the [OMS v1.3 specification](https://github.com/openmemoryspec/oms) for the complete updated field mapping table (Appendix C).
+</Callout>

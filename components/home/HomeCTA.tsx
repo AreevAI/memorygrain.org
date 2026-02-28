@@ -67,7 +67,7 @@ export function HomeCTA() {
         </div>
 
         <p style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)', marginTop: '2rem', fontFamily: 'var(--font-mono)' }}>
-          OMS v1.0 · .mg Container Definition · Standards Track · OWF Final
+          OMS v1.3 · .mg Container Definition · Standards Track · OWF Final
         </p>
       </div>
     </section>
