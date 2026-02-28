@@ -1,8 +1,8 @@
-name: Trigger Deploy
+name: Trigger Deploy Odin
 
 on:
   push:
-    branches: [deploy/atlas]
+    branches: [deploy/odin]
   workflow_dispatch:
 
 jobs:
@@ -21,5 +21,5 @@ jobs:
         with:
           token: ${{ steps.token.outputs.token }}
           repository: mindgryd/devops
-          event-type: deploy-memorygrain
+          event-type: deploy-memorygrain-odin
           client-payload: '{"ref":"${{ github.ref }}","sha":"${{ github.sha }}"}'
