@@ -24,6 +24,7 @@ import { buildMetadata } from '@/lib/metadata'
 import { Badge } from '@/components/ui/Badge'
 import { PlaceholderImage } from '@/components/ui/PlaceholderImage'
 import { Callout } from '@/components/ui/Callout'
+import { ExpandableImage } from '@/components/ui/ExpandableImage'
 import { ArrowLeft } from 'lucide-react'
 
 const tagVariants: Record<string, 'fact' | 'episode' | 'checkpoint' | 'workflow' | 'toolcall' | 'observation' | 'default'> = {
@@ -59,7 +60,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   })
 }
 
-const mdxComponents = { PlaceholderImage, Callout }
+const mdxComponents = { PlaceholderImage, Callout, ExpandableImage }
 
 export default async function BlogPostPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
@@ -97,7 +98,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <div style={{ padding: 'clamp(2.5rem, 5vw, 4rem) 0' }}>
-        <div className="container-content" style={{ maxWidth: 760 }}>
+        <div className="container-content" style={{ maxWidth: 960 }}>
           {/* Back link */}
           <Link
             href="/blog"

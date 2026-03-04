@@ -1,0 +1,230 @@
+---
+title: "Choosing the Right Context Format: SML, TOON, Markdown, and JSON"
+description: "CAL's FORMAT clause gives you six output options for assembled agent context. Side-by-side token counts, real examples, and a decision guide for when to use SML, TOON, Markdown, or JSON."
+date: "2026-03-04"
+readTime: "10 min read"
+tags: ["cal", "sml", "toon", "context-format", "agent-memory", "llm"]
+---
+
+A context window is not infinitely large. Every token you spend on formatting overhead is a token you cannot spend on actual information. Every format you choose trades something: structure for compactness, readability for density, semantic signals for raw throughput.
+
+CAL's `FORMAT` clause lets you make that trade explicitly. Six formats, same data, same budget — different trade-offs. This post puts them side by side.
+
+## One Scenario, Four Formats
+
+A customer success agent is helping Elena with her account renewal. The memory store has three beliefs, one goal, and one tool result. Here is the same data rendered four ways.
+
+### SML — Semantic Tags for LLM Reasoning
+
+```sml
+<context intent="helping elena with account renewal negotiation">
+
+  <belief subject="elena" confidence="0.93">prefers multi-year terms when pricing is fixed</belief>
+  <belief subject="elena" confidence="0.88">has budget authority up to $500k annually</belief>
+  <belief subject="elena" confidence="0.81">makes renewal decisions in Q1</belief>
+
+  <goal subject="elena" state="active" deadline="2026-03-31">negotiate renewal before fiscal year close</goal>
+
+  <action tool="get_renewal_quote" phase="completed">450 seats at $290/seat = $1.44M/yr; 3-year at $265/seat; 18% discount for 3-year commit</action>
+
+</context>
+```
+
+### Markdown — Human-Readable Structure
+
+```markdown
+## Context: helping elena with account renewal negotiation
+
+### Beliefs about elena
+- **prefers multi-year terms when pricing is fixed** (confidence: 0.93)
+- **has budget authority up to $500k annually** (confidence: 0.88)
+- **makes renewal decisions in Q1** (confidence: 0.81)
+
+### Active Goals
+- Negotiate renewal before fiscal year close — deadline: 2026-03-31
+
+### Recent Actions
+- `get_renewal_quote` (completed): 450 seats at $290/seat = $1.44M/yr; 3-year at $265/seat; 18% discount for 3-year commit
+```
+
+### TOON — Tabular, Token-Efficient
+
+```
+beliefs[3]{subject,confidence,content}:
+elena,0.93,prefers multi-year terms when pricing is fixed
+elena,0.88,has budget authority up to $500k annually
+elena,0.81,makes renewal decisions in Q1
+
+goals[1]{subject,state,deadline,content}:
+elena,active,2026-03-31,negotiate renewal before fiscal year close
+
+actions[1]{tool,phase,content}:
+get_renewal_quote,completed,450 seats at $290/seat = $1.44M/yr; 3-year at $265/seat; 18% discount for 3-year commit
+```
+
+### JSON — Structured Machine-Readable
+
+```json
+{
+  "assembly": {
+    "intent": "helping elena with account renewal negotiation",
+    "grain_count": 5,
+    "budget_used": 380
+  },
+  "grains": [
+    {"type": "belief", "subject": "elena", "confidence": 0.93,
+     "content": "prefers multi-year terms when pricing is fixed"},
+    {"type": "belief", "subject": "elena", "confidence": 0.88,
+     "content": "has budget authority up to $500k annually"},
+    {"type": "belief", "subject": "elena", "confidence": 0.81,
+     "content": "makes renewal decisions in Q1"},
+    {"type": "goal", "subject": "elena", "state": "active",
+     "deadline": "2026-03-31",
+     "content": "negotiate renewal before fiscal year close"},
+    {"type": "action", "tool": "get_renewal_quote",
+     "phase": "completed",
+     "content": "450 seats at $290/seat..."}
+  ]
+}
+```
+
+## The Token Cost
+
+Same five grains. Radically different token budgets:
+
+| Format | Approx. Tokens | vs JSON | Best Use Case |
+|---|---|---|---|
+| **TOON** | ~95 | -65% | Large result sets, tight budgets |
+| **text** | ~110 | -60% | Ultra-compact summaries |
+| **SML** | ~155 | -44% | LLM system prompts, epistemic reasoning |
+| **markdown** | ~190 | -31% | Human-facing dashboards, audit logs |
+| **YAML** | ~230 | -17% | Config-style consumption |
+| **JSON** | ~275 | baseline | Downstream pipelines, APIs |
+
+At 5 grains the difference is ~120 tokens. At 50 grains it is ~1,200 tokens. At scale, format choice is a budget decision.
+
+TOON achieves its savings through tabular layout: the grain type and column names appear once per section, not once per grain. For uniform arrays (50 beliefs about the same user), the savings compound. For mixed-type assemblies, TOON groups by type and each group gets its own header — still compact, but the per-section overhead adds up.
+
+## When to Use Each
+
+### SML — Default for LLM System Prompts
+
+Use SML when the model needs to distinguish between types of information. The tag name is the signal: `<belief confidence="0.65">` tells the model to hedge. `<consent action="denied">` tells it what it cannot do. `<reasoning type="abductive">` tells it an inference has already been drawn.
+
+```sql
+ASSEMBLE user_context
+  FOR "resolving elena's renewal"
+  FROM beliefs: (RECALL beliefs ABOUT "elena" LIMIT 10),
+       goals:   (RECALL goals ABOUT "elena" WHERE goal_state = "active")
+  BUDGET 3000 tokens
+  FORMAT sml
+```
+
+SML is the right default when your agent reasons about user preferences, active objectives, prior inferences, or permission boundaries. See the [SML deep dive](/blog/sml-context-format-for-llms) for all 10 grain types with examples.
+
+**Use when:** LLM system prompts, epistemic-sensitive applications (support, legal, medical, financial).
+
+### TOON — Tight Budgets, Large Result Sets
+
+Use TOON when you have 20+ grains of the same type and every token matters. TOON's CSV-tabular layout writes column headers once, then emits rows:
+
+```sql
+RECALL beliefs ABOUT "elena"
+  WHERE relation IS PREFERENCE
+  | ORDER BY confidence DESC | LIMIT 50
+  AS toon
+```
+
+50 beliefs in TOON uses roughly the same tokens as 30 beliefs in JSON. If you are building a knowledge retrieval step that feeds a second LLM call, TOON preserves more information within the same budget.
+
+TOON follows the [TOON specification v3.0](https://github.com/toon-format/spec). It combines YAML-like indentation for nested structures with CSV-style rows for uniform arrays — the common case for CAL output.
+
+**Use when:** Large RECALL results (20+ grains), tight ASSEMBLE budgets, homogeneous sources.
+
+### Markdown — Human-Readable Displays
+
+Use Markdown when the output will be read by a human — support dashboards, escalation reviews, operator audit trails, debugging interfaces.
+
+```sql
+ASSEMBLE escalation_summary
+  FOR "escalation review for elena's account"
+  FROM history: (RECALL events ABOUT "elena" RECENT 20),
+       actions: (RECALL actions ABOUT "elena" RECENT 10)
+  BUDGET 4000 tokens
+  FORMAT markdown
+```
+
+Markdown also works well when the model is summarising or transforming the context rather than acting on it directly.
+
+**Use when:** Human-facing UIs, audit logs, escalation summaries, summarisation tasks.
+
+### JSON — Downstream Code Processing
+
+Use JSON when the output goes to code, not an LLM — analytics pipelines, reporting dashboards, rules engines, integration APIs.
+
+```sql
+ASSEMBLE account_snapshot
+  FOR "account health report"
+  FROM beliefs: (RECALL beliefs ABOUT "elena"),
+       consent: (RECALL consents WHERE subject = "elena")
+  BUDGET 200 grains
+  FORMAT json
+```
+
+JSON includes the full machine envelope — assembly metadata, grain counts, budget utilisation, source labels — that other formats omit.
+
+**Use when:** APIs, databases, analytics, any downstream code that needs structured data.
+
+### Text — Absolute Minimum
+
+Use text when you need the smallest prose footprint and the LLM does not need to distinguish grain types:
+
+```sql
+RECALL beliefs ABOUT "elena"
+  WHERE relation IS PREFERENCE | LIMIT 5 AS text
+```
+
+Output:
+```
+elena prefers multi-year contract terms when pricing is fixed.
+elena has budget authority up to $500k annually without board approval.
+elena makes renewal decisions in Q1 to align with fiscal year.
+```
+
+**Use when:** Ultra-compact contexts, sub-summaries within larger prompts, no structure needed.
+
+## Mixing Formats in One Assembly
+
+CAL's `AS` clause controls format per-source. The `FORMAT` clause controls the outer envelope:
+
+```sql
+CAL/1 ASSEMBLE mixed_context
+  FOR "support review for elena"
+  FROM
+    profile: (RECALL beliefs ABOUT "elena"
+               WHERE relation IS PREFERENCE | LIMIT 10 AS toon),
+    history: (RECALL events ABOUT "elena" RECENT 10 AS sml),
+    actions: (RECALL actions ABOUT "elena" RECENT 5 AS markdown)
+  BUDGET 4000 tokens
+  PRIORITY history > profile > actions
+  FORMAT sml
+```
+
+Profile data comes as compact TOON — saves tokens on a uniform array of beliefs. Conversation history comes as SML — preserves epistemic signals for the model. Actions come as Markdown — readable in an audit trail. Each source is optimised independently.
+
+## Quick Reference: Which Format?
+
+| Scenario | Format | Why |
+|---|---|---|
+| LLM needs to reason about trust, confidence, or permissions | `sml` | Tag names carry epistemic signals the model can act on |
+| Tight budget, 20+ grains of the same type | `toon` | ~40% fewer tokens than JSON; tabular layout eliminates per-grain overhead |
+| LLM is summarising or transforming (not acting) | `markdown` | Readable structure without per-element semantic weight |
+| Minimal context injection, no structure needed | `text` | Absolute smallest token footprint |
+| Output goes to code, APIs, or databases | `json` | Structured data with full machine envelope |
+| Human-facing dashboard or audit log | `markdown` | Renders natively in any UI that supports Markdown |
+
+The right format is the one that gets the most information into the context window at the lowest token cost while preserving the signals the consumer actually needs. Everything else is overhead.
+
+---
+
+*The FORMAT system is defined in the [CAL specification](/cal). For how CAL queries work end-to-end, see [CAL: The Query Language Your Agent Orchestrator Has Been Missing](/blog/cal-agent-memory-query-language). For a deep dive into SML's 10 grain types, see [SML: The Context Format That Tells LLMs What to Trust](/blog/sml-context-format-for-llms). TOON is defined in the [TOON specification v3.0](https://github.com/toon-format/spec).*

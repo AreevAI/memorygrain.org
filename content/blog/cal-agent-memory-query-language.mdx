@@ -1,0 +1,250 @@
+---
+title: "CAL: The Query Language Your Agent Orchestrator Has Been Missing"
+description: "How the Context Assembly Language turns a raw memory store into a first-class context pipeline for AI agents — from querying relevant grains to assembling token-budgeted context blocks that drop directly into LLM calls."
+date: "2026-03-04"
+readTime: "14 min read"
+tags: ["cal", "agent-memory", "context-assembly", "orchestration", "llm"]
+---
+
+Picture this. It is 2:47 AM and your on-call agent has just been handed a P0 incident. The agent needs to know: what does the system know about this service? What was the last deployment? What are the SLAs? What did the user say ninety seconds ago? These facts live in a memory store. Getting them into the agent's context window — at the right size, in the right order, without blowing the token budget — is your problem.
+
+Most teams solve this with bespoke Python: a function that queries some vector store, another that truncates results to fit, a third that formats them into a string, a fourth that jams it all into a system prompt. Each project invents its own version. Each version has its own bugs around token counting, priority ordering, and deduplication. None of them compose.
+
+The Context Assembly Language (CAL) replaces all of that with a single declarative query.
+
+<ExpandableImage src="/assets/cal-pipeline-diagram.png" alt="CAL Context Assembly Pipeline — Agent/Orchestrator sends a CAL ASSEMBLE query to the OMS Memory Store, which returns formatted context (SML, markdown, toon) directly into the LLM context window." width={960} height={440} />
+
+## What Comes Out
+
+Before you see the query, look at the result. The following SML block was produced by a single CAL `ASSEMBLE` statement. The scenario: a product agent helping a user named Priya prepare a Q2 roadmap under a deadline.
+
+```sml
+<context intent="helping priya prepare the Q2 product roadmap">
+
+  <belief subject="priya" confidence="0.94">prefers written summaries over verbal briefings</belief>
+  <belief subject="priya" confidence="0.91">works in two-week sprint cycles aligned to the first and third Monday</belief>
+  <belief subject="priya" confidence="0.87">uses OKR framework for goal-setting; expects outcomes not outputs</belief>
+
+  <goal subject="priya" state="active" deadline="2026-03-28">deliver Q2 roadmap to board for approval</goal>
+  <goal subject="priya" state="active">reduce time-to-decision on feature prioritisation by 30%</goal>
+
+  <event role="user" time="12m ago">Can you pull together the themes from last quarter's customer interviews?</event>
+  <event role="assistant" time="12m ago">Fetching interview data now. Found 47 sessions tagged customer-feedback for Q1.</event>
+  <event role="user" time="9m ago">Focus on enterprise accounts — the sub-50 seat customers are out of scope for Q2.</event>
+
+  <action tool="search_interviews" phase="completed">retrieved 23 enterprise customer interviews from Q1 2026</action>
+  <action tool="query_crm" phase="completed">pulled ARR data for 23 accounts; median ARR $180k</action>
+
+  <reasoning type="deductive">enterprise accounts consistently raise onboarding friction as the top expansion blocker; this should anchor the Q2 roadmap theme</reasoning>
+
+  <workflow trigger="roadmap_prep_requested">1. extract interview themes  2. validate with CRM data  3. draft one-pager  4. review with Priya  5. submit to board by 2026-03-28</workflow>
+
+</context>
+```
+
+The LLM sees tag names that carry epistemic weight. A `<belief>` with `confidence="0.87"` is treated differently from a `<belief>` at `0.94`. A `<reasoning type="deductive">` tells the model that this conclusion was already reached — do not re-derive it. A `<goal>` with a `deadline` creates urgency. None of this requires custom prompt engineering. The format does the work. (For the full SML deep dive, see [SML: The Context Format That Tells LLMs What to Trust](/blog/sml-context-format-for-llms).)
+
+## The Query That Produced It
+
+```sql
+CAL/1 ASSEMBLE roadmap_context
+  FOR "helping priya prepare the Q2 product roadmap"
+  FROM
+    profile:    (RECALL beliefs ABOUT "priya"
+                  WHERE relation IS PREFERENCE
+                  | ORDER BY confidence DESC | LIMIT 10),
+    goals:      (RECALL goals ABOUT "priya"
+                  WHERE goal_state = "active" RECENT 5),
+    history:    (RECALL events ABOUT "priya" RECENT 8),
+    actions:    (RECALL actions ABOUT "priya"
+                  WHERE action_phase = "completed" RECENT 5),
+    reasoning:  (RECALL reasoning ABOUT "priya" RECENT 3),
+    workflow:   (RECALL workflows ABOUT "priya" RECENT 1)
+  BUDGET 3000 tokens
+  PRIORITY profile > goals > history > actions > reasoning > workflow
+  FORMAT sml
+  WITH progressive_disclosure(standard), dedup(subject)
+```
+
+Six source queries. One budget. One priority order. One output format. CAL executes all six in parallel, deduplicates across sources, allocates tokens down the priority cascade, and renders the result as a single string ready for a system prompt. No token-counting library. No priority logic in your application code. No format-specific rendering.
+
+### The Anatomy of an ASSEMBLE
+
+**`FOR`** declares intent. It is not decorative — it populates the `intent` attribute in the SML envelope and hints CAL's relevance scorer on how to rank ambiguous grains.
+
+**`FROM`** is a named map of independent `RECALL` queries. Each label becomes a budget accounting slot. The queries run in parallel. Results are deterministic — same query, same state, same output.
+
+**`BUDGET 3000 tokens`** is the hard cap. CAL distributes tokens across sources using the priority weights. Surplus from under-utilised sources flows downstream. The caller never token-counts the result. It fits.
+
+**`PRIORITY`** defines the cascade. When the budget fills, lower-priority sources truncate first. Priya's preferences survive; the workflow step-list might get trimmed. That is the right trade-off for this context window.
+
+**`FORMAT sml`** selects [SML output](/blog/sml-context-format-for-llms). Alternatives: `markdown`, `json`, `toon`, `text`, `yaml`, `triples`. Same budget, same priority — different rendering. See [Choosing the Right Context Format](/blog/cal-context-formats-comparison) for when to use each.
+
+**`WITH dedup(subject)`** prevents duplicates across sources. The highest-priority copy wins.
+
+## What CAL Reads Like
+
+CAL was designed to be generated by LLMs. Its keywords read like English. Common patterns have shortcuts that desugar to standard clauses at parse time:
+
+```sql
+-- "What does the system know about Priya's preferences?"
+RECALL beliefs ABOUT "priya" WHERE relation IS PREFERENCE
+
+-- "Show me the last 5 things that happened"
+RECALL events ABOUT "priya" RECENT 5
+
+-- "Anything contradictory in her profile?"
+RECALL beliefs ABOUT "priya" CONTRADICTIONS
+
+-- "What happened in this thread?"
+RECALL events THREAD "sess-9f3a2b"
+
+-- "Find grains that are semantically similar to this"
+RECALL LIKE "onboarding friction in enterprise accounts"
+```
+
+`ABOUT` means `WHERE subject = ...`. `RECENT 5` means `| ORDER BY time DESC | LIMIT 5`. `CONTRADICTIONS` means `WHERE contradicted = true WITH contradiction_detection`. `LIKE` triggers semantic search. Every shortcut has a deterministic expansion — no ambiguity, no surprises.
+
+## From Memory Store to LLM Call
+
+Here is what the integration looks like end-to-end:
+
+```python
+import httpx, anthropic
+
+# 1. Assemble context from memory
+cal_query = """
+CAL/1 ASSEMBLE roadmap_context
+  FOR "helping priya prepare the Q2 product roadmap"
+  FROM
+    profile:   (RECALL beliefs ABOUT "priya" WHERE relation IS PREFERENCE
+                 | ORDER BY confidence DESC | LIMIT 10),
+    goals:     (RECALL goals ABOUT "priya" WHERE goal_state = "active" RECENT 5),
+    history:   (RECALL events ABOUT "priya" RECENT 8)
+  BUDGET 3000 tokens
+  PRIORITY profile > goals > history
+  FORMAT sml
+"""
+
+resp = httpx.post(
+    "https://memory.internal/cal",
+    headers={"Authorization": f"Bearer {cap_token}"},
+    json={"query": cal_query}
+)
+context_block = resp.json()["data"]["content"]
+
+# 2. Inject directly into the system prompt
+system = f"""You are a product strategy assistant.
+
+The following context was assembled from persistent memory.
+Beliefs carry calibrated confidence. Goals have deadlines.
+Reasoning elements are inferences already made — build on them.
+
+{context_block}
+"""
+
+# 3. Call the model
+client = anthropic.Anthropic()
+message = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=4096,
+    system=system,
+    messages=conversation_history,
+)
+```
+
+Three steps. No string manipulation between steps 1 and 2. The assembled context drops in verbatim.
+
+## When the Agent Learns Something
+
+CAL is not read-only. Tier 1 operations let the agent evolve memory without destroying anything. Every write is append-only. The old grain survives, queryable via `WITH superseded`.
+
+```sql
+-- Priya stated a new preference
+CAL/1 ADD belief
+  SET subject = "priya"
+  SET relation = "mg:prefers"
+  SET object = "roadmap decks use two-column layout with metrics on the left"
+  SET confidence = 0.92
+  SET tags = ["preference", "presentation", "roadmap"]
+  REASON "user explicitly stated during roadmap prep session 2026-03-04"
+
+-- Her confidence in dark mode dropped (she mentioned trying light mode)
+CAL/1 SUPERSEDE sha256:a1b2c3d4...
+  SET confidence = 0.72
+  REASON "user mentioned experimenting with light mode; preference weakened"
+```
+
+`ADD` creates a new grain. `SUPERSEDE` creates a new version that points back to the original. `REVERT` undoes a supersession by creating yet another grain. Three grains exist after a supersede-then-revert chain. Nothing is ever deleted. This is the core safety guarantee — enforced at the grammar level, not by policy.
+
+<Callout type="security">
+CAL cannot destroy data. The tokens `DELETE`, `DROP`, `FORGET`, `ERASE`, `DESTROY`, `PURGE`, and `TRUNCATE` are not recognised by the parser — they are syntax errors, not policy violations. Destructive operations exist only in implementation-specific APIs outside of CAL.
+</Callout>
+
+## Multi-Agent Handoff
+
+When one agent hands off to another, the receiving agent needs to catch up fast. `BATCH` executes multiple independent queries in a single round-trip:
+
+```sql
+CAL/1 BATCH {
+  state:     RECALL states ABOUT "priya" RECENT 1,
+  goals:     RECALL goals ABOUT "priya" WHERE goal_state = "active",
+  reasoning: RECALL reasoning ABOUT "priya" RECENT 3,
+  handoff:   RECALL events WHERE tags INCLUDE ["handoff"] RECENT 5
+}
+```
+
+Four queries, one response, four labelled result slots. The receiving agent picks what it needs.
+
+For more complex handoffs, `LET` bindings chain queries together:
+
+```sql
+CAL/1
+LET $team = RECALL beliefs
+  WHERE relation = "member_of" AND object = "team-alpha" | SUBJECTS;
+
+ASSEMBLE team_context
+  FOR "team alpha's collective preferences and goals"
+  FROM
+    prefs: (RECALL beliefs WHERE subject IN ($team)
+              AND relation IS PREFERENCE),
+    goals: (RECALL goals WHERE subject IN ($team) RECENT 10)
+  BUDGET 4000 tokens
+  PRIORITY prefs > goals
+  FORMAT markdown
+```
+
+The first query finds who is on the team. The second uses that list to assemble a cross-member context window. Two queries, one result, no application-level glue code.
+
+## Choose Your Output Format
+
+The `FORMAT` clause is not limited to SML. Same ASSEMBLE, different rendering:
+
+```sql
+FORMAT sml        -- semantic tags, epistemic signals (default for LLM prompts)
+FORMAT markdown   -- human-readable (good for dashboards, audit logs)
+FORMAT toon       -- ~40% fewer tokens than JSON (large result sets, tight budgets)
+FORMAT json       -- structured data (downstream pipelines, APIs)
+FORMAT text       -- minimal prose (ultra-compact summaries)
+```
+
+For standalone `RECALL` queries, the equivalent is the `AS` clause:
+
+```sql
+RECALL beliefs ABOUT "alice" LIMIT 20 AS toon
+RECALL events THREAD "sess-123" AS markdown
+```
+
+The format decision does not change what is retrieved — only how many tokens it costs and how much semantic structure the LLM receives. The [format comparison post](/blog/cal-context-formats-comparison) has side-by-side examples of the same data in all four formats, including TOON's tabular layout.
+
+## Why This Matters
+
+The value of CAL is not the syntax. It is the separation of concerns.
+
+Your orchestrator routes messages and calls models. CAL answers "what should be in the context window right now?" Keeping these two concerns apart — with a clean, declarative, non-destructive interface — is what makes agent memory maintainable when you have ten agents, fifty memory sources, and a context window that is always too small.
+
+No custom token counters. No priority logic in Python. No ad-hoc deduplication. No format rendering code. No data destruction risk. One query. One result. Done.
+
+---
+
+*CAL is part of the [Open Memory Specification (OMS) v1.3](/spec). The full language reference — grammar, safety model, format system, conformance levels — is at the [CAL specification page](/cal). For a deep dive on the SML output format, see [SML: The Context Format That Tells LLMs What to Trust](/blog/sml-context-format-for-llms). For a comparison of all output formats including TOON, see [Choosing the Right Context Format](/blog/cal-context-formats-comparison).*

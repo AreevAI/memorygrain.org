@@ -1,0 +1,208 @@
+---
+title: "SML: The Context Format That Tells LLMs What to Trust"
+description: "Semantic Markup Language (SML) uses grain type tag names as epistemic signals — telling an LLM not just what information is, but what kind of information it is. Hands-on examples across all 10 grain types, from customer support to incident response."
+date: "2026-03-04"
+readTime: "12 min read"
+tags: ["sml", "context-format", "llm", "agent-memory", "cal"]
+---
+
+Run an experiment. Take this text:
+
+> Alice prefers dark mode. Alice probably prefers dark mode. Alice's calendar shows a meeting at 3pm. The support team agreed that onboarding takes too long. Alice granted the agent permission to access her billing records. The agent concluded that the billing discrepancy is caused by an unprocessed amendment.
+
+Now paste it into a system prompt and ask the model to act on it. The model has no way to know that "prefers dark mode" is a high-confidence belief, that "probably prefers" is low-confidence, that the calendar entry is a passive observation, that the onboarding claim was independently verified by multiple sources, that the billing permission is an explicit consent record, or that the discrepancy conclusion is the agent's own inference. It is all text. The model treats every sentence with equal epistemic weight.
+
+This is the problem SML solves. Not by adding more text — by adding structure that carries semantic meaning.
+
+## What SML Does Differently
+
+SML (Semantic Markup Language) is a flat, tag-based format where the tag name itself is the signal. It uses the 10 OMS grain type names — `belief`, `goal`, `event`, `action`, `observation`, `reasoning`, `state`, `workflow`, `consensus`, `consent` — as element names. Each name tells the LLM what epistemic category the content belongs to before it reads a single word.
+
+```sml
+<belief subject="alice" confidence="0.94">prefers dark mode in all tools</belief>
+<belief subject="alice" confidence="0.61">probably prefers dark mode</belief>
+```
+
+The model now sees two beliefs about dark mode — one at 94% confidence, one at 61%. It can weight them differently. It can mention the stronger belief as fact and the weaker one as a possibility. No prompt instruction needed. The structure communicates the distinction.
+
+SML is not XML. It does not require an XML parser, does not use escape sequences, does not support nesting, and does not validate against a schema. It is a flat tag format consumed directly by an LLM — designed for one reader, optimised for that reader's strengths.
+
+## The 10 Grain Types
+
+Each OMS grain type maps to one SML tag name. Here is every type with examples drawn from production agent scenarios.
+
+### `<belief>` — What the System Knows (With Calibrated Certainty)
+
+Beliefs are semantic triples with a confidence score. They represent structured knowledge — user preferences, relationships between entities, operational facts.
+
+```sml
+<belief subject="marcus" confidence="0.96">enterprise plan customer since 2023-01</belief>
+<belief subject="marcus" confidence="0.89">consistently pays on net-30 terms; no prior late payments</belief>
+<belief subject="marcus" confidence="0.74">tends to escalate billing issues directly to VP of Customer Success</belief>
+<belief subject="server-room-3" confidence="0.98">temperature must stay between 18C and 24C</belief>
+<belief subject="deployment-v4.2" confidence="0.82">caused 12% latency increase in checkout flow</belief>
+```
+
+The confidence score is not decorative. When an LLM sees `0.74`, it should treat that belief as likely but unconfirmed. When it sees `0.98`, it should treat it as a hard constraint. The tag name (`belief`) plus the attribute (`confidence`) create a two-dimensional signal that plain text cannot carry.
+
+### `<goal>` — What the User is Trying to Achieve
+
+Goals signal active objectives. The `state` attribute distinguishes active from completed or paused. The `deadline` creates temporal urgency.
+
+```sml
+<goal subject="marcus" state="active" deadline="2026-04-01">resolve disputed charge on INV-2024-8831 before renewal</goal>
+<goal subject="marcus" state="active">get clarification on new per-seat pricing for Q3</goal>
+<goal subject="team-infra" state="paused">migrate primary database from Postgres 14 to 16</goal>
+```
+
+An LLM that sees an active goal with a deadline eight days away will weight its response toward resolving that goal. It does not need a prompt instruction telling it to "prioritise urgent items." The structure does it.
+
+### `<event>` — What Was Said and When
+
+Events are interaction records — conversation turns with role attribution and temporal position.
+
+```sml
+<event role="user" time="5m ago">I was charged $4,200 for March but my contract shows $3,600.</event>
+<event role="assistant" time="5m ago">Pulling your contract and the March invoice now.</event>
+<event role="user" time="2m ago">We added 4 seats in February. Is this related?</event>
+```
+
+The `time` attribute uses human-relative values (`5m ago`, `2d ago`, `yesterday`). The model immediately understands recency. The `role` attribute prevents confusion about who said what — a problem that plagues unstructured conversation logs pasted into prompts.
+
+### `<action>` — What Tools Have Already Been Called
+
+Actions record tool invocations and their results. The `phase` attribute signals whether the action is pending, completed, or errored.
+
+```sml
+<action tool="get_invoice" phase="completed">INV-2024-8831: $4,200 for 28 seats at $150/seat</action>
+<action tool="get_contract" phase="completed">contract shows 24 seats at $150/seat = $3,600/month</action>
+<action tool="get_seat_history" phase="completed">4 seats added 2026-02-14; amendment not yet executed</action>
+<action tool="send_amendment" phase="error">failed — legal review required for mid-term amendments</action>
+```
+
+When the LLM sees `phase="completed"` for `get_invoice`, it knows the data is available. It will not suggest calling the tool again. When it sees `phase="error"`, it knows to acknowledge the failure and route around it. This eliminates a class of redundant tool calls that waste tokens and latency.
+
+### `<observation>` — What the System Noticed Passively
+
+Observations carry lower implied certainty than explicit beliefs. They are things the system perceived without the user stating them.
+
+```sml
+<observation observer="system">marcus opened the billing dashboard at 09:14 UTC</observation>
+<observation observer="calendar">account renewal meeting scheduled for 2026-04-01 14:00 UTC</observation>
+<observation observer="sentiment-model">user tone shifted from neutral to frustrated after viewing invoice</observation>
+```
+
+The `observer` attribute tells the LLM who made the observation. A `system` observer that logs dashboard opens is more reliable than a `sentiment-model` that guesses emotional state. The LLM can weight accordingly.
+
+### `<reasoning>` — What the Agent Already Figured Out
+
+This is one of SML's most powerful tags. Reasoning elements surface conclusions the agent has already drawn, preventing the LLM from re-deriving them or — worse — contradicting them.
+
+```sml
+<reasoning type="deductive">the $600 discrepancy is explained by 4 additional seats provisioned without a contract amendment; charge is technically correct but amendment was never executed</reasoning>
+<reasoning type="abductive">marcus's frustration likely stems from not being notified about the rate change, not the amount itself</reasoning>
+<reasoning type="inductive">across 23 enterprise interviews, 18 mentioned onboarding; pattern is robust</reasoning>
+```
+
+The `type` attribute distinguishes deductive (certain given premises), abductive (best explanation), and inductive (pattern-based) inference. An LLM that sees `type="deductive"` should treat it as a resolved conclusion. One that sees `type="abductive"` should treat it as a strong hypothesis open to challenge.
+
+### `<state>` — Where the Task Is Right Now
+
+State grains capture the current checkpoint in a multi-step process.
+
+```sml
+<state context="billing_dispute">identified root cause: seats added without amendment; awaiting legal review for mid-term amendment process</state>
+<state context="incident_response">page sent to on-call; impact assessment underway; ETA for status update: 15 minutes</state>
+```
+
+State grains prevent the model from asking "where were we?" — the answer is in the context, explicitly tagged.
+
+### `<workflow>` — The Prescribed Sequence
+
+Workflows define multi-step processes the agent is following or aware of.
+
+```sml
+<workflow trigger="billing_dispute_filed">1. pull invoice and contract  2. identify discrepancy  3. check seat provisioning log  4. determine root cause  5. propose resolution  6. execute with customer approval</workflow>
+<workflow trigger="p0_incident">1. acknowledge  2. assess impact  3. page on-call  4. post status  5. resolve  6. retrospective within 48h</workflow>
+```
+
+An LLM that sees a workflow knows there is a prescribed sequence. It will not skip steps or suggest ad-hoc alternatives unless the user explicitly asks.
+
+### `<consensus>` — What Multiple Sources Agree On
+
+Consensus grains carry more epistemic weight than single beliefs. They represent claims independently verified by multiple observers.
+
+```sml
+<consensus threshold="3" count="5">Q1 deployment frequency improved 18% over Q4 2025</consensus>
+<consensus threshold="2" count="2">enterprise onboarding takes an average of 47 days for 200+ seat accounts</consensus>
+```
+
+When `count >= threshold`, the claim is independently corroborated. The LLM should present these as established facts.
+
+### `<consent>` — What is Explicitly Permitted or Denied
+
+Consent grains are authoritative and non-negotiable. They represent explicit permission grants or denials.
+
+```sml
+<consent action="granted" grantor="marcus" grantee="support-agent">access billing records, invoice history, and contract documents for this dispute</consent>
+<consent action="denied" grantor="marcus" grantee="support-agent">share any account data with third-party vendors</consent>
+```
+
+When the LLM sees `action="denied"`, that scope is off-limits. Period. The consent record overrides anything the user might say later in the conversation. This is how SML enforces authorization in the context layer.
+
+## Progressive Disclosure
+
+SML controls metadata density without changing structure. The element shape stays flat — only the number of attributes changes:
+
+```sml
+<!-- summary: subject + content only -->
+<belief subject="marcus">enterprise plan customer since 2023-01</belief>
+
+<!-- standard: adds confidence -->
+<belief subject="marcus" confidence="0.96">enterprise plan customer since 2023-01</belief>
+
+<!-- full: adds source, observation time, provenance -->
+<belief subject="marcus" confidence="0.96" source="crm-sync" observed="1d ago">enterprise plan customer since 2023-01</belief>
+```
+
+In [CAL](/blog/cal-agent-memory-query-language), you control this with `WITH progressive_disclosure(summary|standard|full)`. Summary level maximises information density for tight budgets. Full level is for debugging and audit.
+
+## A Real Support Scenario, Assembled
+
+Here is a complete SML context block for a support agent resolving Marcus's billing dispute. Every grain type is doing work:
+
+```sml
+<context intent="resolving marcus's billing dispute for invoice INV-2024-8831">
+
+  <belief subject="marcus" confidence="0.96">enterprise plan customer since 2023-01</belief>
+  <belief subject="marcus" confidence="0.89">consistently pays on net-30; no prior late payments</belief>
+  <belief subject="marcus" confidence="0.82">primary contact for billing decisions</belief>
+
+  <goal subject="marcus" state="active" deadline="2026-04-01">resolve disputed charge before renewal date</goal>
+
+  <event role="user" time="5m ago">I was charged $4,200 for March but my contract shows $3,600. Fix this before my renewal.</event>
+  <event role="assistant" time="5m ago">Pulling your contract and the March invoice now.</event>
+  <event role="user" time="2m ago">We added 4 seats in February. Is this related?</event>
+
+  <action tool="get_invoice" phase="completed">INV-2024-8831: $4,200 for 28 seats at $150/seat</action>
+  <action tool="get_contract" phase="completed">contract: 24 seats at $150/seat = $3,600/month; renewal 2026-04-01</action>
+  <action tool="get_seat_history" phase="completed">4 seats added 2026-02-14; amendment not executed</action>
+
+  <observation observer="billing-system">invoice reflects provisioned seats (28); contract reflects signed quantity (24)</observation>
+
+  <reasoning type="deductive">the $600 discrepancy is 4 seats x $150; seats were provisioned without a contract amendment — charge is correct but marcus was never formally notified</reasoning>
+
+  <consensus threshold="2" count="2">4 seats provisioned on 2026-02-14 confirmed independently by billing-system and CRM</consensus>
+
+  <consent action="granted" grantor="marcus" grantee="support-agent">access billing records and contract documents for this dispute</consent>
+
+</context>
+```
+
+From this single context block, an LLM can give Marcus a precise, empathetic, accurate response: acknowledge the discrepancy, explain the root cause (4 seats without amendment), confirm the data is verified by two independent systems, and propose a resolution — all without asking Marcus to repeat himself.
+
+The tag names do the heavy lifting. The model knows what to trust (`consensus`), what is certain (`belief` at 0.96), what was inferred (`reasoning`), and what it is authorised to access (`consent`). This is not prompt engineering. It is structural communication.
+
+---
+
+*SML is produced by CAL's `ASSEMBLE` statement. For how to generate these context blocks from a memory store, see [CAL: The Query Language Your Agent Orchestrator Has Been Missing](/blog/cal-agent-memory-query-language). For a comparison of SML, TOON, Markdown, and JSON — and when to choose each — see [Choosing the Right Context Format](/blog/cal-context-formats-comparison). The full SML specification is at the [SML spec page](/sml).*
