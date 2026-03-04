@@ -26,7 +26,7 @@ export default function AboutPage() {
         <div className="prose">
           <h2>OMS at a Glance</h2>
           <p>
-            OMS is structured as a family of specifications. This document defines the Memory Grain (.mg) container — the atomic wire format for agent knowledge. Future parts will cover query and retrieval protocols, registry APIs, and transport bindings. All parts share the same design principles and licensing.
+            OMS is structured as a family of three specifications: the Memory Grain (.mg) container definition (OMS), the <Link href="/cal">Context Assembly Language (CAL)</Link> for querying grain stores, and the <Link href="/sml">Semantic Markup Language (SML)</Link> for LLM-consumable context rendering. All parts share the same design principles and licensing.
           </p>
 
           <h2>The Problem</h2>
@@ -62,12 +62,26 @@ export default function AboutPage() {
             OMS v1.3 spans 28 sections and 7 appendices covering blob layout, canonical serialization, content addressing, field compaction, ten grain types, cryptographic signing (COSE Sign1), selective disclosure, the .mg file format, identity (W3C DIDs), sensitivity classification, provenance, temporal modeling, conformance levels, device profiles, grain protection, observer type registry, query conventions, domain profile extensions (healthcare, legal, finance, robotics, science, consumer, integration), and security considerations.
           </p>
           <p>
-            <Link href="/spec">Read the full OM specification →</Link>
+            <Link href="/spec">Read the OMS specification →</Link>
+          </p>
+
+          <h2>Companion Specifications</h2>
+          <p>
+            <strong>CAL (Context Assembly Language)</strong> is a non-destructive, deterministic query language for assembling agent context from OMS memory stores. CAL cannot delete data — this is enforced at the grammar level. It covers safety model, type system, streaming, compliance, and 6 appendices across 27 sections.
+          </p>
+          <p>
+            <Link href="/cal">Read the CAL specification →</Link>
+          </p>
+          <p>
+            <strong>SML (Semantic Markup Language)</strong> is a flat, tag-based markup format optimized for LLM context consumption. Tag names map directly to OMS grain types, so LLMs understand the epistemic status of each piece of context without parsing schemas. SML is the default output format for CAL ASSEMBLE statements.
+          </p>
+          <p>
+            <Link href="/sml">Read the SML specification →</Link>
           </p>
 
           <h2>License</h2>
           <p>
-            The specification is published under the <a href="https://www.openwebfoundation.org/the-agreements/the-owf-1-0-agreements-granted-claims/owfa-1-0" target="_blank" rel="noopener noreferrer">Open Web Foundation Final Specification Agreement (OWF Final)</a> — the same license used by the W3C, OpenID Foundation, and OASIS. It is specifically designed for open standards: patent-clean, contributor-friendly, and suitable for submission to standards bodies.
+            The specification is published under the <a href="https://www.openwebfoundation.org/the-agreements/the-owf-1-0-agreements-granted-claims/owfa-1-0" target="_blank" rel="noopener noreferrer">Open Web Foundation Final Specification Agreement (OWF Final)</a> — the same kind of patent-royalty-free license used by the W3C, OpenID Foundation, and OASIS. It is specifically designed for open standards: patent-clean, contributor-friendly, and suitable for submission to standards bodies.
           </p>
 
           <h2>Version History</h2>
@@ -107,7 +121,7 @@ export default function AboutPage() {
 
           <h2>Contributing</h2>
           <p>
-            The specification is open source. Contributions welcome:
+            The specification is open source. We&apos;re actively looking for contributors — whether you want to build implementations, write test vectors, review the spec, or bring compliance expertise.
           </p>
           <ul>
             <li><strong>Implementations</strong> — Python (reference), Go, Rust, JavaScript, Java, C#</li>
@@ -117,6 +131,11 @@ export default function AboutPage() {
           </ul>
           <p>
             <a href="https://github.com/openmemoryspec/oms" target="_blank" rel="noopener noreferrer">github.com/openmemoryspec/oms →</a>
+          </p>
+
+          <h2>Backed by Areev</h2>
+          <p>
+            memorygrain.org and the Open Memory Specification are backed by <a href="https://areev.ai" target="_blank" rel="noopener noreferrer">areev.ai</a> — the reference implementation of OMS. Areev is built by MindGryd Software Private Limited.
           </p>
 
           <h2>AI Discoverability</h2>

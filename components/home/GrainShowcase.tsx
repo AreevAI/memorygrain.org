@@ -22,25 +22,25 @@ const cards: GrainCard[] = [
     type: 'Belief',
     typeHex: '0x01',
     color: 'var(--belief)',
-    agent: 'HealthPulse',
-    company: 'MediCorp',
+    agent: 'FitCoach',
+    company: 'KineticAI',
     description:
-      'Extracted from lab panel analysis. Dietary and allergy agents query this grain before making food recommendations.',
+      'Learned from three months of workout data. Nutrition and scheduling agents use this grain to personalize recovery plans.',
     hash: 'a7f3e812…9c21',
     payload: {
       type: 'belief',
       subject: 'user:john-smith',
-      relation: 'diagnosed_condition',
-      object: 'lactose_intolerance',
-      confidence: 0.96,
-      source_type: 'sensor',
+      relation: 'preferred_activity',
+      object: 'morning_run_5k',
+      confidence: 0.94,
+      source_type: 'pattern',
       created_at: 1739980800000,
-      namespace: 'health:conditions',
+      namespace: 'fitness:preferences',
     },
     readers: [
       { agent: 'FoodBot', use: 'meal planning' },
-      { agent: 'TravelBot', use: 'restaurant picks' },
-      { agent: 'InsureAI', use: 'risk factors' },
+      { agent: 'CalendarBot', use: 'schedule optimization' },
+      { agent: 'FitCoach', use: 'training progression' },
     ],
   },
   {
@@ -50,22 +50,22 @@ const cards: GrainCard[] = [
     agent: 'AutoPilot',
     company: 'DrivAI',
     description:
-      'Raw interaction record logged after a safety-critical event. Insurance and route-planning agents consume this for risk scoring.',
+      'Milestone logged when the vehicle completed its longest autonomous trip. Route and efficiency agents reference this for future planning.',
     hash: 'c4e9d5a1…b702',
     payload: {
       type: 'event',
       role: 'assistant',
       content:
-        'Emergency braking on Hwy 101 MP-42 at 97 km/h \u2014 pedestrian detected, collision avoided.',
+        'Completed 320 km autonomous drive, SF to Tahoe \u2014 zero interventions, avg 92 km/h.',
       created_at: 1740000023000,
       user_id: 'john-smith',
-      namespace: 'driving:safety',
+      namespace: 'driving:milestones',
       importance: 0.9,
-      structural_tags: ['safety', 'driving'],
+      structural_tags: ['milestone', 'driving'],
     },
     readers: [
-      { agent: 'InsureAI', use: 'underwriting' },
-      { agent: 'RouteBot', use: 'path optimization' },
+      { agent: 'RouteBot', use: 'route planning' },
+      { agent: 'EfficiencyAI', use: 'energy optimization' },
     ],
   },
   {
@@ -493,9 +493,8 @@ export function GrainShowcase() {
           <p
             style={{
               fontSize: '0.8125rem',
-              fontFamily: 'var(--font-mono)',
-              color: 'var(--accent)',
               fontWeight: 600,
+              color: 'var(--accent)',
               marginBottom: '0.75rem',
               textTransform: 'uppercase',
               letterSpacing: '0.08em',
@@ -574,7 +573,7 @@ export function GrainShowcase() {
               style={{
                 display: 'flex',
                 justifyContent: 'center',
-                flex: '0 1 960px',
+                flex: '0 1 1060px',
               }}
             >
               <div
@@ -686,51 +685,22 @@ export function GrainShowcase() {
                       overflow: 'hidden',
                     }}
                   >
-                    {/* Corner ribbon */}
                     <div
                       style={{
-                        position: 'absolute',
-                        top: 25,
-                        left: -40,
-                        background: 'var(--fg-muted)',
-                        color: '#fff',
-                        fontSize: '0.6rem',
-                        fontWeight: 700,
-                        fontFamily: 'var(--font-mono)',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.08em',
-                        padding: '3px 36px',
-                        transform: 'rotate(-45deg)',
-                        zIndex: 2,
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
-                        lineHeight: 1.4,
-                      }}
-                    >
-                      Sample Grain
-                    </div>
-
-                    <div
-                      style={{
-                        padding: '1rem 1.25rem 0',
+                        padding: '1rem 1.25rem 0.5rem',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'flex-end',
-                        gap: 6,
-                        marginBottom: 4,
+                        justifyContent: 'space-between',
+                        gap: 8,
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '0.75rem',
                       }}
                     >
-                      <Braces
-                        size={13}
-                        aria-hidden="true"
-                        style={{ color: 'var(--accent)' }}
-                      />
                       <span
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
                           gap: 6,
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: '0.75rem',
                           fontWeight: 600,
                           color: 'var(--accent)',
                           textTransform: 'uppercase',
@@ -749,29 +719,20 @@ export function GrainShowcase() {
                         />
                         {card.type} · {card.typeHex}
                       </span>
-                    </div>
-
-                    {/* Envelope metadata */}
-                    <div
-                      style={{
-                        padding: '0 1.25rem 0.5rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'flex-end',
-                        gap: 8,
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '0.65rem',
-                        color: 'var(--fg-muted)',
-                        flexWrap: 'wrap',
-                      }}
-                    >
-                      <span style={{ opacity: 0.8 }}>sha256:{card.hash}</span>
-                      <span style={{ opacity: 0.5 }}>·</span>
-                      <span style={{ opacity: 0.8 }}>v1</span>
-                      <span style={{ opacity: 0.5 }}>·</span>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: 'var(--accent)' }}>
-                        <ShieldCheck size={11} aria-hidden="true" />
-                        COSE Signed
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          fontSize: '0.65rem',
+                          color: 'var(--fg-muted)',
+                        }}
+                      >
+                        v1 ·{' '}
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: 'var(--accent)' }}>
+                          <ShieldCheck size={11} aria-hidden="true" />
+                          COSE Signed
+                        </span>
                       </span>
                     </div>
 
@@ -780,12 +741,11 @@ export function GrainShowcase() {
                         margin: 0,
                         padding: '0 1.25rem 1.25rem',
                         fontFamily: 'var(--font-mono)',
-                        fontSize: 'clamp(0.75rem, 1.4vw, 0.8125rem)',
-                        lineHeight: 1.7,
-                        overflowY: 'auto',
-                        overflowX: 'hidden',
-                        whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-word',
+                        fontSize: 'clamp(0.6875rem, 1.2vw, 0.75rem)',
+                        lineHeight: 1.65,
+                        overflowY: 'hidden',
+                        overflowX: 'auto',
+                        whiteSpace: 'pre',
                         flex: 1,
                         minHeight: 0,
                       }}

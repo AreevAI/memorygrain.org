@@ -32,9 +32,12 @@ There are two distinct content types, each with its own pipeline:
    - Required frontmatter: `title`, `description`, `date`, `readTime`, `tags[]`
    - Two MDX components available inside posts: `<Callout type="info|warning|success|security">` and `<PlaceholderImage label="...">`
 
-2. **Specification** — `../oms/SPECIFICATION.md` (copied to `docs/oms-specification.md` at build time)
-   - A single Markdown file rendered in `app/spec/page.tsx` via the `unified` pipeline (remark → rehype → stringify)
-   - The sidebar TOC in that page is hardcoded — update `tocSections` array when spec sections change
+2. **Specifications** — fetched from GitHub at build time into `docs/`
+   - `docs/oms-specification.md` → rendered in `app/spec/page.tsx`
+   - `docs/cal-specification.md` → rendered in `app/cal/page.tsx`
+   - `docs/sml-specification.md` → rendered in `app/sml/page.tsx`
+   - All three use the same `unified` pipeline (remark → rehype → stringify)
+   - The sidebar TOC in each page is hardcoded — update `tocSections` array when spec sections change
 
 ### Styling System
 
@@ -57,6 +60,13 @@ Dark mode is applied via the `.dark` class on `<html>` (managed by `next-themes`
 
 `app/page.tsx` assembles the homepage from ordered section components in `components/home/`. The render order is: `Hero → GitAnalogy → UseCases → HowItWorks → MemoryTypes → GrainShowcase → PortabilitySection → ConformanceLevels → BlogPreview → HomeCTA`.
 
+### Specification Pages
+
+Three spec pages share the same pattern (`unified` pipeline + hardcoded TOC sidebar):
+- `app/spec/page.tsx` — OMS (.mg container definition), 28 sections + 7 appendices
+- `app/cal/page.tsx` — CAL (Context Assembly Language), 27 sections + 6 appendices
+- `app/sml/page.tsx` — SML (Semantic Markup Language), 4 sections + 1 appendix
+
 ### Metadata
 
 All pages use `buildMetadata()` from `lib/metadata.ts`. Pass overrides for page-specific title/description. The site URL is controlled by `NEXT_PUBLIC_SITE_URL` (defaults to `https://memorygrain.org`). GA tracking ID via `NEXT_PUBLIC_GA_ID`.
@@ -78,7 +88,7 @@ When content, pages, or spec details change, the following files **must** be upd
 **Triggers:**
 - **New/removed page** → update `llms.txt` Pages section + `sitemap.ts` static entries
 - **New/removed blog post** → `sitemap.ts` handles this automatically via `getAllPosts()`; update `llms.txt` if the blog section description changes
-- **Spec changes** (memory types, header format, conformance levels, sections) → update both `llms.txt` and `llms-full.txt`
+- **Spec changes** (memory types, header format, conformance levels, sections) → update both `llms.txt` and `llms-full.txt`; also update TOC arrays in `app/spec/page.tsx`, `app/cal/page.tsx`, `app/sml/page.tsx` if headings change
 - **GitHub URL changes** → update `llms.txt` Source section, `Header.tsx`, `Footer.tsx`, `HomeCTA.tsx`, `about/page.tsx`, `README.md`
 
 ### GitHub URLs
@@ -88,40 +98,47 @@ The project lives under the `openmemoryspec` GitHub organization:
 - Specification repo: `https://github.com/openmemoryspec/oms`
 - Website repo: `https://github.com/AreevAI/memorygrain.org`
 
-### Brand Colors (Navy-to-Cyan Palette)
+### Brand Colors (Areev Blue Palette)
 
-The memorygrain brand uses a navy-to-cyan gradient palette aligned with the areev parent brand.
+The memorygrain brand uses the Areev blue gradient palette — four blues matching the Areev arc colors.
 
-**Icon gradient (4 squares, light → dark):**
+**Icon gradient (4 grain squares, diagonal light → dark):**
 
-| Square | Hex | Position |
-|--------|-----|----------|
-| Bright Cyan | `#00E5FF` | Top-left |
-| Bright Teal | `#00BBD6` | Top-right |
-| Medium Teal | `#0088AA` | Bottom-left |
-| Deep Teal | `#005577` | Bottom-right |
+| Square | Hex | Name | Position |
+|--------|-----|------|----------|
+| Sky Blue | `#60A5FA` | L4 Procedural | Top-left (brightest) |
+| Vivid Blue | `#3B82F6` | L1 Working | Top-right (accent) |
+| Rich Blue | `#2563EB` | L2 Episodic | Bottom-left (CTA) |
+| Deep Blue | `#1E40AF` | L3 Semantic | Bottom-right (darkest) |
 
 **Text colors:**
 
 | Token | Hex | Usage |
 |-------|-----|-------|
-| Dark Text | `#001830` | Wordmark + tagline on light backgrounds |
-| White | `#FFFFFF` | Wordmark + tagline on dark backgrounds |
+| Dark Text | `#0A1628` | Wordmark on light backgrounds |
+| Light Text | `#F0F4FF` | Wordmark on dark backgrounds |
+| Tagline Light | `#5A7A9F` | Tagline on light backgrounds |
+| Tagline Dark | `#7A96BA` | Tagline on dark backgrounds |
 
 **CSS design tokens** (defined in `app/globals.css`):
 
-| Mode | `--accent` | `--accent-hover` | `--bg` |
-|------|-----------|-----------------|--------|
-| Light | `#0088AA` | `#005577` | `#ffffff` |
-| Dark | `#00BBD6` | `#00E5FF` | `#000A1A` |
+| Mode | `--accent` | `--accent-hover` | `--bg` | `--surface` |
+|------|-----------|-----------------|--------|-------------|
+| Light | `#3B82F6` | `#2563EB` | `#ffffff` | `#F4F7FC` |
+| Dark | `#3B82F6` | `#60A5FA` | `#080E1A` | `#0F1E35` |
 
-**Typography:** Space Grotesk 600 (wordmark), Inter (body), JetBrains Mono (code)
+**Typography:** Space Grotesk 600 (wordmark), Sora 700 (headlines), Inter (body), JetBrains Mono (code)
 
 **Logo files** (in `public/`):
 - `logo-header.svg` / `logo-header-dark.svg` — horizontal lockup (icon + "MemoryGrain")
 - `logo-tagline.svg` / `logo-tagline-dark.svg` — with ".mg — open memory format"
 - `favicon.svg` — 4-square icon only
+- `favicon.ico` — ICO with 16/32/48px layers
+- `apple-touch-icon.png` — 180x180 (blue mark on white)
+- `logo-icon-192.png` / `logo-icon-512.png` — App icons
 
-**Editable source:** `/Users/sathish/mg/marketing/memorygrain/logo/mem-logo.pen` (Pencil format)
+**Brand design source:** Paper file `MemoryGrain.org` (4 artboards: Logo Mark, Lockup Variants, Color & Typography, Usage Guidelines)
 
-**Do NOT use old teal-green colors** (`#99F6E4`, `#5EEAD4`, `#2DD4BF`, `#0D9488`). The brand has moved to navy-to-cyan.
+**Full visual identity reference:** `../areev-marketing/visuals-guide.md`
+
+**Do NOT use old teal/cyan colors** (`#00E5FF`, `#00BBD6`, `#0088AA`, `#005577`). The brand has moved to Areev blue.

@@ -1,127 +1,109 @@
 import Link from 'next/link'
 
+const navLinks = [
+  { href: '/spec', label: 'Specification' },
+  { href: '/blog', label: 'Blog' },
+  { href: 'https://github.com/openmemoryspec/oms', label: 'GitHub', external: true },
+  { href: '/about', label: 'About' },
+  { href: '/llms.txt', label: 'llms.txt', plain: true },
+  { href: '/sitemap.xml', label: 'Sitemap', plain: true },
+]
+
 export function Footer() {
-  const year = new Date().getFullYear()
   return (
     <footer
       role="contentinfo"
       style={{
         borderTop: '1px solid var(--border)',
-        padding: '3rem 0 2rem',
-        marginTop: '6rem',
+        padding: '2.5rem 0 2rem',
+        textAlign: 'center',
       }}
     >
-      <div className="container-content">
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-            gap: '2rem',
-            marginBottom: '3rem',
-          }}
-        >
-          {/* Brand */}
-          <div>
-            <div style={{ marginBottom: '0.5rem' }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo-header.svg" alt="Memory Grain" className="logo-light" style={{ height: 24, width: 'auto' }} />
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo-header-dark.svg" alt="Memory Grain" className="logo-dark" style={{ height: 24, width: 'auto' }} />
-            </div>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)', lineHeight: 1.6, maxWidth: 200 }}>
-              The Open Memory Specification for autonomous systems.
-            </p>
-          </div>
+      <div className="container-content" style={{ maxWidth: 700, margin: '0 auto' }}>
+        {/* Backed by */}
+        <p style={{ fontSize: '0.9375rem', color: 'var(--fg-muted)', marginBottom: '1.25rem' }}>
+          Backed by{' '}
+          <a
+            href="https://areev.ai"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: 'var(--fg)', fontWeight: 600, textDecoration: 'none' }}
+          >
+            areev.ai
+          </a>
+        </p>
 
-          {/* Spec */}
-          <div>
-            <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--fg)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              OM Specification
-            </p>
-            {[
-              { href: '/spec#abstract', label: 'Abstract' },
-              { href: '/spec#blob-layout', label: 'Blob Layout' },
-              { href: '/spec#cryptographic-signing', label: 'Cryptographic Signing' },
-              { href: '/spec#conformance', label: 'Conformance Levels' },
-            ].map(({ href, label }) => (
-              <Link key={href} href={href} style={{ display: 'block', fontSize: '0.8125rem', color: 'var(--fg-secondary)', textDecoration: 'none', marginBottom: '0.375rem' }}>
-                {label}
-              </Link>
-            ))}
-          </div>
-
-          {/* Blog */}
-          <div>
-            <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--fg)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              Blog
-            </p>
-            {[
-              { href: '/blog/signing-memory-grains-cose-dids', label: 'COSE Sign1 Deep Dive' },
-              { href: '/blog/anatomy-of-a-mg-blob', label: 'Anatomy of a .mg Blob' },
-              { href: '/blog/open-standard-vendor-lockin', label: 'Open Standard vs Vendor Lock-in' },
-              { href: '/blog/agent-memory-autonomous-vehicles', label: 'Autonomous Vehicles' },
-            ].map(({ href, label }) => (
-              <Link key={href} href={href} style={{ display: 'block', fontSize: '0.8125rem', color: 'var(--fg-secondary)', textDecoration: 'none', marginBottom: '0.375rem' }}>
-                {label}
-              </Link>
-            ))}
-          </div>
-
-          {/* Resources */}
-          <div>
-            <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--fg)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              Resources
-            </p>
-            {[
-              { href: '/about', label: 'About' },
-              { href: 'https://github.com/AreevAI/memorygrain.org', label: 'GitHub', external: true },
-              { href: '/llms.txt', label: 'llms.txt' },
-              { href: '/sitemap.xml', label: 'Sitemap' },
-            ].map(({ href, label, external }) => (
-              <a
-                key={href}
-                href={href}
-                target={external ? '_blank' : undefined}
-                rel={external ? 'noopener noreferrer' : undefined}
-                style={{ display: 'block', fontSize: '0.8125rem', color: 'var(--fg-secondary)', textDecoration: 'none', marginBottom: '0.375rem' }}
-              >
-                {label}
-              </a>
-            ))}
-          </div>
-        </div>
-
-        <div
+        {/* Nav links */}
+        <nav
+          aria-label="Footer navigation"
           style={{
             display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
+            justifyContent: 'center',
             flexWrap: 'wrap',
-            gap: '0.5rem',
-            paddingTop: '1.5rem',
-            borderTop: '1px solid var(--border-subtle)',
+            gap: '0.25rem 1.25rem',
+            marginBottom: '1.5rem',
           }}
         >
-          <p style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)' }}>
-            © {year} Memory Grain contributors. Specification licensed under{' '}
-            <a href="https://www.openwebfoundation.org/the-agreements/the-owf-1-0-agreements-granted-claims/owfa-1-0" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
-              OWFa 1.0
-            </a>
-            . Website licensed under{' '}
-            <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
-              CC0 1.0
-            </a>
-            .
-          </p>
-          <p style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)' }}>
-            Backed by{' '}
-            <a href="https://areev.ai" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
-              areev.ai
-            </a>
-          </p>
-        </div>
-      </div>
+          {navLinks.map(({ href, label, external, plain }) => {
+            if (external || plain) {
+              return (
+                <a
+                  key={href}
+                  href={href}
+                  target={external ? '_blank' : undefined}
+                  rel={external ? 'noopener noreferrer' : undefined}
+                  style={{
+                    fontSize: '0.8125rem',
+                    color: 'var(--fg-secondary)',
+                    textDecoration: 'none',
+                  }}
+                >
+                  {label}
+                </a>
+              )
+            }
+            return (
+              <Link
+                key={href}
+                href={href}
+                style={{
+                  fontSize: '0.8125rem',
+                  color: 'var(--fg-secondary)',
+                  textDecoration: 'none',
+                }}
+              >
+                {label}
+              </Link>
+            )
+          })}
+        </nav>
 
+        {/* Licensing */}
+        <p style={{ fontSize: '0.75rem', color: 'var(--fg-muted)', lineHeight: 1.7, marginBottom: '0.375rem' }}>
+          Specification licensed under{' '}
+          <a
+            href="https://www.openwebfoundation.org/the-agreements/the-owf-1-0-agreements-granted-claims/owfa-1-0"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: 'var(--fg-muted)', textDecoration: 'underline', textUnderlineOffset: '2px' }}
+          >
+            OWFa 1.0
+          </a>
+          {' \u00B7 '}
+          Website{' '}
+          <a
+            href="https://creativecommons.org/publicdomain/zero/1.0/"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: 'var(--fg-muted)', textDecoration: 'underline', textUnderlineOffset: '2px' }}
+          >
+            CC0 1.0
+          </a>
+        </p>
+        <p style={{ fontSize: '0.75rem', color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>
+          OMS v1.3 · memorygrain.org
+        </p>
+      </div>
     </footer>
   )
 }

@@ -10,6 +10,20 @@ The Memory Grain (.mg) format is a binary standard for atomic, immutable knowled
 produced and consumed by autonomous systems. Think of it as what .git objects are to version
 control  -  but for agent memory.
 
+## Companion Specifications
+
+OMS v1.3 includes two companion specifications:
+
+- **CAL (Context Assembly Language)** - A non-destructive, deterministic, LLM-native query language
+  for assembling agent context from OMS memory stores. CAL cannot delete data - this is enforced
+  at the grammar level. 27 sections + 6 appendices covering safety model, grammar, type system,
+  streaming, compliance, and conformance levels.
+
+- **SML (Semantic Markup Language)** - A flat, tag-based markup format optimized for LLM context
+  consumption. Tag names map directly to OMS grain types (belief, goal, event, etc.) so LLMs
+  understand the epistemic status of each piece of context without parsing schemas. SML is the
+  default output format for CAL ASSEMBLE statements.
+
 Each memory grain is:
 - Identified by its SHA-256 content address (the hash IS the unique ID)
 - Immutable (any change produces a different hash)
@@ -92,9 +106,11 @@ Full specification: https://memorygrain.org/spec/
 ## Pages
 
 - https://memorygrain.org/  -  Home, use cases, grain types, conformance levels
-- https://memorygrain.org/spec/  -  Full OM specification with ABNF grammar and test vectors
+- https://memorygrain.org/spec/  -  Full OMS specification with ABNF grammar and test vectors
+- https://memorygrain.org/cal/  -  CAL specification  -  Context Assembly Language for querying grain stores
+- https://memorygrain.org/sml/  -  SML specification  -  Semantic Markup Language for LLM context
 - https://memorygrain.org/blog/  -  Technical deep dives into the .mg format
-- https://memorygrain.org/about/  -  About, license, contributing
+- https://memorygrain.org/about/  -  About, license, contributing, backed by areev.ai
 
 ## License
 

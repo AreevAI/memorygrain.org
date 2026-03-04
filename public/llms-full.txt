@@ -452,11 +452,13 @@ Extended (Servers, Cloud): max 1MB, streaming, blind indexes, vector refs
 A .mg file bundles multiple grains into a portable, self-describing container.
 v1.2 adds an optional index manifest (§11.7) to carry portable index-layer state.
 
-  [magic: 4 bytes] [version: 1 byte] [grain_count: uint32] [reserved: 3 bytes]
-  [index: N × (sha256[32] + offset[4] + length[4])]
+  [magic: 3 bytes ("MG\x01")] [flags: 1 byte] [grain_count: uint32]
+  [field_map_version: 1 byte] [compression_codec: 1 byte] [reserved: 6 bytes]
+  = 16-byte header
+  [index: grain_count × u32 offsets (4 bytes each)]
   [data: grain_blob_0, grain_blob_1, ..., grain_blob_N-1]
   [index_manifest (optional): index-layer state for lifecycle portability]
-  [checksum: SHA-256 of entire container bytes preceding this field]
+  [checksum: SHA-256 of header + index + grains + manifest (32 bytes)]
 
 ================================================================================
 ## CONFORMANCE LEVELS

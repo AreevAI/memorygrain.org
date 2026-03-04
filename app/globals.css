@@ -5,18 +5,18 @@
 /* ─── Design Tokens ─────────────────────────────────────────── */
 :root {
   --bg: #ffffff;
-  --surface: #f0f7ff;
-  --elevated: #d6eeff;
-  --fg: #0f172a;
-  --fg-secondary: #475569;
-  --fg-muted: #94a3b8;
-  --border: #a0d0e8;
-  --border-subtle: #e0f0f8;
-  --accent: #0088AA;
-  --accent-hover: #005577;
-  --accent-light: #d6eeff;
-  --code-bg: #f0f7ff;
-  --code-border: #80d0e8;
+  --surface: #F4F7FC;
+  --elevated: #E2EAF4;
+  --fg: #0A1628;
+  --fg-secondary: #2A3E5C;
+  --fg-muted: #5A7294;
+  --border: #C8D8EC;
+  --border-subtle: #E2EAF4;
+  --accent: #3B82F6;
+  --accent-hover: #2563EB;
+  --accent-light: #EBF2FF;
+  --code-bg: #F4F7FC;
+  --code-border: #C8D8EC;
 
   /* Grain type colors (v1.2 canonical names + v1.1 aliases) */
   --belief: #3b82f6;
@@ -37,19 +37,19 @@
 }
 
 .dark {
-  --bg: #000A1A;
-  --surface: #0A1A2A;
-  --elevated: #142838;
-  --fg: #f0f8ff;
-  --fg-secondary: #94a3b8;
-  --fg-muted: #4A7A8F;
-  --border: #1A3040;
-  --border-subtle: #102030;
-  --accent: #00BBD6;
-  --accent-hover: #00E5FF;
-  --accent-light: #0A2030;
-  --code-bg: #081520;
-  --code-border: #1A3040;
+  --bg: #080E1A;
+  --surface: #0F1E35;
+  --elevated: #152540;
+  --fg: #F0F4FF;
+  --fg-secondary: #B8C8E8;
+  --fg-muted: #6B84A8;
+  --border: #162B4D;
+  --border-subtle: #0F2040;
+  --accent: #3B82F6;
+  --accent-hover: #60A5FA;
+  --accent-light: #0F1E35;
+  --code-bg: #0D1525;
+  --code-border: #1A2E4D;
 }
 
 @theme {
@@ -112,7 +112,7 @@ body {
 }
 
 ::selection {
-  background: rgba(0, 136, 170, 0.2);
+  background: rgba(59, 130, 246, 0.2);
 }
 
 /* ─── Focus ──────────────────────────────────────────────────── */
@@ -346,7 +346,7 @@ code[data-line-numbers] [data-line]::before {
 }
 /* Grain carousel — fixed height + three-column card layout */
 .grain-card-container {
-  height: 380px;
+  height: 460px;
 }
 .grain-card-grid {
   display: grid;
@@ -364,6 +364,9 @@ code[data-line-numbers] [data-line]::before {
     grid-template-columns: 1fr !important;
   }
   .grain-nav-arrow {
+    display: none !important;
+  }
+  .how-it-works-arrow {
     display: none !important;
   }
 }

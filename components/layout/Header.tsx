@@ -7,8 +7,9 @@ import { Github, Menu, X } from 'lucide-react'
 import { useState } from 'react'
 
 const navLinks = [
-  { href: '/', label: 'Home' },
-  { href: '/spec', label: 'OM Spec' },
+  { href: '/spec', label: 'OMS' },
+  { href: '/cal', label: 'CAL' },
+  { href: '/sml', label: 'SML' },
   { href: '/blog', label: 'Blog' },
   { href: '/about', label: 'About' },
 ]
@@ -72,21 +73,22 @@ export function Header() {
               href="https://github.com/openmemoryspec/oms"
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="View on GitHub"
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                width: 36,
-                height: 36,
+                gap: 6,
+                padding: '0.375rem 0.75rem',
                 borderRadius: 8,
                 border: '1px solid var(--border)',
                 background: 'var(--surface)',
                 color: 'var(--fg-secondary)',
                 textDecoration: 'none',
+                fontSize: '0.875rem',
+                fontWeight: 500,
               }}
             >
               <Github size={16} />
+              GitHub
             </a>
             <ThemeToggle />
 
@@ -143,6 +145,25 @@ export function Header() {
                 {label}
               </Link>
             ))}
+            <a
+              href="https://github.com/openmemoryspec/oms"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setMenuOpen(false)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '0.625rem 0.75rem',
+                borderRadius: 6,
+                fontSize: '0.9375rem',
+                color: 'var(--fg)',
+                textDecoration: 'none',
+              }}
+            >
+              <Github size={16} />
+              GitHub
+            </a>
           </nav>
         )}
       </div>

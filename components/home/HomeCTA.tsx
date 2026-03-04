@@ -13,6 +13,18 @@ export function HomeCTA() {
       }}
     >
       <div className="container-content" style={{ maxWidth: 700, margin: '0 auto' }}>
+        {/* Accent divider */}
+        <div
+          aria-hidden="true"
+          style={{
+            width: 60,
+            height: 3,
+            background: 'var(--accent)',
+            borderRadius: 2,
+            margin: '0 auto 2rem',
+          }}
+        />
+
         <h2
           style={{
             fontSize: 'clamp(1.75rem, 4vw, 2.75rem)',
@@ -26,7 +38,7 @@ export function HomeCTA() {
           Implement OMS today.
         </h2>
         <p style={{ fontSize: '1.0625rem', color: 'var(--fg-secondary)', lineHeight: 1.75, marginBottom: '2.5rem' }}>
-          The Open Memory Specification is open. The .mg container definition is licensed under OWF Final. Implementations in any language are welcome — read the spec, run the test vectors, and join the standard.
+          The specification is open and licensed under OWF Final. Read the spec, run the test vectors, and build interoperable agent memory in any language.
         </p>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
           <Link

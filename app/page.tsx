@@ -1,12 +1,9 @@
 import { getAllPosts } from '@/lib/blog'
 import { buildMetadata } from '@/lib/metadata'
 import { Hero } from '@/components/home/Hero'
-import { GitAnalogy } from '@/components/home/GitAnalogy'
-import { UseCases } from '@/components/home/UseCases'
-import { MemoryTypes } from '@/components/home/MemoryTypes'
-import { GrainShowcase } from '@/components/home/GrainShowcase'
 import { HowItWorks } from '@/components/home/HowItWorks'
-import { PortabilitySection } from '@/components/home/PortabilitySection'
+import { GrainShowcase } from '@/components/home/GrainShowcase'
+import { EnterpriseSection } from '@/components/home/EnterpriseSection'
 import { ConformanceLevels } from '@/components/home/ConformanceLevels'
 import { BlogPreview } from '@/components/home/BlogPreview'
 import { HomeCTA } from '@/components/home/HomeCTA'
@@ -18,12 +15,9 @@ export default function HomePage() {
   return (
     <>
       <Hero />
-      <GitAnalogy />
-      <UseCases />
       <HowItWorks />
-      <MemoryTypes />
       <GrainShowcase />
-      <PortabilitySection />
+      <EnterpriseSection />
       <ConformanceLevels />
       <BlogPreview posts={posts} />
       <HomeCTA />
