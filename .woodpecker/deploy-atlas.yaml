@@ -1,0 +1,38 @@
+when:
+  - event: push
+    branch: deploy/atlas
+
+labels:
+  location: odin
+
+steps:
+  - name: build
+    image: docker:27
+    commands:
+      - docker login registry.atmatic.ai -u $HARBOR_USERNAME -p $HARBOR_PASSWORD
+      - >-
+        docker build
+        --build-arg NEXT_PUBLIC_GA_ID=G-VW8SRXQEW3
+        --build-arg NEXT_PUBLIC_SITE_URL=https://memorygrain.org
+        -t registry.atmatic.ai/opensource/memorygrain-web:latest
+        -t registry.atmatic.ai/opensource/memorygrain-web:${CI_PIPELINE_NUMBER}
+        .
+      - docker push registry.atmatic.ai/opensource/memorygrain-web:latest
+      - docker push registry.atmatic.ai/opensource/memorygrain-web:${CI_PIPELINE_NUMBER}
+    secrets: [harbor_username, harbor_password]
+
+  - name: clone-devops
+    image: alpine/git
+    commands:
+      - git clone https://$GITHUB_TOKEN@github.com/mindgryd/devops.git /tmp/devops
+    secrets: [github_token]
+
+  - name: deploy
+    image: bitnami/kubectl:latest
+    commands:
+      - mkdir -p ~/.kube
+      - echo "$ATLAS_KUBECONFIG" > ~/.kube/config
+      - kubectl apply -k /tmp/devops/services/memorygrain-web/overlays/atlas
+      - kubectl rollout restart deployment/memorygrain-web -n memorygrain-web
+      - kubectl rollout status deployment/memorygrain-web -n memorygrain-web --timeout=300s
+    secrets: [atlas_kubeconfig]
