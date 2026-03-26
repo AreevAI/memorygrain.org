@@ -19,13 +19,19 @@ steps:
         .
       - docker push registry.atmatic.ai/opensource/memorygrain-web:latest
       - docker push registry.atmatic.ai/opensource/memorygrain-web:${CI_PIPELINE_NUMBER}
-    secrets: [harbor_username, harbor_password]
+    environment:
+      HARBOR_USERNAME:
+        from_secret: harbor_username
+      HARBOR_PASSWORD:
+        from_secret: harbor_password
 
   - name: clone-devops
     image: alpine/git
     commands:
       - git clone https://$GITHUB_TOKEN@github.com/mindgryd/devops.git /tmp/devops
-    secrets: [github_token]
+    environment:
+      GITHUB_TOKEN:
+        from_secret: github_token
 
   - name: deploy
     image: bitnami/kubectl:latest
@@ -35,4 +41,6 @@ steps:
       - kubectl apply -k /tmp/devops/services/memorygrain-web/overlays/atlas
       - kubectl rollout restart deployment/memorygrain-web -n memorygrain-web
       - kubectl rollout status deployment/memorygrain-web -n memorygrain-web --timeout=300s
-    secrets: [atlas_kubeconfig]
+    environment:
+      ATLAS_KUBECONFIG:
+        from_secret: atlas_kubeconfig
