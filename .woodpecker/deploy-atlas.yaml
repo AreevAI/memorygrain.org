@@ -6,6 +6,15 @@ labels:
   location: odin
 
 steps:
+  - name: slack-start
+    image: registry.atmatic.ai/mindgryd/wp-notify
+    failure: ignore
+    commands:
+      - notify started
+    environment:
+      SLACK_BOT_TOKEN:
+        from_secret: slack_bot_token
+
   - name: build
     image: docker:27
     commands:
@@ -44,3 +53,14 @@ steps:
     environment:
       ATLAS_KUBECONFIG:
         from_secret: atlas_kubeconfig
+
+  - name: slack-result
+    image: registry.atmatic.ai/mindgryd/wp-notify
+    failure: ignore
+    when:
+      - status: [success, failure]
+    commands:
+      - notify
+    environment:
+      SLACK_BOT_TOKEN:
+        from_secret: slack_bot_token
