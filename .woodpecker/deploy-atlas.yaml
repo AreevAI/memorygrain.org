@@ -54,13 +54,22 @@ steps:
       ATLAS_KUBECONFIG:
         from_secret: atlas_kubeconfig
 
-  - name: slack-result
+  - name: slack-success
+    image: registry.atmatic.ai/mindgryd/wp-notify
+    failure: ignore
+    commands:
+      - notify success
+    environment:
+      SLACK_BOT_TOKEN:
+        from_secret: slack_bot_token
+
+  - name: slack-failure
     image: registry.atmatic.ai/mindgryd/wp-notify
     failure: ignore
     when:
-      - status: [success, failure]
+      - status: [failure]
     commands:
-      - notify
+      - notify failure
     environment:
       SLACK_BOT_TOKEN:
         from_secret: slack_bot_token
