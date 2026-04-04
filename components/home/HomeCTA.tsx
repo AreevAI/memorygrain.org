@@ -38,7 +38,7 @@ export function HomeCTA() {
           Implement OMS today.
         </h2>
         <p style={{ fontSize: '1.0625rem', color: 'var(--fg-secondary)', lineHeight: 1.75, marginBottom: '2.5rem' }}>
-          The specification is open and licensed under OWF Final. Read the spec, run the test vectors, and build interoperable agent memory in any language.
+          The specification is open and licensed under CC0 1.0. Read the spec, run the test vectors, and build interoperable agent memory in any language.
         </p>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
           <Link
@@ -79,7 +79,7 @@ export function HomeCTA() {
         </div>
 
         <p style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)', marginTop: '2rem', fontFamily: 'var(--font-mono)' }}>
-          OMS v1.3 · .mg Container Definition · Standards Track · OWF Final
+          OMS v1.3 · .mg Container Definition · Standards Track · CC0 1.0
         </p>
       </div>
     </section>

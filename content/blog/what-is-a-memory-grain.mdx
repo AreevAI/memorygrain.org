@@ -245,11 +245,11 @@ New fields never break old implementations. Parsers must ignore unknown fields a
 
 ### 3. Minimal required fields
 
-Each memory type defines only the essential fields. A Fact requires just seven fields: `type`, `subject`, `relation`, `object`, `confidence`, `source_type`, `created_at`. Everything else is optional. This means a simple knowledge claim and a richly annotated one with temporal validity, provenance chains, cross-links, and content references coexist in the same format without separate type hierarchies.
+Each memory type defines only the essential fields. A Belief requires just six fields: `type`, `subject`, `relation`, `object`, `confidence`, `created_at`. Everything else is optional. This means a simple knowledge claim and a richly annotated one with temporal validity, provenance chains, cross-links, and content references coexist in the same format without separate type hierarchies.
 
 ### 4. Semantic triples
 
-The subject-relation-object model maps naturally to knowledge graphs. Every Fact is an RDF triple. This makes the transition from `.mg` grains to graph databases, SPARQL queries, or ontological reasoning a direct mapping rather than an impedance mismatch.
+The subject-relation-object model maps naturally to knowledge graphs. Every Belief is an RDF triple. This makes the transition from `.mg` grains to graph databases, SPARQL queries, or ontological reasoning a direct mapping rather than an impedance mismatch.
 
 ### 5. Compliance by design
 

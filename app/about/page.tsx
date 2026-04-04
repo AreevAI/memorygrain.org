@@ -4,7 +4,7 @@ import { buildMetadata } from '@/lib/metadata'
 
 export const metadata: Metadata = buildMetadata({
   title: 'About',
-  description: 'About the Open Memory Specification (OMS) — the open standard for immutable, content-addressed agent memory. The .mg container is defined by OMS.  OWF Final licensed, standards-track, community-driven.',
+  description: 'About the Open Memory Specification (OMS) — the open standard for immutable, content-addressed agent memory. The .mg container is defined by OMS.  CC0 1.0 licensed, standards-track, community-driven.',
 })
 
 export default function AboutPage() {
@@ -81,7 +81,7 @@ export default function AboutPage() {
 
           <h2>License</h2>
           <p>
-            The specification is published under the <a href="https://www.openwebfoundation.org/the-agreements/the-owf-1-0-agreements-granted-claims/owfa-1-0" target="_blank" rel="noopener noreferrer">Open Web Foundation Final Specification Agreement (OWF Final)</a> — the same kind of patent-royalty-free license used by the W3C, OpenID Foundation, and OASIS. It is specifically designed for open standards: patent-clean, contributor-friendly, and suitable for submission to standards bodies.
+            The specification is published under <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener noreferrer">CC0 1.0 Universal (Public Domain Dedication)</a> — waiving all copyright and related rights worldwide. Anyone can copy, modify, distribute, and build on the specification for any purpose, without permission or attribution.
           </p>
 
           <h2>Version History</h2>
@@ -112,8 +112,8 @@ export default function AboutPage() {
                 </tr>
                 <tr>
                   <td><code>1.3</code></td>
-                  <td>2026-02-28</td>
-                  <td>Integration Domain Profile (int: namespace, Appendix A.7) with 25 action/trigger fields; Action output_schema field (JSON Schema draft-07); Trigger Definitions via Observation Grains (§27.6); Consensus Grain for Action Definition Validation (§27.7); 25 new compact keys; 5 compact key collision fixes</td>
+                  <td>2026-03-03</td>
+                  <td>Integration Domain Profile (int: namespace, Appendix A.7) with 25 action/trigger fields; Action output_schema field (JSON Schema draft-07); Trigger Definitions via Observation Grains (§27.6); Consensus Grain for Action Definition Validation (§27.7); 25 new compact keys; 5 compact key collision fixes; CAL v1.0 and SML v1.0 bundled as companion specifications</td>
                 </tr>
               </tbody>
             </table>

@@ -59,24 +59,24 @@ The Lightweight profile is where the most aggressive trade-offs happen:
 - **Max nesting depth: 8 levels.** The tightest limit. Microcontrollers have small stacks (often 4-8 KB), and deeply recursive parsing can overflow them. Eight levels is more than enough for a flat grain with no nested structures.
 
 <Callout type="info">
-The Lightweight profile's 512-byte limit is not arbitrary. The Vector 1 test grain — a minimal Fact with 9 fields including an `author_did` of 56 characters — is 159 bytes. A Fact with just the required Lightweight fields (type, subject, relation, object, confidence, created_at, namespace) would be roughly 80-100 bytes, depending on string lengths. 512 bytes provides meaningful headroom for longer strings while remaining feasible for microcontrollers with 256 KB or less of total RAM.
+The Lightweight profile's 512-byte limit is not arbitrary. The Vector 1 test grain — a minimal Belief with 9 fields including an `author_did` of 56 characters — is 159 bytes. A Belief with just the required Lightweight fields (type, subject, relation, object, confidence, created_at, namespace) would be roughly 80-100 bytes, depending on string lengths. 512 bytes provides meaningful headroom for longer strings while remaining feasible for microcontrollers with 256 KB or less of total RAM.
 </Callout>
 
 ## What Fits in Each Profile
 
 To understand the practical implications of blob size limits, consider several grain scenarios:
 
-**Minimal Fact (required fields only):**
-A grain like `"user prefers dark mode"` with type, subject, relation, object, confidence, source_type, created_at, and namespace. This produces roughly 100-160 bytes, depending on string lengths. The Vector 1 test grain, which includes an `author_did` (56 characters of DID string), is 159 bytes. Fits in all three profiles.
+**Minimal Belief (required fields only):**
+A grain like `"user prefers dark mode"` with type, subject, relation, object, confidence, created_at, and namespace. This produces roughly 100-160 bytes, depending on string lengths. The Vector 1 test grain, which includes an `author_did` (56 characters of DID string), is 159 bytes. Fits in all three profiles.
 
-**Annotated Fact (common optional fields):**
+**Annotated Belief (common optional fields):**
 Add `author_did`, `importance`, `structural_tags` with 2-3 tags, `valid_from`, and `valid_to`. This pushes the grain to roughly 250-400 bytes. Fits in all three profiles, though it is approaching the Lightweight limit.
 
-**Richly annotated Fact (provenance, cross-links):**
+**Richly annotated Belief (provenance, cross-links):**
 Add a `provenance_chain` with 2-3 entries, `related_to` with 2 cross-links, `context` with 3-4 key-value pairs, and `content_refs` with an image reference. This can easily reach 800-2000 bytes. Fits in Standard and Extended, but NOT Lightweight.
 
-**Episode with long content:**
-An Episode grain with a `content` field containing a full conversation transcript — say, 10 KB of text. Fits in Standard (32 KB limit) and Extended (1 MB limit), but not Lightweight (512 bytes).
+**Event with long content:**
+An Event grain with a `content` field containing a full conversation transcript — say, 10 KB of text. Fits in Standard (32 KB limit) and Extended (1 MB limit), but not Lightweight (512 bytes).
 
 **Observation with content reference:**
 A sensor Observation that references an external point cloud file via `content_refs` — the reference metadata adds roughly 150-200 bytes to the base grain. A compact Observation with one content reference fits in all three profiles. But if the Observation includes `context` with sensor calibration data, it may exceed 512 bytes for Lightweight.
@@ -100,7 +100,7 @@ Here is how the profiles map to real hardware:
 
 ### Lightweight Profile Devices
 
-- **ESP32**: 520 KB SRAM, hardware SHA-256, WiFi/BLE. The most popular microcontroller for IoT. Can generate Lightweight Fact and Observation grains, hash them, and transmit via MQTT over TLS.
+- **ESP32**: 520 KB SRAM, hardware SHA-256, WiFi/BLE. The most popular microcontroller for IoT. Can generate Lightweight Belief and Observation grains, hash them, and transmit via MQTT over TLS.
 - **STM32** (Cortex-M series): 64-1024 KB SRAM depending on variant. Many models have hardware crypto accelerators. Used in industrial sensors, medical devices, and automotive systems.
 - **Nordic nRF52/nRF53**: 256 KB RAM, hardware crypto, BLE. Used in wearables, environmental sensors, and asset trackers. The 512-byte Lightweight limit aligns well with BLE's MTU constraints.
 - **Battery-powered environmental sensors**: Temperature, humidity, air quality, soil moisture. These devices wake periodically, take a reading, create a Lightweight Observation grain, transmit it, and sleep. Every byte of grain size impacts battery life because larger payloads require longer radio-on time.
@@ -157,7 +157,7 @@ At each tier, grains can be enriched:
 
 1. **Sensor (Lightweight):** Creates a minimal Observation grain: type, observer_id, observer_type, subject ("room-temperature"), object ("22.5C"), confidence (0.99), created_at, namespace.
 
-2. **Gateway (Standard):** Receives the Observation, validates it, and creates a new Fact grain that includes `derived_from` pointing to the Observation's content address, adds `provenance_chain`, `structural_tags` for classification, and `context` with sensor calibration data. The original Observation grain is forwarded as-is.
+2. **Gateway (Standard):** Receives the Observation, validates it, and creates a new Belief grain that includes `derived_from` pointing to the Observation's content address, adds `provenance_chain`, `structural_tags` for classification, and `context` with sensor calibration data. The original Observation grain is forwarded as-is.
 
 3. **Cloud (Extended):** Receives both grains, stores them, adds `embedding_refs` for semantic search, generates `related_to` cross-links to other temperature observations, and indexes everything in a hexastore for graph queries.
 

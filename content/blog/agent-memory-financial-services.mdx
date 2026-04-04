@@ -223,7 +223,7 @@ State grains (type byte `0x03`, Section 8.3) capture the complete state of a tra
 }
 ```
 
-If the trading agent crashes or the session needs to be reconstructed, the Checkpoint provides a complete snapshot. The `context` map captures open positions, P&L, buying power, margin utilization, trade count, and risk exposure — everything needed to resume operations or audit the session state at a specific point in time.
+If the trading agent crashes or the session needs to be reconstructed, the State grain provides a complete snapshot. The `context` map captures open positions, P&L, buying power, margin utilization, trade count, and risk exposure — everything needed to resume operations or audit the session state at a specific point in time.
 
 ### Events for analyst reports and market commentary
 
@@ -240,7 +240,7 @@ Event grains (type byte `0x02`, Section 8.2) store raw, unstructured text. In fi
 }
 ```
 
-Like clinical Episodes in healthcare, these are the input to consolidation — the process of extracting structured Facts. The trading agent might process this Episode and generate Belief grains: `(AAPL, earnings_surprise, +12%)`, `(AAPL, revenue_growth, 18% YoY)`. The extracted Facts carry `source_type: "llm_generated"` and reference the Episode in their `derived_from` field.
+Like clinical Events in healthcare, these are the input to consolidation — the process of extracting structured Beliefs. The trading agent might process this Event and generate Belief grains: `(AAPL, earnings_surprise, +12%)`, `(AAPL, revenue_growth, 18% YoY)`. The extracted Beliefs carry `source_type: "llm_generated"` and reference the Event in their `derived_from` field.
 
 ## Bi-temporal modeling for decision reconstruction
 
@@ -283,7 +283,7 @@ Section 20.6 of the OMS specification explicitly addresses SOX: ".mg blobs are t
 
 ### Provenance chain for derivation tracking
 
-Every grain carries a `provenance_chain` — the full derivation trail showing where the grain came from and how it was produced. For a trading decision, this chain might trace from raw market data (Episode) through signal generation (Fact) through strategy trigger (Workflow reference) to order execution (ToolCall).
+Every grain carries a `provenance_chain` — the full derivation trail showing where the grain came from and how it was produced. For a trading decision, this chain might trace from raw market data (Event) through signal generation (Belief) through strategy trigger (Workflow reference) to order execution (Action).
 
 Each provenance entry records:
 - `source_hash` — the content address of the source grain (cryptographically verifiable)
@@ -362,7 +362,7 @@ At write time, the serializer scans tags and sets header sensitivity bits to the
 
 When sharing trading analytics with clients, the firm may need to demonstrate performance without revealing proprietary strategy details. OMS selective disclosure (Section 10) enables this:
 
-A portfolio performance Fact shared with a client might elide the `provenance_chain` (which reveals the firm's analytical methods) and `namespace` (which reveals organizational structure):
+A portfolio performance Belief shared with a client might elide the `provenance_chain` (which reveals the firm's analytical methods) and `namespace` (which reveals organizational structure):
 
 ```json
 {
@@ -442,7 +442,7 @@ Here is how a complete trading workflow maps to OMS memory types:
 
 6. **Session state**: At regular intervals and after significant events, State grains capture the complete trading session state — positions, P&L, margin, risk exposure.
 
-7. **Regulatory audit**: Years later, a regulator asks what the agent knew when it made a specific trade. The bi-temporal query reconstructs the exact system state at the moment of the decision. The provenance chain traces from the trade (ToolCall) back through the strategy (Workflow), the signals (Facts), and the raw data (Episodes). Every grain is content-addressed, COSE-signed, and immutable.
+7. **Regulatory audit**: Years later, a regulator asks what the agent knew when it made a specific trade. The bi-temporal query reconstructs the exact system state at the moment of the decision. The provenance chain traces from the trade (Action) back through the strategy (Workflow), the signals (Beliefs), and the raw data (Events). Every grain is content-addressed, COSE-signed, and immutable.
 
 Every grain in this workflow carries `structural_tags: ["reg:sox"]`, routing it to seven-year retention storage. Every grain is content-addressed, making any tampering detectable. Every grain carries `author_did`, making every decision attributable. And the bi-temporal model ensures that historical reconstruction is precise — what the system knew, when it knew it, and what it did with that knowledge.
 

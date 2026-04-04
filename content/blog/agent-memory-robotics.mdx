@@ -320,7 +320,7 @@ Goal state transitions follow the immutable supersession model. When the "Pick p
 
 ## Checkpoints for robot state recovery
 
-When a robot loses power, crashes, or needs to hand off a task to another robot, it needs to save and restore its complete operational state. The Checkpoint memory type (Section 8.3) is designed exactly for this.
+When a robot loses power, crashes, or needs to hand off a task to another robot, it needs to save and restore its complete operational state. The State memory type (Section 8.3) is designed exactly for this.
 
 ```json
 {
@@ -414,7 +414,7 @@ The standard profile fits single-board computers like NVIDIA Jetson or Raspberry
 - **Encryption:** AES-256-GCM
 - **Full feature set**
 
-Cloud-based systems handle fleet management, long-horizon planning, and historical analysis. The 1 MB blob limit and 32-level nesting depth support complex Goal hierarchies, rich provenance chains, and detailed Checkpoint states that capture the full operational context of a robot fleet.
+Cloud-based systems handle fleet management, long-horizon planning, and historical analysis. The 1 MB blob limit and 32-level nesting depth support complex Goal hierarchies, rich provenance chains, and detailed State grains that capture the full operational context of a robot fleet.
 
 <Callout type="info">
 The three-tier device profile maps naturally to the robotics compute stack. Lightweight MCUs on actuators produce minimal grains with transport encryption. Onboard SBCs aggregate and enrich these grains. Cloud systems perform fleet-wide analysis with full-featured grains. All three tiers produce and consume the same OMS format — the grains are interoperable regardless of which profile generated them.

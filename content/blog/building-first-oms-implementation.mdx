@@ -21,7 +21,7 @@ Level 1 is sufficient for reading, verifying, and storing grains. It requires si
 1. **Deserialize version byte + canonical MessagePack payload** — Parse the 9-byte fixed header and decode the MessagePack map that follows it.
 2. **Compute and verify SHA-256 content addresses** — Hash the entire blob (header + payload) and compare against a claimed content address.
 3. **Support field compaction (short keys to full names)** — When you encounter a key `"s"` in the payload, you must know it means `"subject"`. When you encounter `"c"`, it means `"confidence"`. The full mapping is in Section 6 of the spec.
-4. **Support all 10 grain types** — Fact, Episode, Checkpoint, Workflow, ToolCall, Observation, and Goal. Your deserializer must handle the required fields for each.
+4. **Support all 10 grain types** — Belief, Event, State, Workflow, Action, Observation, Goal, Reasoning, Consensus, and Consent. Your deserializer must handle the required fields for each.
 5. **Ignore unknown fields** — If you encounter a key that is not in the field compaction mapping, preserve it as-is. Do not error. This is how OMS achieves forward compatibility.
 6. **Constant-time hash comparison** — When verifying content addresses, use a constant-time comparison function, not string equality. This prevents timing attacks where an adversary measures response times to guess hash values byte by byte.
 
@@ -33,7 +33,7 @@ Level 2 adds writing capabilities and strict enforcement. All Level 1 requiremen
 
 - **Serialize (full names to short keys)** — The reverse of Level 1 compaction.
 - **Enforce canonical MessagePack rules** — Sorted keys, smallest integer encoding, float64 only, NFC-normalized strings, null omission.
-- **Validate required fields per schema** — A Fact must have `type`, `subject`, `relation`, `object`, `confidence`, `source_type`, and `created_at`. Reject grains with missing required fields.
+- **Validate required fields per schema** — A Belief must have `type`, `subject`, `relation`, `object`, `confidence`, and `created_at`. Reject grains with missing required fields.
 - **Pass all test vectors** — The spec provides six test vectors with expected content addresses.
 - **Support multi-modal content references** — Handle `content_refs` and `embedding_refs` arrays, including their nested field compaction.
 - **Implement Store protocol** — `get`, `put`, `delete`, `list`, `exists` operations for grain storage.
@@ -69,7 +69,7 @@ Every OMS blob starts with a fixed 9-byte header:
 ```
 Byte 0:    Version (must be 0x01)
 Byte 1:    Flags (bit field)
-Byte 2:    Type (memory type enum: 0x01=Fact, 0x02=Episode, ..., 0x07=Goal)
+Byte 2:    Type (memory type enum: 0x01=Belief, 0x02=Event, ..., 0x0A=Consent)
 Bytes 3-4: Namespace hash (first 2 bytes of SHA-256(namespace), big-endian uint16)
 Bytes 5-8: Created-at (uint32 epoch seconds, big-endian)
 ```
@@ -191,7 +191,7 @@ cb 3f ec cc cc cc cc cc cd a2 63 61 cf 00 00 01 9b c1 19 01 00 a2 6e 73 a6
 
 - `01` — Version 1
 - `00` — Flags: all bits zero (public, MessagePack encoding, unsigned, no content refs, no embedding refs, no compression, no encryption)
-- `01` — Type: Fact (`0x01`)
+- `01` — Type: Belief (`0x01`)
 - `a4 d2` — Namespace hash: first 2 bytes of SHA-256("shared"), as uint16 big-endian
 - `69 68 ba a0` — Created-at: 1768471200 decimal = `0x6968baa0`, which is 2026-01-15T10:00:00Z in epoch seconds, big-endian
 

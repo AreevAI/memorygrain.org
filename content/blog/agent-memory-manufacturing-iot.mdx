@@ -224,7 +224,7 @@ The Workflow type requires only `type`, `steps` (non-empty array), `trigger` (no
 
 ## Checkpoints for production line state
 
-Shift handoff is a critical moment in manufacturing. The Checkpoint type (Section 8.3) captures a complete snapshot of production state:
+Shift handoff is a critical moment in manufacturing. The State type (Section 8.3) captures a complete snapshot of production state:
 
 ```json
 {
@@ -425,7 +425,7 @@ The full predictive maintenance workflow chains OMS memory types together:
 
 **Step 5 — Learn procedures.** When maintenance is performed — either by a human operator or an automated system — the agent records the procedure as a Workflow grain. Over time, repeated observations of similar procedures refine the Workflow through supersession.
 
-**Step 6 — Verify.** After maintenance, the agent monitors post-maintenance Observations. If vibration drops back to baseline and the defect rate falls, the maintenance Fact's `success_count` increments. If the problem persists, `failure_count` increments, signaling that the diagnosis may have been wrong or the repair insufficient.
+**Step 6 — Verify.** After maintenance, the agent monitors post-maintenance Observations. If vibration drops back to baseline and the defect rate falls, the maintenance Belief's `success_count` increments. If the problem persists, `failure_count` increments, signaling that the diagnosis may have been wrong or the repair insufficient.
 
 This pipeline creates a self-improving maintenance system. Each cycle — observe, infer, act, verify — leaves a complete, auditable, content-addressed trail from raw sensor data through inference to action and outcome.
 

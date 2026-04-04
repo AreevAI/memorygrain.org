@@ -33,7 +33,7 @@ Contract analysis, regulatory research, and case law review all produce structur
 }
 ```
 
-The `source_type` of `"imported"` (Section 6.1) indicates this fact was extracted from an external document through automated analysis, not stated by a human or inferred by the agent from patterns. The `derived_from` array links this Fact back to the specific Action grain that performed the document analysis — the provenance chain from knowledge claim to source document.
+The `source_type` of `"imported"` (Section 6.1) indicates this fact was extracted from an external document through automated analysis, not stated by a human or inferred by the agent from patterns. The `derived_from` array links this Belief back to the specific Action grain that performed the document analysis — the provenance chain from knowledge claim to source document.
 
 Contract terms, deadlines, party identities, financial figures — all follow this same pattern. Each is a discrete knowledge claim with a confidence score, a source type, and a provenance link to the document it came from.
 
@@ -53,7 +53,7 @@ Contract terms, deadlines, party identities, financial figures — all follow th
 
 ### Events for case research and client consultations
 
-Deposition summaries, case research notes, and client consultation records are unstructured text — ideal for the Episode type (Section 8.2):
+Deposition summaries, case research notes, and client consultation records are unstructured text — ideal for the Event type (Section 8.2):
 
 ```json
 {
@@ -259,7 +259,7 @@ When producing relevant Facts, the creating party can elide fields that reveal p
 
 The receiving party can see that an amendment was dated 2024-06-10 and that this was extracted from a document (source_type: "imported"), but the `subject` (which contract, which party) and `context` (which might contain internal analysis notes) are hidden behind SHA-256 hashes.
 
-Section 10.2 defines which fields can be elided. The `type` field cannot be elided (the receiver must know it is a Fact). The `relation` field cannot be elided (it is core knowledge structure). The `confidence` field cannot be elided (it is essential for trust decisions). But `subject`, `object`, `context`, `structural_tags`, and `provenance_chain` can all be elided.
+Section 10.2 defines which fields can be elided. The `type` field cannot be elided (the receiver must know it is a Belief). The `relation` field cannot be elided (it is core knowledge structure). The `confidence` field cannot be elided (it is essential for trust decisions). But `subject`, `object`, `context`, `structural_tags`, and `provenance_chain` can all be elided.
 
 ### Attorney-client communications in privilege logs
 
@@ -281,7 +281,7 @@ Privilege logs must identify the existence of privileged communications without 
 The privilege log entry proves:
 - A communication exists (the grain is real — `_disclosure_of` links to its content address)
 - It was created at a specific time (`created_at` is non-elidable per Section 10.2)
-- It is an Episode (the `type` is non-elidable)
+- It is an Event (the `type` is non-elidable)
 - The content, user identity, and tags are all present but hidden
 
 The SHA-256 hashes in `_elided` are computed per Section 10.1.1: the hash of the canonical MessagePack encoding of each field's value. If a court later orders disclosure of the privilege, the actual values can be revealed and verified against these hashes — match proves the values were present in the original grain and have not been fabricated after the fact.
@@ -428,7 +428,7 @@ Footer:  SHA-256 checksum (32 bytes)
 The receiving party — a court, opposing counsel, or a regulatory body — can independently verify the file: check the footer checksum, verify individual grain content addresses, validate COSE signatures where present, and traverse provenance chains from conclusions back to source documents.
 
 <Callout type="success">
-Because every grain in the .mg file is content-addressed, deduplication is automatic. If the same Fact appears in multiple provenance chains, it is stored once. The offset index enables random access even in large evidence packages. And the zstd compression (Section 11.3) reduces file sizes while preserving the ability to decompress and access individual grains.
+Because every grain in the .mg file is content-addressed, deduplication is automatic. If the same Belief appears in multiple provenance chains, it is stored once. The offset index enables random access even in large evidence packages. And the zstd compression (Section 11.3) reduces file sizes while preserving the ability to decompress and access individual grains.
 </Callout>
 
 ## Putting it together: a litigation lifecycle
@@ -439,7 +439,7 @@ Consider how these features compose across a full litigation lifecycle:
 
 **2. Document review.** Agents analyze documents for relevance and privilege. Privileged documents are tagged with `structural_tags: ["legal:privilege"]`. Review decisions are recorded as Belief grains with `source_type: "agent_inferred"` and provenance linking to the reviewed documents.
 
-**3. Deposition preparation.** Deposition summaries enter as Episodes. Key testimony is extracted as Facts with `derived_from` pointing to the Episode. Contradictions between testimony and documentary evidence are tracked through `related_to` cross-links with `relation_type: "contradicts"` (Section 14.3).
+**3. Deposition preparation.** Deposition summaries enter as Events. Key testimony is extracted as Beliefs with `derived_from` pointing to the Event. Contradictions between testimony and documentary evidence are tracked through `related_to` cross-links with `relation_type: "contradicts"` (Section 14.3).
 
 **4. Discovery production.** Relevant, non-privileged grains are exported as an .mg evidence package. Privileged grains are selectively disclosed — content elided, existence proven — for the privilege log. The `_elided` map in each disclosed grain provides cryptographic proof that the withheld fields exist.
 

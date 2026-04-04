@@ -14,9 +14,9 @@ This post covers the Observation schema, its spatial and temporal alignment fiel
 
 ## What Is an Observation Grain?
 
-An Observation grain is a **measurement or percept from any kind of observer** — a physical sensor, an AI cognitive agent, or a human. It is designed for high-volume, time-critical data with spatial context. Where a Fact grain records structured knowledge (`"server-room" "has_temperature" "22.5C"` with confidence 0.95), an Observation grain records the raw measurement event: which observer, what type, what was observed, when, and in what coordinate frame.
+An Observation grain is a **measurement or percept from any kind of observer** — a physical sensor, an AI cognitive agent, or a human. It is designed for high-volume, time-critical data with spatial context. Where a Belief grain records structured knowledge (`"server-room" "has_temperature" "22.5C"` with confidence 0.95), an Observation grain records the raw measurement event: which observer, what type, what was observed, when, and in what coordinate frame.
 
-The distinction matters. Facts are knowledge claims with confidence scores and temporal validity windows. Observations are measurement events with observer identity and spatial metadata. A system might generate thousands of Observation grains per second from a LiDAR scanner, then consolidate them into a handful of Fact grains that describe the environment. An AI agent might record cognitive observations about patterns it detects in incoming data. The two types serve different stages of the data pipeline.
+The distinction matters. Beliefs are knowledge claims with confidence scores and temporal validity windows. Observations are measurement events with observer identity and spatial metadata. A system might generate thousands of Observation grains per second from a LiDAR scanner, then consolidate them into a handful of Belief grains that describe the environment. An AI agent might record cognitive observations about patterns it detects in incoming data. The two types serve different stages of the data pipeline.
 
 In the OMS header, Observation grains carry type byte `0x06`. Like all OMS types, this enables header-level filtering — a system processing a stream of `.mg` blobs can identify all Observation grains by reading a single byte at offset 2.
 
@@ -200,7 +200,7 @@ This design follows OMS Design Principle 1: **References, not blobs.** Multi-mod
 
 ## The Default Importance of 0.3
 
-The Observation type has a default `importance` of 0.3. This is notably lower than the Fact type's default of 0.7. The reasoning is straightforward: observations are high-volume, and most are routine.
+The Observation type has a default `importance` of 0.3. This is notably lower than the Belief type's default of 0.7. The reasoning is straightforward: observations are high-volume, and most are routine.
 
 A temperature sensor reporting 22.5C in a server room that normally runs at 22-23C is not noteworthy. A LiDAR scan of an empty warehouse aisle looks the same as the previous scan. The vast majority of sensor readings confirm the expected state of the world.
 
@@ -281,10 +281,10 @@ The `confidence` field records measurement certainty. The `structural_tags` fiel
 
 Observation grains participate in the broader OMS memory graph:
 
-- **Fact derivation.** A consolidation engine might process thousands of temperature Observation grains and produce a single Fact grain: `"server-room" "average_temperature" "22.3C"` with `derived_from` pointing to the source observations.
+- **Belief derivation.** A consolidation engine might process thousands of temperature Observation grains and produce a single Belief grain: `"server-room" "average_temperature" "22.3C"` with `derived_from` pointing to the source observations.
 - **Goal satisfaction.** A Goal grain with criteria like `"server_room_temp < 25C"` can reference Observation grains in its `satisfaction_evidence` to prove the criteria were met.
-- **Episode context.** An Episode grain recording a maintenance event can reference Observation grains via `related_to` cross-links, connecting the narrative record to the raw sensor data that triggered the event.
-- **ToolCall inputs.** When an agent invokes a sensor processing tool, the ToolCall grain's `content_refs` might point to the same raw data as the Observation grain, creating a link between what was observed and what was done with the observation.
+- **Event context.** An Event grain recording a maintenance event can reference Observation grains via `related_to` cross-links, connecting the narrative record to the raw sensor data that triggered the event.
+- **Action inputs.** When an agent invokes a sensor processing tool, the Action grain's `content_refs` might point to the same raw data as the Observation grain, creating a link between what was observed and what was done with the observation.
 
 ## Summary
 

@@ -1,0 +1,449 @@
+---
+title: "Grain Type Deep Dive: Consent"
+description: "A comprehensive guide to the Consent grain type (0x0A) in OMS v1.2 — DID-scoped permission grants and withdrawals, the consent_cascade invalidation policy, GDPR/CCPA/HIPAA compliance patterns, and how Consent grains create an immutable audit trail for data processing authorization."
+date: "2026-04-02"
+readTime: "14 min read"
+tags: ["memory-types", "consent", "gdpr", "privacy", "compliance"]
+---
+
+Every other grain type in OMS records what an agent knows, what it observed, what it did, or what it intends to do. The Consent grain type records something fundamentally different: **whether the agent is authorized to process data at all**. Without consent, the other grains may not legally exist.
+
+Defined in Section 8.10 of the OMS v1.2 specification, the Consent grain type (`0x0A`) is a DID-scoped permission grant or withdrawal. It records that a specific data subject (identified by a Decentralized Identifier) has granted or revoked permission for a specific entity to process their data for a specific purpose. It is the only grain type in OMS that can trigger cascading erasure of other grains when revoked.
+
+This post covers the full Consent schema: why a dedicated type was required, the DID-scoped permission model, every required and optional field, field compaction keys, the consent_cascade invalidation policy, compliance patterns for GDPR, CCPA, and HIPAA, and how Consent grains connect to the broader memory graph.
+
+## Why a Dedicated Consent Type Was Required
+
+The original OMS v1.0 specification did not include a Consent type. Consent was modeled as a Belief grain with a conventional structure — something like `subject="user-alice", relation="consents_to", object="health:biometrics:read"`. This worked syntactically but failed operationally in four ways that became clear during domain review.
+
+Four domain review boards — Healthcare, Legal, Finance, and Consumer — independently identified the same structural gap during the v1.2 review cycle:
+
+**Healthcare.** HIPAA requires that patient consent for data sharing be recorded with specific fields: the identity of the patient, the identity of the receiving entity, the categories of data covered, and the legal basis. A Belief triple cannot natively express "Alice grants Clinic-B permission to read her biometric data under explicit consent, revocable at any time, subject to EU jurisdiction." The Healthcare board required dedicated fields for `subject_did`, `grantee_did`, `scope`, `basis`, and `jurisdiction`.
+
+**Legal.** GDPR Article 7 requires that consent be "as easy to withdraw as to give." The Legal board pointed out that modeling consent as a Belief meant that withdrawal required creating a contradicting Belief — a fundamentally different operation from granting consent. There was no structural symmetry. The `is_withdrawal` field was their requirement: a single boolean that makes grants and withdrawals first-class operations using the same schema.
+
+**Finance.** Financial services regulations require purpose-bounded data processing. A customer consenting to credit scoring does not consent to marketing. The Finance board required the `scope` field to be an explicit array of permission strings, not a free-text object field in a Belief triple. They also required `conditions` for attaching regulatory constraints to consent records.
+
+**Consumer.** Consumer privacy advocates on the review board required that consent revocation trigger automatic cleanup. When a user withdraws consent, all grains whose processing depended on that consent should be erased — not just marked as superseded, but actually made unrecoverable. This requirement produced the `consent_cascade` invalidation policy, which is unique to the Consent grain type.
+
+The result was type byte `0x0A` — the tenth grain type in OMS, and the only one whose creation was driven entirely by regulatory requirements rather than agent capability modeling.
+
+## Required Fields
+
+Every Consent grain MUST include these fields:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | Yes | Must be `"consent"` |
+| `subject_did` | string | Yes | DID of the data subject granting or withdrawing consent |
+| `grantee_did` | string | Yes | DID of the entity receiving the permission |
+| `scope` | array[string] | Yes | Permissions being granted (e.g., `["health:biometrics:read"]`) |
+| `basis` | string | Yes | Legal basis for processing |
+| `is_withdrawal` | bool | Yes | `false` = grant, `true` = withdrawal |
+| `created_at` | int64 (epoch ms) | Yes | When this consent record was created |
+
+Seven required fields — more than any other grain type except Goal. This is deliberate. A consent record missing any of these fields is legally incomplete. You cannot have consent without knowing who gave it (`subject_did`), who received it (`grantee_did`), what it covers (`scope`), on what legal basis (`basis`), and whether it is a grant or withdrawal (`is_withdrawal`).
+
+### subject_did and grantee_did: The DID-Scoped Model
+
+Both identity fields use W3C Decentralized Identifiers. This is a stronger requirement than the `user_id` field on other grain types, which accepts any string. Consent grains require DIDs because consent is a legal act between identified parties — the data subject and the data processor must both be cryptographically identifiable.
+
+The `subject_did` is the person granting consent. The `grantee_did` is the agent, service, or organization receiving it. In practice:
+
+```
+subject_did: "did:key:z6MkAlice..."   // Alice (data subject)
+grantee_did: "did:key:z6MkAgent..."   // An AI agent processing Alice's data
+```
+
+This DID-scoped model enables precise consent queries: "Has Alice granted Agent-X permission to read her biometric data?" is a direct lookup on `subject_did` + `grantee_did` + `scope`, without full payload deserialization beyond the indexed fields.
+
+### scope: Purpose-Bounded Permissions
+
+The `scope` field is an array of permission strings using a hierarchical namespace convention:
+
+```json
+["health:biometrics:read", "health:biometrics:retain"]
+```
+
+The colon-separated hierarchy enables both specific and broad consent:
+- `"health:biometrics:read"` — read biometric data
+- `"health:biometrics:retain"` — retain biometric data beyond the session
+- `"health:*"` — all health-related data processing (wildcard)
+- `"marketing:email:send"` — send marketing emails
+
+Each string in the array is an independent permission. Granting `["health:biometrics:read", "health:biometrics:retain"]` is two permissions, not one. Withdrawing one does not withdraw the other — withdrawal requires a separate Consent grain targeting the specific scope entry.
+
+### basis: Legal Basis for Processing
+
+The `basis` field records the legal justification for data processing. Common values map directly to GDPR Article 6(1):
+
+| Basis | GDPR Article | Meaning |
+|-------|-------------|---------|
+| `"explicit_consent"` | Art. 6(1)(a) | Data subject has given explicit consent |
+| `"contract"` | Art. 6(1)(b) | Processing necessary for contract performance |
+| `"legal_obligation"` | Art. 6(1)(c) | Processing necessary for legal compliance |
+| `"vital_interest"` | Art. 6(1)(d) | Processing necessary to protect vital interests |
+| `"public_interest"` | Art. 6(1)(e) | Processing necessary for public interest |
+| `"legitimate_interest"` | Art. 6(1)(f) | Processing necessary for legitimate interests |
+
+The field is an open string, not an enum — jurisdictions outside the EU may define additional bases. But implementations targeting GDPR compliance SHOULD use the values above for interoperability.
+
+### is_withdrawal: Structural Symmetry
+
+The `is_withdrawal` boolean is the field that solved the Legal board's requirement. A Consent grain with `is_withdrawal: false` is a grant. A Consent grain with `is_withdrawal: true` is a revocation. Both use the same schema, the same serialization, and the same content-addressing. This provides structural symmetry — consent is as easy to withdraw as to give, because it is literally the same operation with one boolean flipped.
+
+<Callout type="info">
+The `is_withdrawal` field ensures GDPR Article 7(3) compliance at the protocol level: "It shall be as easy to withdraw as to give consent." Both grants and withdrawals are Consent grains with identical schemas — only the boolean differs.
+</Callout>
+
+## Optional Fields
+
+Consent grains support several optional fields that add jurisdictional, temporal, and contextual detail:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `jurisdiction` | string | Legal jurisdiction (e.g., `"EU"`, `"US-CA"`, `"BR"`) |
+| `purpose` | string | Natural language purpose statement |
+| `retention_period` | string | How long data may be retained (e.g., `"P2Y"`, `"P90D"`) |
+| `conditions` | array[string] | Conditions attached to consent |
+| `confidence` | float64 [0.0, 1.0] | Confidence in the consent record's accuracy |
+| `subject` | string | Human-readable subject label |
+| `namespace` | string | Memory partition (default `"shared"`) |
+| `author_did` | string | DID of the agent that created this consent record |
+| `structural_tags` | array[string] | Classification tags |
+
+### jurisdiction
+
+The `jurisdiction` field records which legal framework governs this consent. `"EU"` means GDPR applies. `"US-CA"` means CCPA applies. `"BR"` means Brazil's LGPD applies. This is critical for cross-border data transfers — a consent record with `jurisdiction: "EU"` triggers GDPR-specific processing rules regardless of where the data is physically stored.
+
+### retention_period
+
+The `retention_period` field uses ISO 8601 duration format: `"P2Y"` means two years, `"P90D"` means ninety days, `"P6M"` means six months. When the retention period expires, the processing permission lapses automatically — the data processor must obtain renewed consent or cease processing.
+
+### conditions
+
+The `conditions` field attaches constraints to the consent:
+
+```json
+["data must be anonymized before sharing with third parties",
+ "processing limited to working hours (9am-5pm CET)",
+ "annual review required"]
+```
+
+Conditions are human-readable strings that downstream systems can evaluate. They are not machine-executable constraints — enforcement is the responsibility of the data processor, but the conditions are preserved in the immutable consent record as evidence of what was agreed.
+
+## Field Compaction Keys
+
+When a Consent grain is serialized, human-readable field names are replaced by short keys to minimize blob size. The Consent-specific compaction keys from Section 6.10 are:
+
+| Full Name | Short Key | Type |
+|-----------|-----------|------|
+| `type` | `t` | string |
+| `subject_did` | `sdid` | string |
+| `grantee_did` | `gdid` | string |
+| `scope` | `scp` | array[string] |
+| `basis` | `bas` | string |
+| `is_withdrawal` | `iw` | bool |
+| `created_at` | `ca` | int64 |
+| `jurisdiction` | `jur` | string |
+| `purpose` | `purp` | string |
+| `retention_period` | `rp` | string |
+| `conditions` | `cond` | array[string] |
+| `confidence` | `c` | float64 |
+| `subject` | `s` | string |
+| `namespace` | `ns` | string |
+| `author_did` | `adid` | string |
+| `structural_tags` | `tags` | array[string] |
+
+After compaction, all keys are sorted lexicographically for canonical serialization. For a minimal Consent grain, the compacted key order would be: `bas`, `ca`, `gdid`, `iw`, `scp`, `sdid`, `t`. The canonical MessagePack encoding then proceeds over this sorted map.
+
+## Concrete Examples
+
+### Example 1: GDPR Consent Grant
+
+A user in the EU explicitly consents to an AI agent reading and retaining their biometric data for health monitoring:
+
+```json
+{
+  "type": "consent",
+  "subject_did": "did:key:z6MkpTHR8VNs5xhqAhQNkVVFwvLsATcE3NAJhKkS9Czgt5tC",
+  "grantee_did": "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",
+  "scope": ["health:biometrics:read", "health:biometrics:retain"],
+  "basis": "explicit_consent",
+  "is_withdrawal": false,
+  "created_at": 1743552000000,
+  "jurisdiction": "EU",
+  "purpose": "Continuous health monitoring and weekly wellness reports",
+  "retention_period": "P1Y",
+  "conditions": [
+    "data must not be shared with third parties",
+    "user may request export at any time"
+  ],
+  "namespace": "health",
+  "author_did": "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",
+  "structural_tags": ["gdpr", "health", "biometrics"]
+}
+```
+
+This grain records that the data subject has granted an AI health agent permission to read and retain biometric data for one year, under EU jurisdiction, with two explicit conditions. The `retention_period: "P1Y"` means the agent must obtain renewed consent after twelve months or cease processing.
+
+### Example 2: Consent Withdrawal
+
+Six months later, the same user withdraws consent for data retention (but keeps the read permission):
+
+```json
+{
+  "type": "consent",
+  "subject_did": "did:key:z6MkpTHR8VNs5xhqAhQNkVVFwvLsATcE3NAJhKkS9Czgt5tC",
+  "grantee_did": "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",
+  "scope": ["health:biometrics:retain"],
+  "basis": "explicit_consent",
+  "is_withdrawal": true,
+  "created_at": 1759276800000,
+  "jurisdiction": "EU",
+  "purpose": "User no longer wishes biometric data to be retained beyond sessions",
+  "namespace": "health",
+  "author_did": "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",
+  "structural_tags": ["gdpr", "health", "biometrics", "withdrawal"]
+}
+```
+
+Note the precision: `is_withdrawal: true` and `scope: ["health:biometrics:retain"]` means only the retention permission is revoked. The original grant for `health:biometrics:read` remains in force. The withdrawal targets a specific scope entry, not the entire consent relationship.
+
+This withdrawal grain triggers the `consent_cascade` invalidation policy on any grains that depended on the `health:biometrics:retain` permission (see below).
+
+### Example 3: Healthcare Patient Consent (HIPAA)
+
+A patient grants a hospital's AI triage system access to their medical records for emergency assessment:
+
+```json
+{
+  "type": "consent",
+  "subject_did": "did:key:z6MkPatient789abc...",
+  "grantee_did": "did:key:z6MkHospitalTriageAgent...",
+  "scope": [
+    "health:medical_records:read",
+    "health:medications:read",
+    "health:allergies:read"
+  ],
+  "basis": "explicit_consent",
+  "is_withdrawal": false,
+  "created_at": 1743552000000,
+  "jurisdiction": "US",
+  "purpose": "Emergency triage assessment and medication interaction checking",
+  "retention_period": "P90D",
+  "conditions": [
+    "access limited to emergency department context",
+    "data must not be used for insurance underwriting",
+    "patient must be notified of each access event"
+  ],
+  "namespace": "clinical",
+  "structural_tags": ["hipaa", "phi", "emergency", "triage"]
+}
+```
+
+The `retention_period: "P90D"` reflects a common HIPAA practice — emergency access records are retained for ninety days for audit purposes, then the processing authorization expires. The `conditions` array captures constraints that go beyond simple scope permissions: access is limited to the emergency context, insurance underwriting is excluded, and the patient must be notified of each access.
+
+## The SML Representation
+
+When Consent grains are rendered in SML (Structured Memory Language) for LLM context injection, they use the `<consent>` tag:
+
+```sml
+<consent action="granted" grantor="alice" grantee="agent">access engineering metrics dashboards for review preparation</consent>
+```
+
+The `action` attribute maps to the `is_withdrawal` field: `"granted"` when `is_withdrawal: false`, `"withdrawn"` when `is_withdrawal: true`. The `grantor` and `grantee` attributes are human-readable labels derived from the DIDs. The tag content is a natural language rendering of the scope and purpose.
+
+For a withdrawal:
+
+```sml
+<consent action="withdrawn" grantor="alice" grantee="agent">retain biometric data beyond session</consent>
+```
+
+## The consent_cascade Invalidation Policy
+
+The most powerful behavior of the Consent grain type is what happens when consent is withdrawn. When a Consent grain with `is_withdrawal: true` is stored, it can trigger **cascading erasure** of all grains whose processing depended on the withdrawn consent.
+
+This is implemented through the `consent_cascade` invalidation policy mode. Any grain that depends on a specific consent for its legal basis can declare this dependency:
+
+```json
+{
+  "type": "belief",
+  "subject": "patient-A",
+  "relation": "resting_heart_rate",
+  "object": "72 bpm",
+  "confidence": 0.95,
+  "created_at": 1743638400000,
+  "invalidation_policy": {
+    "mode": "consent_cascade",
+    "consent_ref": "a1b2c3d4e5f6..."
+  }
+}
+```
+
+The `consent_ref` field holds the content address of the Consent grain that authorizes this data's existence. When a withdrawal grain is stored that revokes the consent identified by `consent_ref`, the store MUST erase all grains that reference that consent within their `consent_cascade` policy — within a maximum of 30 days (the GDPR Article 17 erasure deadline).
+
+<Callout type="security">
+The `consent_cascade` invalidation policy is the only mode in OMS that triggers automatic erasure of other grains. When consent is revoked, all grains with `invalidation_policy.mode: "consent_cascade"` pointing to that consent's content address are erased — not just marked as superseded, but cryptographically erased via key destruction or physical deletion. The 30-day deadline is normative.
+</Callout>
+
+### How the Cascade Works
+
+The cascade follows a specific sequence:
+
+1. **Withdrawal grain is stored.** A Consent grain with `is_withdrawal: true` enters the store. The store indexes its `subject_did`, `grantee_did`, and `scope`.
+
+2. **Affected consent identified.** The store matches the withdrawal against existing consent grants by `subject_did` + `grantee_did` + overlapping `scope` entries.
+
+3. **Dependent grains located.** The store queries all grains with `invalidation_policy.mode: "consent_cascade"` whose `consent_ref` points to the now-revoked consent grant.
+
+4. **Cascading erasure.** Each dependent grain is erased. If per-user encryption is in use (Section 20.3), erasure is performed by destroying the encryption key — the ciphertext remains but becomes cryptographically unrecoverable. If encryption is not in use, the grain bytes are physically deleted.
+
+5. **Audit trail preserved.** The withdrawal Consent grain itself is never erased. It remains as an immutable record that consent was withdrawn. The original grant Consent grain also remains — the pair (grant + withdrawal) constitutes the complete audit trail.
+
+This design satisfies both GDPR Article 17 (right to erasure — the data is gone) and GDPR Article 5(2) (accountability — the consent records prove the erasure was authorized).
+
+## GDPR, CCPA, and HIPAA Compliance Patterns
+
+### GDPR Compliance
+
+The Consent grain type maps directly to GDPR requirements:
+
+| GDPR Article | OMS Mechanism |
+|-------------|---------------|
+| Art. 6(1) — Lawful basis | `basis` field records the legal basis for processing |
+| Art. 7(1) — Demonstrable consent | Immutable Consent grain with content address serves as proof |
+| Art. 7(2) — Distinguishable consent | `scope` array explicitly enumerates each permission |
+| Art. 7(3) — Easy withdrawal | `is_withdrawal: true` uses the same schema as grants |
+| Art. 13 — Information at collection | `purpose` field records what the data subject was told |
+| Art. 17 — Right to erasure | `consent_cascade` triggers automatic erasure within 30 days |
+| Art. 30 — Records of processing | The chain of Consent grains constitutes the processing record |
+
+### CCPA Compliance
+
+The California Consumer Privacy Act maps to Consent grains through:
+
+- **Right to opt out of sale** — A Consent withdrawal with `scope: ["data:sale:*"]` and `jurisdiction: "US-CA"` records the opt-out
+- **Right to know** — The set of active Consent grains for a `subject_did` constitutes the record of what processing is authorized
+- **Right to delete** — Consent withdrawal triggers `consent_cascade` erasure of dependent grains
+
+### HIPAA Compliance
+
+For Protected Health Information (PHI), the Consent grain type provides:
+
+- **Authorization tracking** — Each HIPAA authorization is a Consent grain with `basis: "explicit_consent"` and PHI-specific scope entries
+- **Minimum necessary** — The `scope` array limits access to specific data categories, enforcing the minimum necessary standard
+- **Revocation** — HIPAA requires that patients can revoke authorization; `is_withdrawal: true` handles this
+- **Audit trail** — Both the authorization and any revocation are immutable, content-addressed records
+
+<Callout type="info">
+The `structural_tags` field enables O(1) identification of PHI-related consent records. Tagging consent grains with `["hipaa", "phi"]` allows compliance systems to filter for HIPAA-relevant records without full payload inspection. Combined with the sensitivity classification bits in the OMS header (bits 6-7 of the flags byte), this provides multi-level filtering.
+</Callout>
+
+## Use Cases
+
+### Healthcare: Patient Consent Management
+
+A hospital system managing patient consent uses Consent grains to track every authorization and revocation. Each patient visit may generate a consent grant scoping what data the treating physician's AI assistant can access. When the patient is discharged, a retention-limited consent remains in force for the follow-up period (`retention_period: "P90D"`), after which the processing authorization lapses.
+
+If a patient calls to revoke consent, the withdrawal grain triggers cascading erasure of all Belief grains (diagnoses, observations, treatment notes) that were created under that consent. The original consent records remain for audit — proving that data was collected with authorization and erased when authorization was withdrawn.
+
+### Marketing: Opt-In and Opt-Out
+
+An e-commerce platform tracks marketing consent as Consent grains:
+
+```json
+{
+  "type": "consent",
+  "subject_did": "did:key:z6MkCustomer...",
+  "grantee_did": "did:key:z6MkMarketingAgent...",
+  "scope": ["marketing:email:send", "marketing:preferences:read"],
+  "basis": "explicit_consent",
+  "is_withdrawal": false,
+  "created_at": 1743552000000,
+  "jurisdiction": "EU",
+  "purpose": "Personalized product recommendations via email",
+  "structural_tags": ["marketing", "email", "gdpr"]
+}
+```
+
+When the customer clicks "unsubscribe," a withdrawal grain is created. The `consent_cascade` policy on any Belief grains holding the customer's marketing preferences (purchase patterns, browsing history, recommendation models) triggers their erasure. The marketing agent can no longer use that data — it is cryptographically gone.
+
+### Cross-Border Data Transfers
+
+When data moves between jurisdictions, Consent grains provide the authorization chain. A user in the EU consents to their data being processed by a US-based agent:
+
+```json
+{
+  "type": "consent",
+  "subject_did": "did:key:z6MkEUUser...",
+  "grantee_did": "did:key:z6MkUSAgent...",
+  "scope": ["profile:read", "profile:analyze"],
+  "basis": "explicit_consent",
+  "is_withdrawal": false,
+  "created_at": 1743552000000,
+  "jurisdiction": "EU",
+  "conditions": [
+    "data transfer must comply with EU-US Data Privacy Framework",
+    "data must be encrypted in transit and at rest",
+    "US agent must not further transfer to non-adequate jurisdictions"
+  ],
+  "purpose": "Cross-border data analysis for service improvement"
+}
+```
+
+The `conditions` array captures the transfer safeguards. If the EU-US Data Privacy Framework adequacy decision is later invalidated (as happened with Privacy Shield in 2020), a withdrawal grain can be issued, and the `consent_cascade` ensures all derived data is erased from the US-based agent's memory store.
+
+## Consent in the Memory Graph
+
+Consent grains are the authorization layer for the entire memory graph. They connect to other grain types through several mechanisms:
+
+**Beliefs depend on consent.** A Belief grain recording a user's health data (`subject="patient-A", relation="blood_pressure", object="120/80"`) should declare `invalidation_policy.mode: "consent_cascade"` with `consent_ref` pointing to the patient's consent grain. If consent is withdrawn, the belief is erased.
+
+**Events depend on consent.** An Event grain recording a therapy session transcript is authorized by the patient's consent. The `consent_cascade` policy ensures the transcript is erased if consent is revoked.
+
+**Actions reference consent.** An Action grain that accessed a user's medical records should include a `structural_tag` referencing the consent that authorized the access. While the Action grain itself may be retained for audit purposes (under a separate legal basis like `"legal_obligation"`), the underlying data it accessed is subject to the consent's lifecycle.
+
+**Goals are bounded by consent.** A Goal grain like "optimize Alice's health outcomes" is only achievable while Alice's consent is active. The goal's scope is implicitly bounded by the consent's scope — the agent cannot pursue the goal using data categories that Alice has not authorized.
+
+**Observations are gated by consent.** Observation grains from health sensors, location trackers, or behavioral monitors are only lawful while consent covers their collection. Withdrawal triggers cascading erasure of the raw observations, not just the consolidated Beliefs derived from them.
+
+This creates a consent-dependent subgraph within the broader memory graph. Every grain in this subgraph is linked — directly or transitively — to one or more Consent grains. Withdrawing any consent prunes its dependent subgraph.
+
+## The Immutable Audit Trail
+
+Both consent grants and withdrawals are preserved forever. This is a critical design property: while the data that was processed under consent may be erased (via `consent_cascade`), the consent records themselves are never erased. They constitute the legal audit trail.
+
+Consider the complete lifecycle:
+
+1. **Grant** — A Consent grain with `is_withdrawal: false` is created at time T1. Content address: `abc123...`
+2. **Processing** — Over the next six months, 500 Belief grains are created under this consent, each with `invalidation_policy.mode: "consent_cascade", consent_ref: "abc123..."`
+3. **Withdrawal** — A Consent grain with `is_withdrawal: true` is created at time T2. Content address: `def456...`
+4. **Cascade** — The 500 Belief grains are erased within 30 days of T2
+5. **Audit** — Both `abc123...` (the grant) and `def456...` (the withdrawal) remain in the store permanently
+
+A regulator asking "did you have consent to process this person's data?" can be answered with the grant grain. A regulator asking "did you honor the withdrawal?" can be answered with the withdrawal grain plus evidence that the cascade completed (the dependent grains no longer exist).
+
+<Callout type="info">
+Consent grains are exempt from the `consent_cascade` they trigger. A withdrawal grain erases the dependent data grains, not the consent records themselves. The grant-withdrawal pair is the permanent, tamper-evident proof that consent was properly managed.
+</Callout>
+
+This dual preservation — data is erasable, consent records are permanent — resolves the apparent tension between GDPR Article 17 (right to erasure) and GDPR Article 5(2) (accountability). The data is gone, but the proof that you had authorization to collect it and that you erased it when asked remains.
+
+## Summary
+
+The Consent grain type is the regulatory backbone of OMS. It exists because four domain review boards independently concluded that consent management cannot be retrofitted onto a general-purpose knowledge type — it requires dedicated fields, dedicated lifecycle semantics, and a dedicated erasure mechanism.
+
+| Aspect | Detail |
+|--------|--------|
+| **Type byte** | `0x0A` in the 9-byte header |
+| **Core model** | DID-scoped permission grant/withdrawal between identified parties |
+| **Required fields** | type, subject_did, grantee_did, scope, basis, is_withdrawal, created_at |
+| **Identity model** | W3C Decentralized Identifiers (DIDs) for both subject and grantee |
+| **Legal basis** | Maps to GDPR Article 6(1): explicit_consent, contract, legal_obligation, vital_interest, public_interest, legitimate_interest |
+| **Withdrawal** | `is_withdrawal: true` — same schema as grants, satisfying GDPR Art. 7(3) |
+| **Cascade erasure** | `consent_cascade` invalidation policy triggers automatic erasure of dependent grains within 30 days |
+| **Jurisdiction** | Optional field enabling cross-border compliance (EU, US-CA, BR, etc.) |
+| **Audit trail** | Both grants and withdrawals are immutable and permanent — never erased by the cascade they trigger |
+
+For details on how per-user encryption and crypto-erasure work alongside consent management, see [GDPR-Ready Agent Memory](/blog/gdpr-ready-agent-memory). For the full invalidation policy framework including the `consent_cascade` mode, see [Grain Protection: How Invalidation Policy Safeguards Critical Knowledge](/blog/grain-protection-invalidation-policy).

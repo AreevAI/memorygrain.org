@@ -95,7 +95,7 @@ A course knowledge graph is built by accumulating Belief grains where concepts s
 
 Each Belief grain is a knowledge graph edge. The `subject` and `object` are nodes. The `relation` is the edge label. The `confidence` field (float64, range [0.0, 1.0] per Section 8.1) indicates how certain we are about the relationship. The `structural_tags` field (Section 6.1) provides topic classification for filtering and browsing.
 
-The OMS spec notes in Section 8.1 that the Fact type follows RDF mapping: `<grain:subject> <grain:relation> "grain:object" .` This means any OMS knowledge graph can be exported to standard RDF/SPARQL systems for interoperability with existing educational knowledge bases.
+The OMS spec notes in Section 8.1 that the Belief type follows RDF mapping: `<grain:subject> <grain:relation> "grain:object" .` This means any OMS knowledge graph can be exported to standard RDF/SPARQL systems for interoperability with existing educational knowledge bases.
 
 <Callout type="info">
 The `confidence` field distinguishes well-established knowledge (0.99 for "machine-learning is_subset_of artificial-intelligence") from more tentative claims (0.7 for "this teaching approach improves retention"). When knowledge is consolidated from multiple student interactions, the `consolidation_level` field tracks the depth of processing: 0=raw, 1=frequency (appeared in many episodes), 2=pattern (co-occurrence detected), 3=sequence (temporal or causal chain).
@@ -107,7 +107,7 @@ Research integrity depends on citation — every claim must trace back to its so
 
 ### From source to conclusion
 
-Every derived Fact carries a `provenance_chain` — an array of entries, each with a `source_hash` (content address of the source grain), `method` (how it was derived), and `weight` (how much this source contributed, range 0.0 to 1.0):
+Every derived Belief carries a `provenance_chain` — an array of entries, each with a `source_hash` (content address of the source grain), `method` (how it was derived), and `weight` (how much this source contributed, range 0.0 to 1.0):
 
 ```json
 {
@@ -196,9 +196,9 @@ Each cross-link entry uses field compaction (Section 14.2): `hash` becomes `h`, 
 The relation type vocabulary is intentionally closed (Section 14.3) to prevent PII leakage through relation names. This is a security decision, not a limitation — the eleven relation types cover the core scholarly relationships, and the `context` map on individual grains can carry additional domain-specific metadata.
 </Callout>
 
-## Episodes for student interactions
+## Events for student interactions
 
-Every tutoring conversation, question-answer session, and lab notebook entry is raw interaction data — the kind of unstructured record that the Episode memory type (Section 8.2) is designed to capture.
+Every tutoring conversation, question-answer session, and lab notebook entry is raw interaction data — the kind of unstructured record that the Event memory type (Section 8.2) is designed to capture.
 
 ### Capturing interactions
 
@@ -215,15 +215,15 @@ Every tutoring conversation, question-answer session, and lab notebook entry is 
 }
 ```
 
-The `consolidated` field (Section 8.2) starts as `false` — this Episode has not yet been processed. Once a consolidation process extracts structured Facts from this interaction, the Episode is marked as consolidated. Since grains are immutable, "marking" means creating a new Episode grain with `consolidated: true` that supersedes the original through the supersession chain.
+The `consolidated` field (Section 8.2) starts as `false` — this Event has not yet been processed. Once a consolidation process extracts structured Beliefs from this interaction, the Event is marked as consolidated. Since grains are immutable, "marking" means creating a new Event grain with `consolidated: true` that supersedes the original through the supersession chain.
 
-The consolidation pipeline (described in the spec's Episode lifecycle) works like this:
+The consolidation pipeline (described in the spec's Event lifecycle) works like this:
 
-1. **Capture**: Raw interaction recorded as Episode with `consolidated` absent (defaults to `false`)
-2. **Consolidation**: An LLM or pattern-matching engine extracts structured Facts
-3. **Tracking**: Extracted Facts carry `consolidation_level` (0=raw, 1=frequency, 2=pattern, 3=sequence)
-4. **Provenance**: Facts link back to source Episodes via `derived_from` and `provenance_chain`
-5. **Marking**: Original Episode superseded by a new grain with `consolidated: true`
+1. **Capture**: Raw interaction recorded as Event with `consolidated` absent (defaults to `false`)
+2. **Consolidation**: An LLM or pattern-matching engine extracts structured Beliefs
+3. **Tracking**: Extracted Beliefs carry `consolidation_level` (0=raw, 1=frequency, 2=pattern, 3=sequence)
+4. **Provenance**: Beliefs link back to source Events via `derived_from` and `provenance_chain`
+5. **Marking**: Original Event superseded by a new grain with `consolidated: true`
 
 From the tutoring session above, consolidation might extract:
 
@@ -397,7 +397,7 @@ G4: goal_state="satisfied", progress=1.0, derived_from=[<hash-G3>],
     state_reason="All criteria verified — assessment score 0.88 exceeds threshold 0.8"
 ```
 
-The `goal_state` lifecycle has four states (Section 8.7): `"active"`, `"satisfied"`, `"failed"`, and `"suspended"`. A course break maps to `"suspended"`. A completed module maps to `"satisfied"` with `satisfaction_evidence` referencing the assessment ToolCall or Observation grains that substantiate the transition. Each state transition creates a new immutable grain in the supersession chain.
+The `goal_state` lifecycle has four states (Section 8.7): `"active"`, `"satisfied"`, `"failed"`, and `"suspended"`. A course break maps to `"suspended"`. A completed module maps to `"satisfied"` with `satisfaction_evidence` referencing the assessment Action or Observation grains that substantiate the transition. Each state transition creates a new immutable grain in the supersession chain.
 
 <Callout type="success">
 The `criteria_structured` schema (Section 8.7) allows machine-evaluable success conditions. An educational platform can automatically check whether a student's `practice_problems_correct_ratio` exceeds the threshold within the evaluation `window_ms` by querying the `measurement_ns` namespace — enabling automated progress assessment without manual grading for practice work.
@@ -450,25 +450,25 @@ OMS achieves this through the convergence of three features:
 **Provenance chains** (Section 14.1) trace every derived grain back to its sources:
 
 ```
-Conclusion (Fact):
+Conclusion (Belief):
   "spaced-repetition improves long-term-retention"
   confidence: 0.88
   provenance_chain:
-    → source_hash: <analysis-toolcall>, method: "frequency_consolidation"
-    → source_hash: <study-1-episode>, method: "direct_input"
+    → source_hash: <analysis-action>, method: "frequency_consolidation"
+    → source_hash: <study-1-event>, method: "direct_input"
 
-Analysis (ToolCall):
+Analysis (Action):
   tool_name: "statistical_analysis"
   arguments: {"method": "paired_t_test", "alpha": 0.05}
   result: {"t_statistic": 4.23, "p_value": 0.0002}
   success: true
   derived_from: [<study-1-episode>, <study-2-episode>]
 
-Study 1 (Episode):
+Study 1 (Event):
   content: "Experiment session 1: 40 participants..."
   content_refs: [{modality: "document", uri: "cas://sha256:..."}]
 
-Study 2 (Episode):
+Study 2 (Event):
   content: "Experiment session 2: 38 participants..."
   content_refs: [{modality: "document", uri: "cas://sha256:..."}]
 ```

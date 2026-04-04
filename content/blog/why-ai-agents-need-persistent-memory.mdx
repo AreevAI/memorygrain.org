@@ -82,19 +82,19 @@ These eight requirements are not theoretical. Here are concrete domains where th
 
 A patient interacts with an AI health assistant over months. The agent learns about allergies, medication responses, ongoing symptoms, and treatment preferences. When the patient transfers to a new provider — or when the platform updates its model — that accumulated context is lost. The new agent asks the same questions from scratch, misses critical drug interactions, or contradicts previous guidance.
 
-With OMS, each piece of clinical knowledge is a grain: a Fact with subject-relation-object structure (`"patient-123" / "allergic_to" / "penicillin"`), tagged with `phi:medication`, classified at the PHI sensitivity level in the header, and carrying a provenance chain back to the source. The `.mg` file transfers with the patient. The receiving system can verify every grain's integrity, trace its origin, and continue care without information loss.
+With OMS, each piece of clinical knowledge is a grain: a Belief with subject-relation-object structure (`"patient-123" / "allergic_to" / "penicillin"`), tagged with `phi:medication`, classified at the PHI sensitivity level in the header, and carrying a provenance chain back to the source. The `.mg` file transfers with the patient. The receiving system can verify every grain's integrity, trace its origin, and continue care without information loss.
 
 ### Customer service context
 
 A customer contacts support repeatedly over weeks about an escalating issue. Each session starts cold — the agent has no memory of previous interactions, resolutions attempted, or commitments made. The customer repeats their story, the agent suggests already-failed solutions, and satisfaction drops.
 
-OMS Episode grains capture raw interaction records. Fact grains consolidate extracted knowledge (`"customer-456" / "issue_type" / "billing_dispute"`). ToolCall grains record what actions were taken and whether they succeeded. When a new agent picks up the case, the full grain history is available, indexed by content address, queryable by time range, and verifiable by hash.
+OMS Event grains capture raw interaction records. Belief grains consolidate extracted knowledge (`"customer-456" / "issue_type" / "billing_dispute"`). Action grains record what actions were taken and whether they succeeded. When a new agent picks up the case, the full grain history is available, indexed by content address, queryable by time range, and verifiable by hash.
 
 ### Autonomous vehicle mission recovery
 
-An autonomous vehicle accumulates Observation grains from lidar, camera, and GPS sensors — thousands per second during operation. Checkpoint grains snapshot the agent's planning state. When the vehicle experiences a system restart mid-mission, it needs to recover its understanding of the environment, its current plan, and its recent observations.
+An autonomous vehicle accumulates Observation grains from lidar, camera, and GPS sensors — thousands per second during operation. State grains snapshot the agent's planning state. When the vehicle experiences a system restart mid-mission, it needs to recover its understanding of the environment, its current plan, and its recent observations.
 
-Without persistent memory, the vehicle restarts from zero: re-mapping its environment, re-planning its route, losing awareness of obstacles it had already identified. With OMS Checkpoint and Observation grains stored in a `.mg` container, recovery is a matter of loading the latest checkpoint and replaying recent observations — verifying each grain's integrity by content address before trusting it.
+Without persistent memory, the vehicle restarts from zero: re-mapping its environment, re-planning its route, losing awareness of obstacles it had already identified. With OMS State and Observation grains stored in a `.mg` container, recovery is a matter of loading the latest checkpoint and replaying recent observations — verifying each grain's integrity by content address before trusting it.
 
 ### Financial audit trails
 

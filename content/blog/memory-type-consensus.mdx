@@ -1,0 +1,353 @@
+---
+title: "Grain Type Deep Dive: Consensus — Multi-Agent Agreement as First-Class Memory"
+description: "How OMS Consensus grains record multi-agent agreement with threshold-based voting, trust-weighted confidence, and quorum protection — enabling auditable decisions across regulated industries, fleet coordination, and collaborative AI systems."
+date: "2026-04-02"
+readTime: "13 min read"
+tags: ["memory-types", "consensus", "multi-agent", "trust"]
+---
+
+When a single agent records a belief, it is making a claim. When multiple agents independently agree on the same claim, something fundamentally different has happened: a **consensus** has formed. The claim is no longer one agent's opinion — it is a collective decision backed by a quorum of participants, each bringing their own observations, reasoning, and trust profile.
+
+Most agent frameworks have no way to represent this distinction. Agreement is implicit, inferred from matching outputs, or tracked in application-specific databases that are mutable, unstructured, and disconnected from the agents' memory. The Open Memory Specification addresses this with a dedicated grain type: **Consensus** (type byte `0x09`). Introduced in OMS v1.2, defined in Section 8.9 of the specification, a Consensus grain is an immutable, content-addressed record of multi-agent agreement with explicit threshold-based voting.
+
+This post covers the Consensus schema in detail: why it exists, every required and optional field, field compaction keys, concrete examples, the v1.3 usage pattern for Action Definition Validation, and how Consensus grains connect to the broader memory graph.
+
+## Why a Dedicated Consensus Type?
+
+The same question that applies to every dedicated grain type applies here: why not just use a Belief grain? You could encode agreement as `subject="deployment-frequency", relation="improved", object="18% over Q4 2025"` with `confidence: 0.95` and a note in `context` about how many agents agreed.
+
+Three problems make this inadequate.
+
+**First, header-level filtering.** Consensus grains carry type byte `0x09` in the OMS header (byte 2). Any system scanning a stream of `.mg` blobs can identify all Consensus grains by reading a single byte — O(1) filtering before any MessagePack deserialization. Querying for multi-agent agreements via Belief grains requires full payload decode and inspection of context fields.
+
+**Second, structured voting semantics.** A Consensus grain has first-class fields for `threshold`, `agreement_count`, and `dissent_count`. These are not ad-hoc metadata crammed into a `context` map — they are validated required fields with defined semantics. The threshold defines the quorum requirement. The agreement and dissent counts record the vote tally. Together they answer the question: "Did this decision meet its quorum?" without any ambiguity about what the numbers mean.
+
+**Third, participant identity.** The `participating_observers` field is a required array of DIDs or identifiers for every agent that participated in the vote. This is not a count — it is the actual list of participants. Any downstream consumer can verify exactly which agents contributed to the agreement, enabling trust-weighted analysis and auditability.
+
+## Required Fields
+
+Every Consensus grain MUST include these fields:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | Yes | Must be `"consensus"` |
+| `participating_observers` | array[string] | Yes | DIDs or IDs of all participating agents |
+| `threshold` | integer | Yes | Minimum votes required for agreement |
+| `agreement_count` | integer | Yes | Number of votes in favor |
+| `dissent_count` | integer | Yes | Number of votes against |
+| `agreed_content` | map | Yes | The content that was agreed upon |
+| `created_at` | int64 (epoch ms) | Yes | When the consensus was recorded |
+
+This is the minimum viable Consensus grain. The `participating_observers` array identifies who voted. The `threshold` declares how many votes were needed. The `agreement_count` and `dissent_count` record the outcome. The `agreed_content` map holds the actual substance of the agreement — what was decided.
+
+Note the relationship between these fields: `agreement_count + dissent_count` should equal `len(participating_observers)`, and `agreement_count >= threshold` means the consensus was reached. Implementations can validate these invariants on write.
+
+### A Minimal Example: Financial Compliance Quorum
+
+Consider a financial compliance system where multiple risk assessment agents must agree before a large trade is approved:
+
+```json
+{
+  "type": "consensus",
+  "participating_observers": [
+    "did:key:z6MkRiskAgent1",
+    "did:key:z6MkRiskAgent2",
+    "did:key:z6MkRiskAgent3",
+    "did:key:z6MkComplianceAgent1"
+  ],
+  "threshold": 3,
+  "agreement_count": 4,
+  "dissent_count": 0,
+  "agreed_content": {
+    "decision": "approve",
+    "instrument": "AAPL 2026-06 Call Option",
+    "notional_value": "2500000",
+    "risk_rating": "moderate",
+    "justification": "Within portfolio risk limits, hedged position, all agents confirm counterparty creditworthiness"
+  },
+  "created_at": 1743552000000,
+  "namespace": "trade-approval",
+  "author_did": "did:key:z6MkQuorumOrchestrator",
+  "structural_tags": ["compliance", "options", "pre-trade-approval"]
+}
+```
+
+This grain records that four agents participated in a trade approval decision. The threshold was 3, meaning at least three agents needed to agree. All four agreed (unanimous), and the `agreed_content` map captures the decision, the instrument, the notional value, and the collective justification. The grain is immutable — no one can retroactively change the vote tally or the decision.
+
+### A Second Example: Multi-Agent Belief Validation
+
+Multiple AI research agents independently verify a statistical claim before it enters the knowledge base:
+
+```json
+{
+  "type": "consensus",
+  "participating_observers": [
+    "did:key:z6MkDataAnalyst1",
+    "did:key:z6MkDataAnalyst2",
+    "did:key:z6MkDataAnalyst3",
+    "did:key:z6MkStatistician1",
+    "did:key:z6MkStatistician2"
+  ],
+  "threshold": 4,
+  "agreement_count": 4,
+  "dissent_count": 1,
+  "agreed_content": {
+    "claim": "Q1 deployment frequency improved 18% over Q4 2025",
+    "methodology": "Compared weekly deployment counts across 12-week windows",
+    "data_source": "CI/CD pipeline telemetry",
+    "statistical_significance": "p < 0.01"
+  },
+  "confidence": 0.92,
+  "created_at": 1743552000000,
+  "namespace": "engineering-metrics",
+  "structural_tags": ["metrics", "deployment", "quarterly-review"],
+  "related_to": [
+    {
+      "target": "a3f8c9d1e2b4567890abcdef12345678abcdef1234567890abcdef1234567890",
+      "relation_type": "validates",
+      "description": "Validates the Q1 2026 deployment frequency analysis"
+    }
+  ]
+}
+```
+
+Here the threshold was 4 out of 5 agents. Four agreed, one dissented. The consensus was reached despite the dissent because `agreement_count (4) >= threshold (4)`. The `confidence` field (optional) is set to 0.92, reflecting the near-unanimous but not fully unanimous agreement. The `related_to` cross-link connects this Consensus grain to the original analysis it validates.
+
+## Optional Fields
+
+Beyond the required fields, Consensus grains support the standard optional fields available to all grain types:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `confidence` | float64, [0.0, 1.0] | Overall confidence in the agreed content |
+| `subject` | string | Entity or topic the consensus is about |
+| `namespace` | string | Memory partition (default `"shared"`) |
+| `author_did` | string | DID of the agent that orchestrated the vote |
+| `structural_tags` | array[string] | Classification tags |
+| `related_to` | array[map] | Cross-links to related grains (Section 14) |
+| `derived_from` | array[string] | Content addresses of source grains |
+| `provenance_chain` | array[map] | Full derivation trail |
+| `invalidation_policy` | map | Protection policy (Section 23) |
+| `importance` | float64, [0.0, 1.0] | Retrieval prioritization weight |
+| `user_id` | string | Data subject identifier (for GDPR) |
+
+The `confidence` field on a Consensus grain has a specific semantic: it represents the **aggregate confidence across all participating agents**, not a single agent's certainty. A unanimous consensus from five high-trust agents might carry `confidence: 0.98`. A bare-quorum consensus with significant dissent might carry `confidence: 0.65`. Implementations can compute this value using trust-weighted averaging across participants (see the section on trust-weighted confidence below).
+
+The `subject` field, when present, identifies the entity or topic the consensus is about. In the financial example, this might be `"AAPL-option-trade-2026-06"`. In the fact validation example, it might be `"deployment-frequency-q1-2026"`.
+
+## Field Compaction Keys
+
+When a Consensus grain is serialized, human-readable field names are replaced by short keys to minimize blob size. The Consensus-specific compaction keys from Section 6.9 are:
+
+| Full Name | Short Key | Type |
+|-----------|-----------|------|
+| `participating_observers` | `po` | array[string] |
+| `threshold` | `thr` | integer |
+| `agreement_count` | `ac` | integer |
+| `dissent_count` | `dc` | integer |
+| `agreed_content` | `agc` | map |
+
+These compact keys combine with the core field compaction: `type` becomes `t`, `created_at` becomes `ca`, `confidence` becomes `c`, `namespace` becomes `ns`, `structural_tags` becomes `tags`, `author_did` becomes `adid`, and so on. The complete mapping is bijective — serializers MUST replace full names with short keys before encoding, and deserializers MUST reverse the mapping after decoding.
+
+After compaction, keys are sorted lexicographically for canonical serialization. For the financial compliance example above, the compacted and sorted keys would be: `ac`, `adid`, `agc`, `ca`, `dc`, `ns`, `po`, `t`, `tags`, `thr` — ten keys in lexicographic order.
+
+## SML Representation
+
+When a Consensus grain is rendered in the Structured Memory Language (SML) context format for LLM consumption, it uses a compact XML-style representation:
+
+```sml
+<consensus threshold="3" count="4">Q1 deployment frequency improved 18% over Q4 2025</consensus>
+```
+
+The `threshold` attribute shows the quorum requirement, `count` shows the agreement count, and the element content is the human-readable summary of the agreed content. This gives an LLM the essential information — what was agreed, how many agents agreed, and what the quorum bar was — without requiring the model to parse the full JSON payload.
+
+## The v1.3 Usage Pattern: Consensus for Action Definition Validation
+
+OMS v1.3, Section 27.7, introduced a documented usage pattern for Consensus grains: **validating Action definition grains when multiple sources agree on an action's schema**.
+
+The pattern addresses a specific problem in multi-agent systems. When an agent discovers a new external tool or API, it may create an Action definition grain (`action_phase: "definition"`) describing the tool's name, input schema, and output schema. But a single agent's definition may be incomplete, outdated, or wrong. If multiple agents independently discover the same tool and produce compatible definitions, a Consensus grain can record their agreement on the canonical schema.
+
+The flow works as follows:
+
+1. **Agent A** discovers an API endpoint and creates an Action definition grain with `input` schema and `output_schema`.
+2. **Agent B** independently discovers the same endpoint and creates its own Action definition grain.
+3. **Agent C** does the same.
+4. A validation orchestrator compares the three definitions. If they agree on the schema (within some tolerance for minor differences), it creates a Consensus grain with:
+   - `participating_observers`: the DIDs of Agents A, B, and C
+   - `threshold`: 2 (at least two must agree)
+   - `agreement_count`: 3
+   - `dissent_count`: 0
+   - `agreed_content`: the canonical schema definition
+   - `related_to`: cross-links to the three Action definition grains with `relation_type: "validates"`
+
+This pattern is particularly valuable in the Integration Domain Profile, where connectors discover and register external API actions. A consensus-validated Action definition carries significantly more trust than a single agent's discovery — it has been independently confirmed by multiple observers.
+
+<Callout type="info">
+The Section 27.7 pattern is a documented usage pattern, not a normative requirement. Implementations are free to use Consensus grains for Action definition validation or to implement their own validation mechanisms. The pattern provides a standardized approach for systems that need multi-source schema agreement.
+</Callout>
+
+## Trust-Weighted Confidence Across Participating Agents
+
+The `confidence` field on a Consensus grain is optional, but when present it should reflect the aggregate trust profile of the participating agents — not just a simple ratio of agreement to total votes.
+
+Consider a system where agents have different trust levels. A senior compliance agent with years of validated decisions carries more weight than a newly deployed analysis agent. A trust-weighted confidence calculation might work as follows:
+
+```
+Agent A (trust: 0.95) — voted agree
+Agent B (trust: 0.90) — voted agree
+Agent C (trust: 0.70) — voted agree
+Agent D (trust: 0.60) — voted dissent
+
+Weighted agreement: (0.95 + 0.90 + 0.70) / (0.95 + 0.90 + 0.70 + 0.60) = 2.55 / 3.15 = 0.809
+```
+
+The resulting `confidence: 0.81` captures more nuance than a raw 3-out-of-4 (75%) ratio. The dissenting agent's lower trust weight reduces its impact on the aggregate confidence. Implementations can store trust weights in the `provenance_chain` entries:
+
+```json
+{
+  "provenance_chain": [
+    {"source_hash": "<agent-a-observation>", "method": "consensus_vote", "weight": 0.95},
+    {"source_hash": "<agent-b-observation>", "method": "consensus_vote", "weight": 0.90},
+    {"source_hash": "<agent-c-observation>", "method": "consensus_vote", "weight": 0.70},
+    {"source_hash": "<agent-d-observation>", "method": "consensus_vote", "weight": 0.60}
+  ]
+}
+```
+
+Each entry records the source grain (the individual agent's observation or analysis that informed their vote), the method (`"consensus_vote"`), and the weight (the agent's trust level). This creates a fully auditable trail from the aggregate confidence back to each individual agent's contribution.
+
+<Callout type="info">
+Trust-weighted confidence is not a normative requirement of the specification. OMS defines the `confidence` field as a float64 in [0.0, 1.0] and the `provenance_chain` structure, but the specific weighting algorithm is left to implementations. The pattern described here is a recommended practice for systems that need differentiated agent trust.
+</Callout>
+
+## Quorum Protection via invalidation_policy
+
+Consensus grains are natural candidates for the `quorum` invalidation policy mode (Section 23). A decision that required multi-agent agreement to create should require multi-agent agreement to invalidate.
+
+The `quorum` mode works as follows: a superseding grain MUST carry a `supersession_auth` field containing at least `threshold` valid COSE signatures from DIDs listed in the `authorized` array. The store MUST reject any supersession attempt that does not meet this requirement, returning `ERR_INVALIDATION_DENIED`.
+
+Here is a Consensus grain with quorum protection:
+
+```json
+{
+  "type": "consensus",
+  "participating_observers": [
+    "did:key:z6MkAuditAgent1",
+    "did:key:z6MkAuditAgent2",
+    "did:key:z6MkAuditAgent3",
+    "did:key:z6MkAuditAgent4",
+    "did:key:z6MkAuditAgent5"
+  ],
+  "threshold": 4,
+  "agreement_count": 5,
+  "dissent_count": 0,
+  "agreed_content": {
+    "finding": "Annual financial audit passed",
+    "fiscal_year": "2025",
+    "material_misstatements": "none",
+    "going_concern": "no issues identified"
+  },
+  "confidence": 0.97,
+  "created_at": 1743552000000,
+  "namespace": "audit",
+  "invalidation_policy": {
+    "mode": "quorum",
+    "authorized": [
+      "did:key:z6MkAuditAgent1",
+      "did:key:z6MkAuditAgent2",
+      "did:key:z6MkAuditAgent3",
+      "did:key:z6MkAuditAgent4",
+      "did:key:z6MkAuditAgent5"
+    ],
+    "threshold": 3,
+    "scope": "lineage",
+    "protection_reason": "Audit finding requires multi-agent quorum to invalidate"
+  },
+  "structural_tags": ["audit", "financial", "annual-review"]
+}
+```
+
+This grain records a unanimous audit finding from five agents. The `invalidation_policy` with `mode: "quorum"` means that invalidating this finding requires COSE signatures from at least 3 of the 5 authorized agents. The `scope: "lineage"` extends the protection to all grains derived from this one — you cannot circumvent the quorum by creating a chain of derived grains that progressively weakens the protection.
+
+The symmetry is deliberate: a multi-agent decision is protected by a multi-agent invalidation requirement. This prevents a single compromised or rogue agent from unilaterally overturning decisions that required collective agreement.
+
+<Callout type="security">
+Quorum-protected Consensus grains create a cryptographic barrier against unilateral override. A single compromised agent cannot invalidate a finding that required four agents to establish. The `invalidation_policy` is part of the immutable blob and is covered by the COSE signature, making the protection tamper-evident.
+</Callout>
+
+## Industry Use Cases
+
+### Regulated Finance
+
+Financial regulation often requires multi-party agreement for critical decisions. Trade approvals above a threshold, risk assessments, and audit findings all benefit from recorded quorum. A Consensus grain provides an immutable, content-addressed record that auditors and regulators can verify: which agents participated, what the quorum requirement was, what was decided, and how many agreed.
+
+The `invalidation_policy` with `mode: "quorum"` ensures that a trade approval cannot be retroactively changed without the same level of multi-agent agreement that created it. For SOX compliance, this creates an auditable decision trail that is cryptographically tamper-evident.
+
+### Healthcare: Diagnostic Agreement
+
+When multiple diagnostic agents analyze a patient's symptoms, lab results, and imaging, a Consensus grain records their collective assessment. The `agreed_content` holds the diagnosis. The `participating_observers` lists the agents (or human physicians) who contributed. The `threshold` ensures a minimum number of independent assessments. The `confidence` reflects the trust-weighted agreement level.
+
+For HIPAA compliance, the `user_id` field links the consensus to the patient, enabling right-of-access requests. The `structural_tags` can include `["phi:diagnosis", "medical"]` to mark the grain for PHI-level sensitivity handling. The sensitivity classification bits in the header (bits 6-7 of the flags byte) can be set to `11` (PHI) for O(1) filtering without payload deserialization.
+
+### Multi-Agent Systems: Collaborative Decision-Making
+
+In multi-agent architectures where agents specialize in different domains, Consensus grains serve as the coordination primitive. A planning agent, a risk agent, and an execution agent might need to agree on a course of action before proceeding. The Consensus grain records that agreement explicitly, with the `agreed_content` holding the plan and the `threshold` ensuring sufficient buy-in.
+
+The `related_to` field can cross-link the Consensus grain to Goal grains (the objectives being pursued), Action grains (the tools to be invoked), and Workflow grains (the procedures to follow). This creates a rich decision context: "We agreed to do X (Consensus) in pursuit of Y (Goal) by following Z (Workflow)."
+
+### Fleet Coordination
+
+Autonomous vehicle or drone fleets need to reach agreement on shared state: route assignments, formation changes, hazard assessments. When multiple fleet members observe the same obstacle and agree on its classification, a Consensus grain records that collective assessment. The `participating_observers` lists the vehicle agents. The `threshold` ensures enough independent sensors confirmed the observation before the fleet acts on it.
+
+Fleet Consensus grains are particularly suited to the `sync_group` mechanism from Observation grains. The individual Observation grains from each vehicle form the evidence base, and the Consensus grain synthesizes them into a collective decision. The `derived_from` field on the Consensus grain points to the content addresses of the individual Observations, creating a verifiable provenance chain from raw sensor data to collective agreement.
+
+## Consensus in the Memory Graph
+
+Consensus grains participate in the broader OMS memory graph through several mechanisms:
+
+- **Observation as evidence.** Individual agents' Observation grains serve as the inputs to a consensus process. The Consensus grain's `derived_from` array points to these source observations, creating a provenance trail from individual measurements to collective agreement.
+
+- **Belief validation.** A Consensus grain can validate a Belief grain via `related_to` with `relation_type: "validates"`. This strengthens the Belief's credibility: it is not just one agent's claim, but a claim backed by multi-agent agreement.
+
+- **Action definition validation.** Per the v1.3 Section 27.7 pattern, Consensus grains validate Action definition grains when multiple agents agree on an API's schema.
+
+- **Goal satisfaction evidence.** A Goal grain's `satisfaction_evidence` array can include the content address of a Consensus grain. "The deployment target was met" is stronger evidence when it comes from a multi-agent consensus rather than a single observation.
+
+- **Supersession chain.** Like all OMS grains, Consensus grains can be superseded. If a consensus is later overturned by new evidence, a new Consensus grain supersedes the old one. The `derived_from` and `superseded_by` fields create the linked chain. When the original grain has quorum protection, the superseding grain must satisfy the `invalidation_policy`.
+
+- **Provenance chain.** The `provenance_chain` entries on a Consensus grain record each participating agent's contribution: their source observation hash, the method (`"consensus_vote"`), and their trust weight. This enables full audit reconstruction.
+
+## Lifecycle of a Consensus Grain
+
+The lifecycle follows the standard OMS immutability model:
+
+1. **Voting.** Individual agents produce their assessments as Observation, Belief, or other grain types. These are independent grains with their own content addresses.
+
+2. **Aggregation.** An orchestrating agent (or a consensus protocol) collects the votes, evaluates them against the threshold, and creates a Consensus grain recording the outcome. The `agreed_content` captures the decision. The `participating_observers`, `agreement_count`, and `dissent_count` capture the vote.
+
+3. **Protection.** If the decision warrants it, the Consensus grain is created with an `invalidation_policy` — typically `mode: "quorum"` for decisions that should require multi-agent agreement to overturn.
+
+4. **Reference.** Other grains reference the Consensus grain: Goals point to it as satisfaction evidence, Beliefs link to it as validation, downstream Actions cite it as authorization.
+
+5. **Supersession.** If the consensus is later overturned — new evidence emerges, conditions change — a new Consensus grain is created that supersedes the old one. The protection policy governs whether this supersession is permitted and what authorization is required.
+
+## Summary
+
+The Consensus grain type elevates multi-agent agreement from an implicit, application-specific pattern to a first-class, standardized memory object. Its required fields capture the complete voting record: who participated, what the threshold was, how many agreed and dissented, and what was decided. Its optional fields support trust-weighted confidence, provenance chains, and quorum-based protection against unilateral override.
+
+| Aspect | Detail |
+|--------|--------|
+| **Core model** | Threshold-based voting with explicit participant identity |
+| **Required fields** | type, participating_observers, threshold, agreement_count, dissent_count, agreed_content, created_at |
+| **Type byte** | `0x09` in the OMS header |
+| **Introduced** | OMS v1.2 |
+| **Confidence** | Optional float64 in [0.0, 1.0], represents trust-weighted aggregate |
+| **Protection** | Natural fit for `invalidation_policy` with `mode: "quorum"` |
+| **v1.3 pattern** | Section 27.7 — Consensus for Action Definition Validation |
+| **Compaction keys** | `po`, `thr`, `ac`, `dc`, `agc` |
+
+<Callout type="info">
+The Consensus grain type is identified by type byte `0x09` in the OMS header. It has 5 type-specific field compaction keys. For multi-agent systems, regulated industries, and any domain where decisions must be auditable and tamper-evident, Consensus grains provide the standard primitive for recording collective agreement.
+</Callout>
+
+For the complete Consensus schema, field definitions, and serialization rules, see [Section 8.9 of the OMS v1.2 specification](https://github.com/openmemoryspec/oms).

@@ -14,7 +14,7 @@ Defined in Section 8.7 of the OMS v1.2 specification, Goal is one of ten grain t
 
 An obvious question: why not just use a Belief grain with `relation="has_goal"`? The specification addresses this directly.
 
-At scale, querying active goals via Fact requires full payload deserialization to inspect the `relation` field. Every grain must be decoded from MessagePack, the `relation` field extracted, and its value compared to `"has_goal"`. With millions of grains, this is expensive.
+At scale, querying active goals via Belief requires full payload deserialization to inspect the `relation` field. Every grain must be decoded from MessagePack, the `relation` field extracted, and its value compared to `"has_goal"`. With millions of grains, this is expensive.
 
 A dedicated type byte solves this. Goal grains carry type byte `0x07` in the OMS header (byte 2). Any system scanning a stream of `.mg` blobs can identify all Goal grains by reading a single byte — **O(1) header-level filtering** before any MessagePack decode. The `goal_state` field is a first-class indexable field in the payload, not buried in a `context` map.
 
@@ -42,7 +42,7 @@ In OMS v1.2, `subject` and `source_type` were moved from required to optional. W
 - **failed** — the goal was not achievable or was abandoned
 - **suspended** — the goal is paused, not permanently resolved
 
-There is no "pending" or "draft" state. A goal that exists is either being pursued, paused, or resolved. If you need a "draft" concept, that is a different grain type (perhaps an Episode recording the discussion of a potential goal) or a Goal with `goal_state: "suspended"` and a `state_reason` explaining it has not yet been activated.
+There is no "pending" or "draft" state. A goal that exists is either being pursued, paused, or resolved. If you need a "draft" concept, that is a different grain type (perhaps an Event recording the discussion of a potential goal) or a Goal with `goal_state: "suspended"` and a `state_reason` explaining it has not yet been activated.
 
 ## Goal-Specific Optional Fields
 
@@ -79,11 +79,11 @@ The `parent_goals` field takes an array of content addresses, not a single paren
 | Field | Type | Description |
 |-------|------|-------------|
 | `state_reason` | string | Audit rationale for the current state transition |
-| `satisfaction_evidence` | array[string] | Content addresses of ToolCall, Fact, or Observation grains |
+| `satisfaction_evidence` | array[string] | Content addresses of Action, Belief, or Observation grains |
 | `progress` | float64, [0.0, 1.0] | Agent-assessed progress (subjective estimate) |
 | `evidence_required` | int | Minimum grains in `satisfaction_evidence` before `satisfied` is valid |
 
-The `satisfaction_evidence` field is an array of content addresses pointing to **ToolCall, Fact, or Observation grains** that substantiate a `satisfied` transition. This creates a verifiable chain: "I marked this goal as satisfied because these specific tool calls succeeded and these specific observations confirmed the criteria."
+The `satisfaction_evidence` field is an array of content addresses pointing to **Action, Belief, or Observation grains** that substantiate a `satisfied` transition. This creates a verifiable chain: "I marked this goal as satisfied because these specific actions succeeded and these specific observations confirmed the criteria."
 
 The `progress` field is explicitly described as a "subjective estimate, not mechanically derived from criteria." This is an agent's self-assessment of how far along it is — useful for dashboards and priority scheduling, but not a formal measure.
 
@@ -93,7 +93,7 @@ The `progress` field is explicitly described as a "subjective estimate, not mech
 |-------|------|-------------|
 | `expiry_policy` | string (enum) | `"hard"` (fail if deadline exceeded), `"soft"` (suspend), `"extend"` (agent may extend) |
 | `recurrence` | string | Cron-like recurrence expression for recurring goals |
-| `rollback_on_failure` | array[string] | Content addresses of Workflow/ToolCall grains to execute on failure |
+| `rollback_on_failure` | array[string] | Content addresses of Workflow/Action grains to execute on failure |
 | `allowed_transitions` | array[string] | State transitions the agent may execute autonomously |
 
 The `expiry_policy` interacts with the `valid_to` field (inherited from core fields). When `valid_to` passes:
@@ -101,7 +101,7 @@ The `expiry_policy` interacts with the `valid_to` field (inherited from core fie
 - `"soft"` — the goal transitions to `suspended`
 - `"extend"` — the agent may create a new goal grain extending the deadline
 
-The `rollback_on_failure` field is particularly interesting: it holds content addresses of Workflow or ToolCall grains that should be executed when the goal fails. This enables compensating actions — if "deploy version 2.3" fails, roll back to version 2.2.
+The `rollback_on_failure` field is particularly interesting: it holds content addresses of Workflow or Action grains that should be executed when the goal fails. This enables compensating actions — if "deploy version 2.3" fails, roll back to version 2.2.
 
 ## Field Compaction Keys
 
@@ -228,7 +228,7 @@ The `provenance_chain` field records who created or modified a goal and by what 
 | `"goal_decomposition"` | Agent broke a parent goal into sub-goals |
 | `"goal_state_transition"` | This grain updates the state of a prior Goal grain |
 | `"goal_revision"` | Human modified a previously set goal |
-| `"goal_inference"` | Agent inferred a goal from Episode or Fact patterns |
+| `"goal_inference"` | Agent inferred a goal from Event or Belief patterns |
 | `"goal_delegation"` | Goal was delegated from another agent |
 
 These method strings appear in the `provenance_chain` array entries alongside `source_hash` (the content address of the source grain) and `weight` (a float indicating the strength of the derivation).
@@ -351,7 +351,7 @@ This goal:
 
 An AI project manager can model an entire project as a hierarchy of Goal grains. The top-level goal ("Ship version 3.0 by March 15") decomposes into sub-goals ("Complete API redesign," "Update documentation," "Pass security audit"), each with their own `criteria_structured`, `priority`, and `valid_to` deadlines.
 
-The `parent_goals` field creates the DAG hierarchy. `progress` fields provide rollup visibility. `state_reason` fields create an audit trail of why tasks were blocked, suspended, or completed. And `satisfaction_evidence` links goals to the actual work products (ToolCall grains for deployments, Fact grains for test results) that prove completion.
+The `parent_goals` field creates the DAG hierarchy. `progress` fields provide rollup visibility. `state_reason` fields create an audit trail of why tasks were blocked, suspended, or completed. And `satisfaction_evidence` links goals to the actual work products (Action grains for deployments, Belief grains for test results) that prove completion.
 
 ### SLA Monitoring
 
@@ -377,9 +377,9 @@ The key advantage over a simple to-do list is the provenance chain and state tra
 
 Goal grains are deeply connected to other memory types:
 
-- **ToolCall as evidence.** A Goal's `satisfaction_evidence` array holds content addresses of ToolCall grains that prove actions were taken. "I deployed the service" is backed by the actual deployment ToolCall.
+- **Action as evidence.** A Goal's `satisfaction_evidence` array holds content addresses of Action grains that prove actions were taken. "I deployed the service" is backed by the actual deployment Action grain.
 - **Observation as evidence.** Observation grains from sensors, monitoring systems, or test runners serve as evidence that criteria were met. "Latency is under 100ms" is backed by the actual metric observations.
-- **Fact as evidence.** A Fact grain recording a test result or a verified state can serve as satisfaction evidence.
+- **Belief as evidence.** A Belief grain recording a test result or a verified state can serve as satisfaction evidence.
 - **Workflow as rollback.** The `rollback_on_failure` field references Workflow grains that define compensating action sequences.
 - **Goal as parent.** The `parent_goals` field creates DAG hierarchies of goals, enabling decomposition, aggregation, and rollup.
 - **Provenance chain.** Every state transition is recorded with `method`, `source_hash`, and `weight`, creating a complete audit trail of the goal's evolution.

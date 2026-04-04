@@ -5,8 +5,80 @@
     <link>https://memorygrain.org/blog/</link>
     <description>Deep dives into the Open Memory Specification (.mg format) — COSE signing, header bytes, GDPR compliance, autonomous vehicles, IoT device profiles, and portability.</description>
     <language>en-us</language>
-    <lastBuildDate>Wed, 04 Mar 2026 12:56:03 GMT</lastBuildDate>
+    <lastBuildDate>Thu, 02 Apr 2026 18:43:38 GMT</lastBuildDate>
     <atom:link href="https://memorygrain.org/feed.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Grain Type Deep Dive: Consensus — Multi-Agent Agreement as First-Class Memory</title>
+      <link>https://memorygrain.org/blog/memory-type-consensus/</link>
+      <guid isPermaLink="true">https://memorygrain.org/blog/memory-type-consensus/</guid>
+      <description>How OMS Consensus grains record multi-agent agreement with threshold-based voting, trust-weighted confidence, and quorum protection — enabling auditable decisions across regulated industries, fleet coordination, and collaborative AI systems.</description>
+      <pubDate>Thu, 02 Apr 2026 00:00:00 GMT</pubDate>
+      <category>memory-types</category>
+      <category>consensus</category>
+      <category>multi-agent</category>
+      <category>trust</category>
+    </item>
+    <item>
+      <title>Grain Type Deep Dive: Consent</title>
+      <link>https://memorygrain.org/blog/memory-type-consent/</link>
+      <guid isPermaLink="true">https://memorygrain.org/blog/memory-type-consent/</guid>
+      <description>A comprehensive guide to the Consent grain type (0x0A) in OMS v1.2 — DID-scoped permission grants and withdrawals, the consent_cascade invalidation policy, GDPR/CCPA/HIPAA compliance patterns, and how Consent grains create an immutable audit trail for data processing authorization.</description>
+      <pubDate>Thu, 02 Apr 2026 00:00:00 GMT</pubDate>
+      <category>memory-types</category>
+      <category>consent</category>
+      <category>gdpr</category>
+      <category>privacy</category>
+      <category>compliance</category>
+    </item>
+    <item>
+      <title>Grain Type Deep Dive: Reasoning — Inference Chains and Thought Audit Trails</title>
+      <link>https://memorygrain.org/blog/memory-type-reasoning/</link>
+      <guid isPermaLink="true">https://memorygrain.org/blog/memory-type-reasoning/</guid>
+      <description>A comprehensive guide to the Reasoning grain type (0x08) in OMS v1.2 — inference methods, premises and conclusions, extended thinking capture, the requires_human_review safety mechanism, field compaction, and real-world applications in healthcare, finance, and legal reasoning.</description>
+      <pubDate>Thu, 02 Apr 2026 00:00:00 GMT</pubDate>
+      <category>memory-types</category>
+      <category>reasoning</category>
+      <category>inference</category>
+      <category>audit-trail</category>
+      <category>thinking</category>
+    </item>
+    <item>
+      <title>CAL: The Query Language Your Agent Orchestrator Has Been Missing</title>
+      <link>https://memorygrain.org/blog/cal-agent-memory-query-language/</link>
+      <guid isPermaLink="true">https://memorygrain.org/blog/cal-agent-memory-query-language/</guid>
+      <description>How the Context Assembly Language turns a raw memory store into a first-class context pipeline for AI agents — from querying relevant grains to assembling token-budgeted context blocks that drop directly into LLM calls.</description>
+      <pubDate>Wed, 04 Mar 2026 00:00:00 GMT</pubDate>
+      <category>cal</category>
+      <category>agent-memory</category>
+      <category>context-assembly</category>
+      <category>orchestration</category>
+      <category>llm</category>
+    </item>
+    <item>
+      <title>Choosing the Right Context Format: SML, TOON, Markdown, and JSON</title>
+      <link>https://memorygrain.org/blog/cal-context-formats-comparison/</link>
+      <guid isPermaLink="true">https://memorygrain.org/blog/cal-context-formats-comparison/</guid>
+      <description>CAL&apos;s FORMAT clause gives you six output options for assembled agent context. Side-by-side token counts, real examples, and a decision guide for when to use SML, TOON, Markdown, or JSON.</description>
+      <pubDate>Wed, 04 Mar 2026 00:00:00 GMT</pubDate>
+      <category>cal</category>
+      <category>sml</category>
+      <category>toon</category>
+      <category>context-format</category>
+      <category>agent-memory</category>
+      <category>llm</category>
+    </item>
+    <item>
+      <title>SML: The Context Format That Tells LLMs What to Trust</title>
+      <link>https://memorygrain.org/blog/sml-context-format-for-llms/</link>
+      <guid isPermaLink="true">https://memorygrain.org/blog/sml-context-format-for-llms/</guid>
+      <description>Semantic Markup Language (SML) uses grain type tag names as epistemic signals — telling an LLM not just what information is, but what kind of information it is. Hands-on examples across all 10 grain types, from customer support to incident response.</description>
+      <pubDate>Wed, 04 Mar 2026 00:00:00 GMT</pubDate>
+      <category>sml</category>
+      <category>context-format</category>
+      <category>llm</category>
+      <category>agent-memory</category>
+      <category>cal</category>
+    </item>
     <item>
       <title>OMS for Autonomous Vehicles: Structured Memory for Sensor Fusion, Decisions, and Audit</title>
       <link>https://memorygrain.org/blog/agent-memory-autonomous-vehicles/</link>
