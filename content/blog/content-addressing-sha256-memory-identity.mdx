@@ -85,7 +85,7 @@ The header breaks down as:
 |-------|-------|---------|
 | `01` | 0x01 | Version 1 |
 | `00` | 0x00 | Flags: public, MessagePack, unsigned |
-| `01` | 0x01 | Type: Fact |
+| `01` | 0x01 | Type: Belief |
 | `a4 d2` | 0xa4d2 | SHA-256("shared")[0:2] as uint16 big-endian |
 | `69 68 ba a0` | 1768471200 | created_at_sec (2026-01-15T10:00:00Z) |
 
@@ -220,7 +220,7 @@ OMS is not the first system to use content addressing, and the pattern it follow
 
 What OMS adds to this pattern is the combination of content addressing with domain-specific semantics for agent memory: typed grains with a fixed 9-byte header that enables O(1) field extraction, temporal binding that prevents replay attacks, and a canonical serialization that ensures cross-implementation hash stability.
 
-The 9-byte header is critical to this last point. By including the version, flags, type, namespace hash, and creation timestamp in the hashed bytes — outside the MessagePack payload but inside the content address — OMS ensures that two grains cannot accidentally collide just because their JSON representation looks similar. The type byte alone means a Fact and an Episode with superficially similar content will always hash differently.
+The 9-byte header is critical to this last point. By including the version, flags, type, namespace hash, and creation timestamp in the hashed bytes — outside the MessagePack payload but inside the content address — OMS ensures that two grains cannot accidentally collide just because their JSON representation looks similar. The type byte alone means a Belief and an Event with superficially similar content will always hash differently.
 
 ## Summary
 

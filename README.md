@@ -159,5 +159,5 @@ python3 verify_hashes.py
 
 ## License
 
-- **Specification:** [Open Web Foundation Final Specification Agreement (OWFa 1.0)](https://www.openwebfoundation.org/the-agreements/the-owf-1-0-agreements-granted-claims/owfa-1-0)
+- **Specification:** [CC0 1.0 Universal (Public Domain Dedication)](https://creativecommons.org/publicdomain/zero/1.0/)
 - **Website:** [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/)

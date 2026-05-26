@@ -205,9 +205,9 @@ The Lightweight limit of 8 levels is designed for constrained devices (microcont
 
 ## Putting It All Together
 
-Consider a simple Fact grain stating "Alice works at ACME Corp" with confidence 0.95, created on January 15, 2026. Here is what the serialization algorithm does:
+Consider a simple Belief grain stating "Alice works at ACME Corp" with confidence 0.95, created on January 15, 2026. Here is what the serialization algorithm does:
 
-**Step 1 — Validate:** All required Fact fields present (`type`, `subject`, `relation`, `object`, `confidence`, `source_type`, `created_at`). Pass.
+**Step 1 — Validate:** All required Belief fields present (`type`, `subject`, `relation`, `object`, `confidence`, `source_type`, `created_at`). Pass.
 
 **Step 2 — Compact field names:**
 ```json
@@ -229,7 +229,7 @@ Consider a simple Fact grain stating "Alice works at ACME Corp" with confidence 
 
 **Step 8 — Encode as MessagePack:** The sorted map is encoded using canonical MessagePack rules — `0.95` as float64 (8 bytes), `1768471200000` as the smallest int representation, strings as UTF-8 fixstr or str8.
 
-**Step 9 — Prepend header:** Build the 9-byte header with version `0x01`, appropriate flags, type `0x01` (Fact), namespace hash bytes, and `created_at` as uint32 epoch seconds.
+**Step 9 — Prepend header:** Build the 9-byte header with version `0x01`, appropriate flags, type `0x01` (Belief), namespace hash bytes, and `created_at` as uint32 epoch seconds.
 
 **Step 10 — SHA-256:** Hash the complete blob. The resulting hex string is the content address.
 

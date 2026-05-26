@@ -138,7 +138,7 @@ The `sync_group` field solves a fundamental problem in sensor fusion: temporal a
 
 ## Checkpoints for mission state
 
-A State grain (type byte `0x03`) captures the vehicle's complete operational state at a point in time. This is the AV equivalent of a game save — if the planning system crashes or needs to recover, it restores from the last Checkpoint.
+A State grain (type byte `0x03`) captures the vehicle's complete operational state at a point in time. This is the AV equivalent of a game save — if the planning system crashes or needs to recover, it restores from the last State grain.
 
 ```json
 {

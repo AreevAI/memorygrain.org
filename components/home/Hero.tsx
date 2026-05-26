@@ -53,7 +53,7 @@ export function Hero() {
                 flexShrink: 0,
               }}
             />
-            v1.3 · Standards Track · OWF Final
+            v1.3 · Standards Track · CC0 1.0
           </span>
         </div>
 

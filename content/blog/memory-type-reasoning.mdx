@@ -1,0 +1,313 @@
+---
+title: "Grain Type Deep Dive: Reasoning — Inference Chains and Thought Audit Trails"
+description: "A comprehensive guide to the Reasoning grain type (0x08) in OMS v1.2 — inference methods, premises and conclusions, extended thinking capture, the requires_human_review safety mechanism, field compaction, and real-world applications in healthcare, finance, and legal reasoning."
+date: "2026-04-02"
+readTime: "13 min read"
+tags: ["memory-types", "reasoning", "inference", "audit-trail", "thinking"]
+---
+
+Beliefs record what an agent knows. Events record what happened. Goals record what an agent is trying to achieve. But none of these types capture *how* an agent arrived at a conclusion. When an LLM diagnoses a patient with possible sleep apnea based on three nights of elevated heart rate and oxygen dips below 94%, the premises, the inference method, and the derived conclusion form a reasoning chain that is fundamentally different from the conclusion itself. The conclusion might become a Belief. The reasoning chain is its own cognitive artifact — one that needs to be preserved, audited, and sometimes blocked from driving automated action until a human reviews it.
+
+The Open Memory Specification addresses this with a dedicated grain type introduced in v1.2: **Reasoning**. Defined in Section 8.8 of the specification, a Reasoning grain is an immutable record of an inference chain — the premises that went in, the conclusion that came out, the method of inference, and optionally the raw extended thinking trace from the LLM that produced it.
+
+This post covers the full Reasoning schema: why it exists as a separate type, every required and optional field, the four inference methods, the `thinking_content` field for LLM thought capture, the `requires_human_review` safety mechanism, field compaction keys, and real-world applications.
+
+## Why a Dedicated Reasoning Type?
+
+An obvious question: why not just use a Belief grain with extra fields? A Belief with `relation="inferred"` and some premises in the `context` map could technically encode a reasoning chain. The specification chose a separate type for three reasons.
+
+**Header-level filtering.** Reasoning grains carry type byte `0x08` in the OMS header (byte 2). Any system scanning a stream of `.mg` blobs can identify all Reasoning grains by reading a single byte — O(1) filtering before any MessagePack deserialization. A compliance system that needs to audit all inference chains, or a clinical review queue that needs to surface all diagnostic reasoning for human sign-off, can do so without decoding every grain in the store.
+
+**Distinct epistemic status.** A Belief is a knowledge claim with a confidence score. A Reasoning grain is the *derivation process* that may produce a knowledge claim. The two have different lifecycles: a Belief evolves through confidence revisions and supersession; a Reasoning grain is a snapshot of a thought process at a point in time. Conflating them forces awkward modeling — where do the premises go? Where does the inference method live? Where does the raw thinking trace fit?
+
+**Safety semantics.** The `requires_human_review` field is a first-class boolean on Reasoning grains that blocks automated decisions. This field does not make sense on a Belief, which represents settled knowledge. It makes sense on a reasoning chain, which represents a *proposed* conclusion that may need human validation before the system acts on it. SOX-regulated environments, healthcare diagnostics, and legal reasoning all need this gate.
+
+## Required Fields
+
+Every Reasoning grain MUST include these fields:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | Yes | Must be `"reasoning"` |
+| `premises` | array[string] | Yes | Input propositions — the evidence or observations feeding the inference |
+| `conclusion` | string | Yes | The derived result — what the reasoning chain produced |
+| `inference_method` | string | Yes | One of: `"deductive"`, `"inductive"`, `"abductive"`, `"analogical"` |
+| `created_at` | int64 (epoch ms) | Yes | When this reasoning was performed |
+
+That is the minimum viable Reasoning grain. Premises capture what went in. Conclusion captures what came out. Inference method captures *how* the conclusion was derived. Created_at anchors the reasoning in time. Type identifies it as a Reasoning grain.
+
+### The Four Inference Methods
+
+The `inference_method` field is an enum with exactly four values. Each carries distinct epistemological weight, and downstream consumers should treat them differently.
+
+**`"deductive"`** — The conclusion follows necessarily from the premises. If the premises are true, the conclusion must be true. This is the strongest form of inference. Example: "All enterprise accounts have a dedicated CSM. Acme Corp is an enterprise account. Therefore Acme Corp has a dedicated CSM." In SML output, a deductive reasoning grain signals a resolved conclusion that the LLM should treat as settled.
+
+**`"inductive"`** — The conclusion is a generalization from observed patterns. The premises are specific instances; the conclusion is a broader rule. Inductive conclusions are probabilistic — they can be wrong even if every premise is true. Example: "Across 23 enterprise interviews, 18 mentioned onboarding friction. Pattern: onboarding is the primary expansion blocker." The confidence field should reflect the strength of the pattern.
+
+**`"abductive"`** — The conclusion is the best explanation for the observed premises. Abductive reasoning works backward from observations to the most likely cause. This is the method used in medical diagnosis, root cause analysis, and hypothesis generation. Example: "Heart rate elevated for 3 consecutive nights. SpO2 dips below 94%. Best explanation: possible sleep apnea." Abductive conclusions are hypotheses — stronger than speculation, weaker than deduction.
+
+**`"analogical"`** — The conclusion is derived by analogy from a similar known case. The premises describe the current situation; the conclusion transfers a known outcome from a structurally similar past situation. Example: "Client X's migration from on-prem to cloud took 6 months. Client Y has a similar infrastructure footprint. Estimate: Client Y's migration will take approximately 6 months." Analogical reasoning is common in project estimation, risk assessment, and case-based legal reasoning.
+
+<Callout type="info">
+The `inference_method` field is not decorative. In SML output, `type="deductive"` tells the LLM to treat the conclusion as resolved. `type="abductive"` tells the LLM the conclusion is a strong hypothesis open to challenge. Downstream systems use this distinction for routing: deductive conclusions can drive automated actions; abductive conclusions may require human review.
+</Callout>
+
+### A Minimal Example
+
+Here is a minimal Reasoning grain — the healthcare diagnostic scenario from the specification's test vectors:
+
+```json
+{
+  "type": "reasoning",
+  "premises": ["hr_elevated_3_nights", "spo2_dip_below_94pct"],
+  "conclusion": "possible_sleep_apnea",
+  "inference_method": "abductive",
+  "requires_human_review": true,
+  "created_at": 1740024000000,
+  "namespace": "health:diagnostics"
+}
+```
+
+This grain records that an agent observed two clinical signals (elevated heart rate over three nights and oxygen saturation dips below 94%) and inferred possible sleep apnea via abductive reasoning. The `requires_human_review: true` flag ensures this conclusion does not drive automated treatment decisions without a clinician's sign-off.
+
+## Optional Fields
+
+Reasoning grains support several optional fields that add depth to the inference record.
+
+### Extended Thinking
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `thinking_content` | string | The raw extended thinking trace from an LLM |
+| `thinking_redacted` | bool | When true, indicates thinking content was captured but redacted |
+
+The `thinking_content` field is one of the most distinctive features of the Reasoning type. Modern LLMs with extended thinking capabilities (chain-of-thought, scratchpad reasoning) produce intermediate reasoning traces before arriving at a final answer. These traces are valuable for auditing, debugging, and understanding why an agent reached a particular conclusion.
+
+When an LLM produces extended thinking — the intermediate steps, considerations, and self-corrections that precede the final output — `thinking_content` captures that trace verbatim. This creates a durable, content-addressed record of the model's internal reasoning process.
+
+The `thinking_redacted` field handles cases where the thinking content existed but was stripped for privacy, sensitivity, or storage reasons. When `thinking_redacted: true`, consumers know that a thinking trace was produced but is not available in this grain. This is important for audit completeness — the absence of thinking content is itself a meaningful signal.
+
+### Safety and Review
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `requires_human_review` | bool | When true, blocks automated decisions based on this reasoning |
+| `confidence` | float64, [0.0, 1.0] | How confident the inference is |
+
+The `requires_human_review` field is a safety mechanism with normative implications. When set to `true`, any system consuming this Reasoning grain SHOULD NOT use its conclusion to drive automated actions without human validation. This is not a suggestion — in SOX-regulated environments, Reasoning grains with `requires_human_review: true` block automated decisions as a compliance control.
+
+The field is particularly important for abductive reasoning in high-stakes domains. A diagnostic agent that infers "possible sleep apnea" should not automatically prescribe a CPAP machine. A financial risk agent that infers "probable insider trading" should not automatically freeze accounts. The reasoning is recorded; the action waits for a human.
+
+<Callout type="security">
+In regulated environments (SOX, HIPAA, financial services), the `requires_human_review` flag is not advisory — it is a compliance gate. Implementations that ignore this flag and allow automated actions based on unreviewed reasoning chains may violate regulatory requirements for human oversight of AI-assisted decisions.
+</Callout>
+
+### Reproducibility
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `statistical_context` | map | Statistical parameters relevant to the inference (sample sizes, p-values, distributions) |
+| `software_environment` | map | Model version, runtime environment, library versions |
+| `parameter_set` | map | Hyperparameters, temperature, sampling configuration |
+| `random_seed` | int64 | Random seed for reproducibility |
+
+These four fields support scientific reproducibility of reasoning chains. If an agent produced a conclusion using a specific model version with specific parameters and a specific random seed, recording these values enables exact reproduction of the reasoning process. The `software_environment` field is especially important when reasoning chains are used as evidence — a reviewer needs to know which model version and configuration produced the inference.
+
+### Alternatives and Provenance
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `alternatives_considered` | array[map] | Other conclusions that were evaluated and rejected |
+| `derived_from` | array[string] | Content addresses of parent grains (Beliefs, Observations, Events) |
+| `related_to` | array[map] | Cross-links to related grains |
+| `subject` | string | Entity the reasoning concerns |
+| `namespace` | string | Memory partition (default `"shared"`) |
+| `author_did` | string | DID of the agent that performed the reasoning |
+| `structural_tags` | array[string] | Classification tags |
+
+The `alternatives_considered` field records competing hypotheses that the agent evaluated before settling on its conclusion. Each entry is a map that can include the alternative conclusion, why it was rejected, and its estimated probability. This is critical for medical diagnosis (differential diagnosis), legal reasoning (alternative interpretations), and financial analysis (competing risk models).
+
+The `derived_from` field links the Reasoning grain back to the source grains that provided its premises. If the premises came from Observation grains (sensor readings, clinical measurements) or Belief grains (known facts, established knowledge), `derived_from` records their content addresses. This creates a verifiable provenance chain: you can trace the reasoning back to the raw evidence.
+
+## Field Compaction Keys
+
+When a Reasoning grain is serialized, human-readable field names are replaced by short keys to minimize blob size. The Reasoning-specific compaction keys (from Section 6.8) are:
+
+| Full Name | Short Key | Type |
+|-----------|-----------|------|
+| `premises` | `prem` | array[string] |
+| `conclusion` | `cncl` | string |
+| `inference_method` | `infm` | string |
+| `thinking_content` | `tc` | string |
+| `thinking_redacted` | `tred` | bool |
+| `requires_human_review` | `rhr` | bool |
+| `alternatives_considered` | `altc` | array[map] |
+| `statistical_context` | `statc` | map |
+| `software_environment` | `swenv` | map |
+| `parameter_set` | `pset` | map |
+| `random_seed` | `rseed` | int64 |
+
+These type-specific keys are combined with the core compaction keys (e.g., `type` becomes `t`, `created_at` becomes `ca`, `namespace` becomes `ns`, `confidence` becomes `c`). After compaction, all keys are sorted lexicographically for canonical serialization.
+
+For the minimal healthcare example, the compacted key order would be: `ca`, `cncl`, `infm`, `ns`, `prem`, `rhr`, `t`. The total key byte savings on a typical Reasoning grain with 8-10 fields runs 50-65 bytes — meaningful when reasoning chains are produced at scale in diagnostic or analytical pipelines.
+
+## SML Output Format
+
+When Reasoning grains are rendered as SML (Semantic Markup Language) for injection into LLM context windows, the tag name is `<reasoning>` and the `type` attribute carries the inference method:
+
+```sml
+<reasoning type="deductive">the $600 discrepancy is explained by 4 additional seats provisioned without a contract amendment; charge is technically correct but amendment was never executed</reasoning>
+<reasoning type="abductive">marcus's frustration likely stems from not being notified about the rate change, not the amount itself</reasoning>
+<reasoning type="inductive">across 23 enterprise interviews, 18 mentioned onboarding; pattern is robust</reasoning>
+```
+
+The SML format is deliberately compact. The tag name tells the LLM this is a pre-computed inference. The `type` attribute tells it how much weight to give the conclusion. A deductive reasoning tag is a resolved conclusion — the LLM should build on it, not re-derive it. An abductive reasoning tag is a hypothesis — the LLM may challenge it if new evidence contradicts it.
+
+## Concrete Examples
+
+### Example 1: Financial Risk Assessment
+
+A compliance agent analyzing trading patterns uses inductive reasoning to identify a suspicious pattern:
+
+```json
+{
+  "type": "reasoning",
+  "premises": [
+    "trader_X_purchased_5000_shares_AcmeCorp_2026-03-28",
+    "AcmeCorp_earnings_beat_announced_2026-03-30",
+    "trader_X_sold_5000_shares_AcmeCorp_2026-03-31_profit_47k",
+    "trader_X_has_no_prior_AcmeCorp_positions_12_months"
+  ],
+  "conclusion": "trader_X_pattern_consistent_with_insider_information",
+  "inference_method": "abductive",
+  "confidence": 0.72,
+  "requires_human_review": true,
+  "created_at": 1743552000000,
+  "namespace": "compliance:trading",
+  "author_did": "did:key:z6MkComplianceAgent9f8e7d6c5b4a3210",
+  "structural_tags": ["insider-trading", "surveillance", "escalation"],
+  "alternatives_considered": [
+    {
+      "conclusion": "coincidental_timing",
+      "probability": 0.20,
+      "reason": "no prior pattern of sector trading"
+    },
+    {
+      "conclusion": "public_information_trade",
+      "probability": 0.08,
+      "reason": "no public pre-announcement signals identified"
+    }
+  ],
+  "derived_from": [
+    "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef12345678",
+    "b2c3d4e5f67890123456789012345678901234567890abcdef1234567890abcdef"
+  ]
+}
+```
+
+This grain records that the agent observed four premises about a trader's activity, considered three possible explanations (the conclusion plus two alternatives), and settled on the most likely explanation via abductive reasoning at 0.72 confidence. The `requires_human_review: true` flag ensures no automated account freeze occurs. The `alternatives_considered` field documents the differential analysis — critical for regulatory review. The `derived_from` field links to the Action and Observation grains that provided the raw trading data.
+
+### Example 2: Engineering Incident Deduction
+
+An SRE agent diagnosing a production outage uses deductive reasoning to pinpoint the root cause:
+
+```json
+{
+  "type": "reasoning",
+  "premises": [
+    "deploy_v2.3.1_completed_14:02_UTC",
+    "error_rate_spiked_from_0.01pct_to_12pct_at_14:03_UTC",
+    "rollback_to_v2.3.0_at_14:15_UTC",
+    "error_rate_returned_to_0.01pct_at_14:16_UTC"
+  ],
+  "conclusion": "v2.3.1_deployment_caused_error_rate_spike",
+  "inference_method": "deductive",
+  "confidence": 0.98,
+  "requires_human_review": false,
+  "created_at": 1743555600000,
+  "namespace": "incidents",
+  "subject": "payments-service",
+  "author_did": "did:key:z6MkSREAgent1a2b3c4d5e6f7890",
+  "structural_tags": ["incident", "root-cause", "deployment"],
+  "thinking_content": "The temporal correlation is exact: error rate spike began within 60 seconds of deploy completion and resolved within 60 seconds of rollback. No other infrastructure changes occurred in this window. The causal chain is: deploy -> error spike -> rollback -> error resolution. This is a classic deploy-induced regression with clean rollback confirmation.",
+  "software_environment": {
+    "model": "claude-opus-4-20250514",
+    "runtime": "areev-v3.2.1"
+  }
+}
+```
+
+This grain demonstrates several features working together. The `inference_method: "deductive"` reflects that the conclusion follows necessarily from the temporal correlation in the premises. The `confidence: 0.98` is near-certain. The `requires_human_review: false` allows automated incident response because the deduction is strong. The `thinking_content` field preserves the LLM's reasoning trace — useful for post-incident review. The `software_environment` records which model and runtime produced the reasoning.
+
+## Use Cases
+
+### Healthcare Diagnosis Chains
+
+Medical AI systems produce chains of abductive reasoning: symptoms in, differential diagnosis out. Each step — from patient observations to candidate diagnoses to the selected diagnosis — can be recorded as a Reasoning grain with full provenance. The `premises` hold the clinical observations (linked via `derived_from` to the Observation grains from sensors or EHR imports). The `alternatives_considered` field holds the differential diagnosis. The `requires_human_review: true` flag ensures a physician reviews the reasoning before it drives treatment decisions.
+
+HIPAA compliance benefits from header-level filtering: the sensitivity bits in byte 1 of the OMS header can mark Reasoning grains as PHI (`0b11`), enabling O(1) identification of protected health information without payload deserialization. The `structural_tags` field can carry `"phi:diagnosis"` for field-level tagging.
+
+### Financial Risk Assessment
+
+Risk models produce reasoning chains that evaluate creditworthiness, detect fraud patterns, and assess market exposure. Each evaluation is a Reasoning grain with the input data as premises, the risk assessment as the conclusion, and the model's inference method. The `statistical_context` field records the quantitative parameters (confidence intervals, sample sizes, model scores). The `software_environment` field records the model version — critical when regulators ask "which version of the model produced this assessment?"
+
+SOX compliance requires that automated financial decisions have auditable reasoning trails. Reasoning grains with `requires_human_review: true` provide a normative mechanism for human-in-the-loop controls. The immutability of grains ensures the reasoning trail cannot be retroactively altered.
+
+### Legal Reasoning and Case Analysis
+
+Legal AI systems apply analogical reasoning — comparing the current case to precedents. The `premises` hold the facts of the current case. The `inference_method: "analogical"` signals that the conclusion is derived by structural similarity to known outcomes. The `alternatives_considered` field documents competing interpretations. The `derived_from` field links to the Belief grains holding the relevant precedents.
+
+Legal reasoning chains are inherently high-stakes. The `requires_human_review` field is almost always `true` in legal contexts — no automated system should file a motion or issue legal advice based solely on analogical inference without attorney review.
+
+## Reasoning in the Memory Graph
+
+Reasoning grains do not exist in isolation. They connect to the broader OMS memory graph through multiple mechanisms.
+
+**From Beliefs to Reasoning.** A Reasoning grain's `premises` are often derived from Belief grains — established knowledge that feeds the inference. The `derived_from` field links the Reasoning grain to the specific Belief grains that provided the input propositions. If a Belief changes (superseded by a new version with different confidence or a corrected object), the Reasoning grain's premises are traceable to the version of knowledge that existed at the time of inference.
+
+**From Reasoning to Beliefs.** The conclusion of a Reasoning grain may become a new Belief. When an agent decides that a reasoning chain's conclusion is reliable enough to treat as established knowledge, it creates a Belief grain with the conclusion as its content and the Reasoning grain's content address in its `derived_from` field. The Belief's `source_type` would be `"agent_inferred"`, and its `provenance_chain` would record the derivation method.
+
+**From Observations to Reasoning.** In diagnostic and analytical workflows, Observation grains (sensor readings, clinical measurements, monitoring data) feed directly into Reasoning grains as premises. The `derived_from` field links back to the specific observations. This creates a complete chain: raw measurement (Observation) to inference process (Reasoning) to settled knowledge (Belief).
+
+**From Reasoning to Goals.** An agent that reasons about a situation may infer a new Goal. "Given three P0 incidents in two weeks, we should prioritize reliability improvements" is a reasoning chain that produces a goal. The Goal grain's `provenance_chain` would record `method: "goal_inference"` with the Reasoning grain's content address as the `source_hash`.
+
+**From Reasoning to Actions.** A Reasoning grain's conclusion may trigger an Action. The Action grain can reference the Reasoning grain in its `derived_from` or `related_to` fields, creating an auditable chain from inference to execution. This is especially important when `requires_human_review: false` — the automated action should be traceable back to the reasoning that authorized it.
+
+<Callout type="info">
+The Reasoning grain type sits at the center of the inference pipeline: Observations and Beliefs flow in as premises, and Beliefs, Goals, and Actions flow out as consequences. The `derived_from` and `related_to` fields create a bidirectional graph connecting evidence to conclusions to actions — a complete audit trail of how an agent thinks.
+</Callout>
+
+## The requires_human_review Safety Mechanism
+
+The `requires_human_review` field deserves special attention because it is not merely a metadata flag — it has normative implications for system behavior.
+
+When `requires_human_review` is `true`:
+
+1. **Automated decision systems SHOULD NOT act on the conclusion** without human validation. A clinical decision support system should surface the reasoning for physician review, not automatically prescribe treatment. A compliance system should create a review queue item, not automatically freeze accounts.
+
+2. **The reasoning chain enters a review pipeline.** Systems consuming Reasoning grains can filter by `requires_human_review: true` to populate review queues, dashboards, and approval workflows. The header-level type byte (`0x08`) enables efficient scanning, and the `namespace` field enables routing to the appropriate review team.
+
+3. **The review outcome is recorded as a new grain.** When a human reviews the reasoning and approves (or rejects) the conclusion, a new grain is created — either a Belief grain adopting the conclusion, or a new Reasoning grain with a revised conclusion. The `derived_from` field links back to the original Reasoning grain, preserving the full review chain.
+
+This mechanism directly addresses a core concern in AI governance: the gap between model inference and real-world action. The Reasoning type does not just record *what* an agent thought — it provides a normative mechanism for controlling *what happens next*.
+
+## Summary
+
+The Reasoning grain type fills a critical gap in the OMS type system. Beliefs record knowledge. Events record history. Goals record objectives. Reasoning records the inference process itself — the bridge between evidence and conclusion.
+
+| Aspect | Detail |
+|--------|--------|
+| **Core model** | Inference chain: premises + inference method = conclusion |
+| **Required fields** | type, premises, conclusion, inference_method, created_at |
+| **Inference methods** | Enum: deductive, inductive, abductive, analogical |
+| **Extended thinking** | `thinking_content` captures raw LLM reasoning traces; `thinking_redacted` signals redaction |
+| **Safety mechanism** | `requires_human_review` blocks automated decisions pending human validation |
+| **Reproducibility** | `statistical_context`, `software_environment`, `parameter_set`, `random_seed` |
+| **Alternatives** | `alternatives_considered` records competing hypotheses with rejection rationale |
+| **Type byte** | `0x08` in the 9-byte header |
+
+<Callout type="info">
+The Reasoning grain type is identified by type byte `0x08` in the OMS header. Introduced in v1.2, it is the first OMS type explicitly designed for LLM-era AI — capturing not just what an agent concluded, but the full chain of inference that got it there, including the raw extended thinking trace.
+</Callout>
+
+For the SML output format that renders Reasoning grains into LLM context windows, see [SML: The Context Format for LLMs](/blog/sml-context-format-for-llms). For details on how content addresses are computed, see [Content Addressing with SHA-256](/blog/content-addressing-sha256-memory-identity).

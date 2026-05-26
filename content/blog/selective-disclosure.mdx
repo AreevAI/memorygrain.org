@@ -165,7 +165,7 @@ The elision model enables several practical scenarios that would otherwise requi
 
 A hospital's AI agent identifies a drug interaction pattern across many patients. The insight — "patients taking Drug A and Drug B have a 3x higher rate of adverse reactions" — is valuable for the pharmaceutical company developing Drug B. But sharing the underlying grains would expose patient identifiers, internal user IDs, and hospital namespace structure.
 
-With selective disclosure, the hospital creates disclosed variants of the relevant Fact grains. The `subject` (patient identifier) and `user_id` are elided. The pharmaceutical company receives grains that prove the facts exist, carry verifiable confidence scores and creation timestamps, and link back to signed originals — but cannot identify any patient.
+With selective disclosure, the hospital creates disclosed variants of the relevant Belief grains. The `subject` (patient identifier) and `user_id` are elided. The pharmaceutical company receives grains that prove the facts exist, carry verifiable confidence scores and creation timestamps, and link back to signed originals — but cannot identify any patient.
 
 ### Inter-company agent collaboration
 

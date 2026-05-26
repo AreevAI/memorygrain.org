@@ -166,7 +166,7 @@ The `related_to` field adds a second layer of edges — not between entities, bu
 
 The two layers compose naturally:
 
-1. **Entity-level graph** — Fact triples create edges between subjects and objects. "Alice works_at ACME Corp", "ACME Corp located_in San Francisco", "San Francisco is_in California" form a connected entity graph.
+1. **Entity-level graph** — Belief triples create edges between subjects and objects. "Alice works_at ACME Corp", "ACME Corp located_in San Francisco", "San Francisco is_in California" form a connected entity graph.
 
 2. **Grain-level graph** — Cross-links create edges between grains. The grain recording Alice's employment `elaborates` a grain about ACME Corp's team size. A grain about Alice's departure `contradicts` the employment grain. A grain about quarterly revenue `supports` the team expansion grain.
 

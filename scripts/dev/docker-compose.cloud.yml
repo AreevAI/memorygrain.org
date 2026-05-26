@@ -1,0 +1,14 @@
+# Local "cloud" simulation for the MemoryGrain website.
+# Builds the production image from ./Dockerfile (static export served by nginx)
+# and runs it in Docker. Driven by `./dev cloud [up|down|clean|status|logs]`.
+name: memorygrain-web-cloud   # isolate from the product repos' "dev" compose project
+services:
+  web:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: memorygrain-web:cloud
+    container_name: memorygrain-web-cloud
+    ports:
+      - "4022:80"        # host (same as native dev) -> container (nginx)
+    restart: unless-stopped

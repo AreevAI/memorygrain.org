@@ -88,7 +88,7 @@ The Belief type (type byte `0x01`) models structured knowledge as semantic tripl
 }
 ```
 
-The `confidence` field is critical in clinical contexts. A diagnosis confirmed by biopsy might carry `confidence: 0.99` with `source_type: "user_explicit"` (the clinician confirmed it). A differential diagnosis suggested by an AI agent analyzing symptoms and lab results would use `source_type: "llm_generated"` with a lower confidence score. The `provenance_chain` traces exactly which evidence — which Observation grains, which Episode transcripts — contributed to this diagnosis.
+The `confidence` field is critical in clinical contexts. A diagnosis confirmed by biopsy might carry `confidence: 0.99` with `source_type: "user_explicit"` (the clinician confirmed it). A differential diagnosis suggested by an AI agent analyzing symptoms and lab results would use `source_type: "llm_generated"` with a lower confidence score. The `provenance_chain` traces exactly which evidence — which Observation grains, which Event transcripts — contributed to this diagnosis.
 
 Drug allergies, family history, and medication records all follow the same pattern: `subject="patient-456"`, `relation="allergic_to"`, `object="Penicillin"`, with appropriate confidence and source type.
 
@@ -108,7 +108,7 @@ Event grains (type byte `0x02`) store raw, unstructured text — perfect for cli
 }
 ```
 
-Episodes are the input to consolidation — the process of extracting structured Facts from unstructured text. A clinical AI agent might process this Episode and generate Belief grains: `(patient-456, has_symptom, persistent_cough)`, `(patient-456, prescribed, codeine_cough_suppressant)`. The extracted Facts would carry `source_type: "llm_generated"` and reference the Episode in their `derived_from` field.
+Events are the input to consolidation — the process of extracting structured Beliefs from unstructured text. A clinical AI agent might process this Event and generate Belief grains: `(patient-456, has_symptom, persistent_cough)`, `(patient-456, prescribed, codeine_cough_suppressant)`. The extracted Beliefs would carry `source_type: "llm_generated"` and reference the Event in their `derived_from` field.
 
 ### Goals for treatment plans
 
@@ -193,7 +193,7 @@ State grains (type byte `0x03`) capture the complete state of a care plan at a p
 }
 ```
 
-If an agent crashes mid-workflow or a patient transfers to a new provider, the Checkpoint enables full state recovery.
+If an agent crashes mid-workflow or a patient transfers to a new provider, the State grain enables full state recovery.
 
 ## PHI protection at the binary level
 
@@ -326,7 +326,7 @@ Every grain in the file carries its original `author_did` — the DID of the age
 
 The result is a patient record that is:
 
-- **Complete** — every Fact, Episode, Observation, Goal, ToolCall, and Checkpoint in one file
+- **Complete** — every Belief, Event, Observation, Goal, Action, and State in one file
 - **Signed** — cryptographically attributable to the originating system
 - **Verifiable** — any byte change is detectable via content address mismatch
 - **Portable** — the `.mg` format is language-agnostic and platform-independent
