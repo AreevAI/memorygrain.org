@@ -6,7 +6,7 @@ readTime: "13 min read"
 tags: ["memory-types", "reasoning", "inference", "audit-trail", "thinking"]
 ---
 
-Beliefs record what an agent knows. Events record what happened. Goals record what an agent is trying to achieve. But none of these types capture *how* an agent arrived at a conclusion. When an LLM diagnoses a patient with possible sleep apnea based on three nights of elevated heart rate and oxygen dips below 94%, the premises, the inference method, and the derived conclusion form a reasoning chain that is fundamentally different from the conclusion itself. The conclusion might become a Belief. The reasoning chain is its own cognitive artifact — one that needs to be preserved, audited, and sometimes blocked from driving automated action until a human reviews it.
+Facts record what an agent knows. Events record what happened. Goals record what an agent is trying to achieve. But none of these types capture *how* an agent arrived at a conclusion. When an LLM diagnoses a patient with possible sleep apnea based on three nights of elevated heart rate and oxygen dips below 94%, the premises, the inference method, and the derived conclusion form a reasoning chain that is fundamentally different from the conclusion itself. The conclusion might become a Fact. The reasoning chain is its own cognitive artifact — one that needs to be preserved, audited, and sometimes blocked from driving automated action until a human reviews it.
 
 The Open Memory Specification addresses this with a dedicated grain type introduced in v1.2: **Reasoning**. Defined in Section 8.8 of the specification, a Reasoning grain is an immutable record of an inference chain — the premises that went in, the conclusion that came out, the method of inference, and optionally the raw extended thinking trace from the LLM that produced it.
 
@@ -14,13 +14,13 @@ This post covers the full Reasoning schema: why it exists as a separate type, ev
 
 ## Why a Dedicated Reasoning Type?
 
-An obvious question: why not just use a Belief grain with extra fields? A Belief with `relation="inferred"` and some premises in the `context` map could technically encode a reasoning chain. The specification chose a separate type for three reasons.
+An obvious question: why not just use a Fact grain with extra fields? A Fact with `relation="inferred"` and some premises in the `context` map could technically encode a reasoning chain. The specification chose a separate type for three reasons.
 
 **Header-level filtering.** Reasoning grains carry type byte `0x08` in the OMS header (byte 2). Any system scanning a stream of `.mg` blobs can identify all Reasoning grains by reading a single byte — O(1) filtering before any MessagePack deserialization. A compliance system that needs to audit all inference chains, or a clinical review queue that needs to surface all diagnostic reasoning for human sign-off, can do so without decoding every grain in the store.
 
-**Distinct epistemic status.** A Belief is a knowledge claim with a confidence score. A Reasoning grain is the *derivation process* that may produce a knowledge claim. The two have different lifecycles: a Belief evolves through confidence revisions and supersession; a Reasoning grain is a snapshot of a thought process at a point in time. Conflating them forces awkward modeling — where do the premises go? Where does the inference method live? Where does the raw thinking trace fit?
+**Distinct epistemic status.** A Fact is a knowledge claim with a confidence score. A Reasoning grain is the *derivation process* that may produce a knowledge claim. The two have different lifecycles: a Fact evolves through confidence revisions and supersession; a Reasoning grain is a snapshot of a thought process at a point in time. Conflating them forces awkward modeling — where do the premises go? Where does the inference method live? Where does the raw thinking trace fit?
 
-**Safety semantics.** The `requires_human_review` field is a first-class boolean on Reasoning grains that blocks automated decisions. This field does not make sense on a Belief, which represents settled knowledge. It makes sense on a reasoning chain, which represents a *proposed* conclusion that may need human validation before the system acts on it. SOX-regulated environments, healthcare diagnostics, and legal reasoning all need this gate.
+**Safety semantics.** The `requires_human_review` field is a first-class boolean on Reasoning grains that blocks automated decisions. This field does not make sense on a Fact, which represents settled knowledge. It makes sense on a reasoning chain, which represents a *proposed* conclusion that may need human validation before the system acts on it. SOX-regulated environments, healthcare diagnostics, and legal reasoning all need this gate.
 
 ## Required Fields
 
@@ -118,7 +118,7 @@ These four fields support scientific reproducibility of reasoning chains. If an 
 | Field | Type | Description |
 |-------|------|-------------|
 | `alternatives_considered` | array[map] | Other conclusions that were evaluated and rejected |
-| `derived_from` | array[string] | Content addresses of parent grains (Beliefs, Observations, Events) |
+| `derived_from` | array[string] | Content addresses of parent grains (Facts, Observations, Events) |
 | `related_to` | array[map] | Cross-links to related grains |
 | `subject` | string | Entity the reasoning concerns |
 | `namespace` | string | Memory partition (default `"shared"`) |
@@ -127,7 +127,7 @@ These four fields support scientific reproducibility of reasoning chains. If an 
 
 The `alternatives_considered` field records competing hypotheses that the agent evaluated before settling on its conclusion. Each entry is a map that can include the alternative conclusion, why it was rejected, and its estimated probability. This is critical for medical diagnosis (differential diagnosis), legal reasoning (alternative interpretations), and financial analysis (competing risk models).
 
-The `derived_from` field links the Reasoning grain back to the source grains that provided its premises. If the premises came from Observation grains (sensor readings, clinical measurements) or Belief grains (known facts, established knowledge), `derived_from` records their content addresses. This creates a verifiable provenance chain: you can trace the reasoning back to the raw evidence.
+The `derived_from` field links the Reasoning grain back to the source grains that provided its premises. If the premises came from Observation grains (sensor readings, clinical measurements) or Fact grains (known facts, established knowledge), `derived_from` records their content addresses. This creates a verifiable provenance chain: you can trace the reasoning back to the raw evidence.
 
 ## Field Compaction Keys
 
@@ -205,7 +205,7 @@ A compliance agent analyzing trading patterns uses inductive reasoning to identi
 }
 ```
 
-This grain records that the agent observed four premises about a trader's activity, considered three possible explanations (the conclusion plus two alternatives), and settled on the most likely explanation via abductive reasoning at 0.72 confidence. The `requires_human_review: true` flag ensures no automated account freeze occurs. The `alternatives_considered` field documents the differential analysis — critical for regulatory review. The `derived_from` field links to the Action and Observation grains that provided the raw trading data.
+This grain records that the agent observed four premises about a trader's activity, considered three possible explanations (the conclusion plus two alternatives), and settled on the most likely explanation via abductive reasoning at 0.72 confidence. The `requires_human_review: true` flag ensures no automated account freeze occurs. The `alternatives_considered` field documents the differential analysis — critical for regulatory review. The `derived_from` field links to the Tool and Observation grains that provided the raw trading data.
 
 ### Example 2: Engineering Incident Deduction
 
@@ -255,7 +255,7 @@ SOX compliance requires that automated financial decisions have auditable reason
 
 ### Legal Reasoning and Case Analysis
 
-Legal AI systems apply analogical reasoning — comparing the current case to precedents. The `premises` hold the facts of the current case. The `inference_method: "analogical"` signals that the conclusion is derived by structural similarity to known outcomes. The `alternatives_considered` field documents competing interpretations. The `derived_from` field links to the Belief grains holding the relevant precedents.
+Legal AI systems apply analogical reasoning — comparing the current case to precedents. The `premises` hold the facts of the current case. The `inference_method: "analogical"` signals that the conclusion is derived by structural similarity to known outcomes. The `alternatives_considered` field documents competing interpretations. The `derived_from` field links to the Fact grains holding the relevant precedents.
 
 Legal reasoning chains are inherently high-stakes. The `requires_human_review` field is almost always `true` in legal contexts — no automated system should file a motion or issue legal advice based solely on analogical inference without attorney review.
 
@@ -263,18 +263,18 @@ Legal reasoning chains are inherently high-stakes. The `requires_human_review` f
 
 Reasoning grains do not exist in isolation. They connect to the broader OMS memory graph through multiple mechanisms.
 
-**From Beliefs to Reasoning.** A Reasoning grain's `premises` are often derived from Belief grains — established knowledge that feeds the inference. The `derived_from` field links the Reasoning grain to the specific Belief grains that provided the input propositions. If a Belief changes (superseded by a new version with different confidence or a corrected object), the Reasoning grain's premises are traceable to the version of knowledge that existed at the time of inference.
+**From Facts to Reasoning.** A Reasoning grain's `premises` are often derived from Fact grains — established knowledge that feeds the inference. The `derived_from` field links the Reasoning grain to the specific Fact grains that provided the input propositions. If a Fact changes (superseded by a new version with different confidence or a corrected object), the Reasoning grain's premises are traceable to the version of knowledge that existed at the time of inference.
 
-**From Reasoning to Beliefs.** The conclusion of a Reasoning grain may become a new Belief. When an agent decides that a reasoning chain's conclusion is reliable enough to treat as established knowledge, it creates a Belief grain with the conclusion as its content and the Reasoning grain's content address in its `derived_from` field. The Belief's `source_type` would be `"agent_inferred"`, and its `provenance_chain` would record the derivation method.
+**From Reasoning to Facts.** The conclusion of a Reasoning grain may become a new Fact. When an agent decides that a reasoning chain's conclusion is reliable enough to treat as established knowledge, it creates a Fact grain with the conclusion as its content and the Reasoning grain's content address in its `derived_from` field. The Fact's `source_type` would be `"agent_inferred"`, and its `provenance_chain` would record the derivation method.
 
-**From Observations to Reasoning.** In diagnostic and analytical workflows, Observation grains (sensor readings, clinical measurements, monitoring data) feed directly into Reasoning grains as premises. The `derived_from` field links back to the specific observations. This creates a complete chain: raw measurement (Observation) to inference process (Reasoning) to settled knowledge (Belief).
+**From Observations to Reasoning.** In diagnostic and analytical workflows, Observation grains (sensor readings, clinical measurements, monitoring data) feed directly into Reasoning grains as premises. The `derived_from` field links back to the specific observations. This creates a complete chain: raw measurement (Observation) to inference process (Reasoning) to settled knowledge (Fact).
 
 **From Reasoning to Goals.** An agent that reasons about a situation may infer a new Goal. "Given three P0 incidents in two weeks, we should prioritize reliability improvements" is a reasoning chain that produces a goal. The Goal grain's `provenance_chain` would record `method: "goal_inference"` with the Reasoning grain's content address as the `source_hash`.
 
-**From Reasoning to Actions.** A Reasoning grain's conclusion may trigger an Action. The Action grain can reference the Reasoning grain in its `derived_from` or `related_to` fields, creating an auditable chain from inference to execution. This is especially important when `requires_human_review: false` — the automated action should be traceable back to the reasoning that authorized it.
+**From Reasoning to Tools.** A Reasoning grain's conclusion may trigger a Tool. The Tool grain can reference the Reasoning grain in its `derived_from` or `related_to` fields, creating an auditable chain from inference to execution. This is especially important when `requires_human_review: false` — the automated action should be traceable back to the reasoning that authorized it.
 
 <Callout type="info">
-The Reasoning grain type sits at the center of the inference pipeline: Observations and Beliefs flow in as premises, and Beliefs, Goals, and Actions flow out as consequences. The `derived_from` and `related_to` fields create a bidirectional graph connecting evidence to conclusions to actions — a complete audit trail of how an agent thinks.
+The Reasoning grain type sits at the center of the inference pipeline: Observations and Facts flow in as premises, and Facts, Goals, and Tools flow out as consequences. The `derived_from` and `related_to` fields create a bidirectional graph connecting evidence to conclusions to actions — a complete audit trail of how an agent thinks.
 </Callout>
 
 ## The requires_human_review Safety Mechanism
@@ -287,13 +287,13 @@ When `requires_human_review` is `true`:
 
 2. **The reasoning chain enters a review pipeline.** Systems consuming Reasoning grains can filter by `requires_human_review: true` to populate review queues, dashboards, and approval workflows. The header-level type byte (`0x08`) enables efficient scanning, and the `namespace` field enables routing to the appropriate review team.
 
-3. **The review outcome is recorded as a new grain.** When a human reviews the reasoning and approves (or rejects) the conclusion, a new grain is created — either a Belief grain adopting the conclusion, or a new Reasoning grain with a revised conclusion. The `derived_from` field links back to the original Reasoning grain, preserving the full review chain.
+3. **The review outcome is recorded as a new grain.** When a human reviews the reasoning and approves (or rejects) the conclusion, a new grain is created — either a Fact grain adopting the conclusion, or a new Reasoning grain with a revised conclusion. The `derived_from` field links back to the original Reasoning grain, preserving the full review chain.
 
 This mechanism directly addresses a core concern in AI governance: the gap between model inference and real-world action. The Reasoning type does not just record *what* an agent thought — it provides a normative mechanism for controlling *what happens next*.
 
 ## Summary
 
-The Reasoning grain type fills a critical gap in the OMS type system. Beliefs record knowledge. Events record history. Goals record objectives. Reasoning records the inference process itself — the bridge between evidence and conclusion.
+The Reasoning grain type fills a critical gap in the OMS type system. Facts record knowledge. Events record history. Goals record objectives. Reasoning records the inference process itself — the bridge between evidence and conclusion.
 
 | Aspect | Detail |
 |--------|--------|

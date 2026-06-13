@@ -132,15 +132,15 @@ Each step is a self-contained instruction. The agent processes them sequentially
 
 Workflows can be authored by humans, but the most powerful use case is agent-learned workflows. Here is how the learning pipeline works:
 
-### From Actions to Workflows
+### From Tools to Workflows
 
-The Action memory type (Section 8.5) records every tool invocation an agent makes: the tool name, arguments, result, success/failure, and duration. Over time, these records reveal patterns:
+The Tool memory type (Section 8.5) records every tool invocation an agent makes: the tool name, arguments, result, success/failure, and duration. Over time, these records reveal patterns:
 
 1. **Observation**: The agent (or a meta-agent) notices that in response to situation X, it consistently executes tools A, B, C in that order.
 
 2. **Extraction**: The repeated pattern is extracted as a Workflow grain with trigger describing situation X and steps describing the A, B, C sequence.
 
-3. **Provenance**: The new Workflow carries `derived_from` pointing to the Action grain content addresses that informed the pattern, and `provenance_chain` entries recording the extraction method.
+3. **Provenance**: The new Workflow carries `derived_from` pointing to the Tool grain content addresses that informed the pattern, and `provenance_chain` entries recording the extraction method.
 
 For example, an agent that repeatedly runs the same sequence when debugging a service outage might generate:
 
@@ -186,9 +186,9 @@ Episodes (Section 8.2) capture raw interaction records. When multiple Episodes d
 
 ## Procedural vs. Declarative Memory
 
-Understanding the distinction between Workflows and Beliefs is crucial for correct use of OMS memory types:
+Understanding the distinction between Workflows and Facts is crucial for correct use of OMS memory types:
 
-| Dimension | Workflow | Belief |
+| Dimension | Workflow | Fact |
 |-----------|----------|--------|
 | Memory type | Procedural (knowing HOW) | Declarative (knowing WHAT) |
 | Core structure | Trigger + ordered steps | Subject-relation-object triple |
@@ -199,10 +199,10 @@ Understanding the distinction between Workflows and Beliefs is crucial for corre
 | Has `confidence` | No | Yes (required, [0.0, 1.0]) |
 | Has `steps` | Yes (required) | No |
 
-The absence of a `confidence` field on Workflows is notable. Beliefs require a confidence score because they are claims that may or may not be true. Workflows are procedures — they either work or they do not. Their effectiveness is tracked through other mechanisms: the `success_count` and `failure_count` fields (available on all grains via the core field map, Section 6.1) and through supersession when an improved workflow replaces an underperforming one.
+The absence of a `confidence` field on Workflows is notable. Facts require a confidence score because they are claims that may or may not be true. Workflows are procedures — they either work or they do not. Their effectiveness is tracked through other mechanisms: the `success_count` and `failure_count` fields (available on all grains via the core field map, Section 6.1) and through supersession when an improved workflow replaces an underperforming one.
 
 <Callout type="info">
-Workflows and Beliefs serve complementary roles. A Belief might record `subject="disk_cleanup", relation="best_practice", object="archive before delete"`. A Workflow encodes the actual procedure: `trigger="disk usage exceeds 90%", steps=["archive old logs", "delete archived files", "verify space freed"]`. The Belief says what is true; the Workflow says what to do about it.
+Workflows and Facts serve complementary roles. A Fact might record `subject="disk_cleanup", relation="best_practice", object="archive before delete"`. A Workflow encodes the actual procedure: `trigger="disk usage exceeds 90%", steps=["archive old logs", "delete archived files", "verify space freed"]`. The Fact says what is true; the Workflow says what to do about it.
 </Callout>
 
 ## Workflow Versioning Through Supersession
@@ -347,7 +347,7 @@ Trading strategies are procedures triggered by market conditions. The trigger de
 ```
 
 <Callout type="warning">
-Workflow steps are natural-language descriptions, not executable code. In a trading context, the agent must interpret each step and translate it into actual API calls (which would be recorded as Action grains, Section 8.5). The Workflow captures the strategy; the Actions capture the execution.
+Workflow steps are natural-language descriptions, not executable code. In a trading context, the agent must interpret each step and translate it into actual API calls (which would be recorded as Tool grains, Section 8.5). The Workflow captures the strategy; the Tools capture the execution.
 </Callout>
 
 ### DevOps Deployment Playbooks
@@ -443,7 +443,7 @@ Workflows encode procedural memory — the knowledge of *how* to do things. Thei
 
 The real power comes from three characteristics:
 
-1. **Learnability**: Agents can extract Workflows from observed patterns in Action and Event grains, formalizing ad-hoc behavior into reusable procedures.
+1. **Learnability**: Agents can extract Workflows from observed patterns in Tool and Event grains, formalizing ad-hoc behavior into reusable procedures.
 
 2. **Versioning**: The immutability model and supersession chain provide automatic, auditable version history. Every workflow revision is traceable, every change is documented, and every previous version is recoverable.
 

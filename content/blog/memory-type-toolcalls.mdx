@@ -1,27 +1,27 @@
 ---
-title: "Grain Type Deep Dive: Action — The Immutable Audit Trail for Agent Actions"
-description: "OMS v1.2 update: The ToolCall type is now named Action with key field name changes. How OMS Action grains record every tool invocation, argument, and result as an immutable, content-addressed record — enabling replay, debugging, cost tracking, and compliance."
+title: "Grain Type Deep Dive: Tool — The Immutable Audit Trail for Agent Actions"
+description: "How OMS Tool grains record every tool invocation, argument, and result as an immutable, content-addressed record — enabling replay, debugging, cost tracking, and compliance."
 date: "2026-02-19"
 readTime: "10 min read"
-tags: ["memory-types", "tool-calls", "audit", "function-calling"]
+tags: ["memory-types", "tools", "audit", "function-calling"]
 ---
 Every modern AI agent interacts with the world through tools. It searches the web, queries databases, calls APIs, writes files, sends messages. Each of these actions has consequences — sometimes irreversible ones. Yet in most agent frameworks today, tool invocations vanish into logs that are unstructured, mutable, and disconnected from the agent's memory.
 
-The Open Memory Specification addresses this with a dedicated grain type: **Action**. Defined in Section 8.5 of the OMS v1.2 specification, an Action grain is an immutable, content-addressed record of a single tool invocation — what was called, with what input, what came back, and whether it errored. Every invocation is a separate grain, never modified after creation.
+The Open Memory Specification addresses this with a dedicated grain type: **Tool**. Defined in Section 8.5 of the OMS v1.2 specification, a Tool grain is an immutable, content-addressed record of a single tool invocation — what was called, with what input, what came back, and whether it errored. Every invocation is a separate grain, never modified after creation.
 
-This post covers the Action schema in detail, its field compaction keys, the parent task hierarchy mechanism, and real-world applications from API auditing to agent benchmarking.
+This post covers the Tool schema in detail, its field compaction keys, the parent task hierarchy mechanism, and real-world applications from API auditing to agent benchmarking.
 
-## What Is an Action Grain?
+## What Is a Tool Grain?
 
-An Action grain is a **record of tool/function invocation and result**. It captures the complete lifecycle of a single action: the tool's name, the input passed to it, the content it returned, and whether it errored or succeeded.
+A Tool grain is a **record of tool/function invocation and result**. It captures the complete lifecycle of a single action: the tool's name, the input passed to it, the content it returned, and whether it errored or succeeded.
 
-Unlike a log line that might read `"Called search API with query='climate data'"`, an Action grain is a structured, binary-serialized, content-addressed object. It has a deterministic SHA-256 hash. It can be cryptographically signed. It can be referenced by other grains — a Goal grain can point to Action grains as satisfaction evidence, or an Event grain can reference the actions that occurred during a conversation.
+Unlike a log line that might read `"Called search API with query='climate data'"`, a Tool grain is a structured, binary-serialized, content-addressed object. It has a deterministic SHA-256 hash. It can be cryptographically signed. It can be referenced by other grains — a Goal grain can point to Tool grains as satisfaction evidence, or an Event grain can reference the actions that occurred during a conversation.
 
-In the OMS header, Action grains carry type byte `0x05`. This means any system scanning a stream of `.mg` blobs can identify Action grains by reading a single byte at offset 2 — no MessagePack deserialization required.
+In the OMS header, Tool grains carry type byte `0x05`. This means any system scanning a stream of `.mg` blobs can identify Tool grains by reading a single byte at offset 2 — no MessagePack deserialization required.
 
 ## Required Fields
 
-Every complete Action grain MUST include these six fields:
+Every complete Tool grain MUST include these six fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -38,11 +38,11 @@ The `is_error` field is a simple boolean. Note the polarity: `is_error: false` m
 
 ## Optional Fields
 
-Action grains support several optional fields that add context to the invocation record:
+Tool grains support several optional fields that add context to the invocation record:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `action_phase` | string | `"definition"` \| `"call"` \| `"result"` \| absent (complete record) |
+| `tool_phase` | string | `"definition"` \| `"call"` \| `"result"` \| absent (complete record) |
 | `tool_call_id` | string | Correlates a call-phase grain with its result-phase grain |
 | `execution_mode` | string | `"function_call"` \| `"code_exec"` \| `"computer_use"` |
 | `error_type` | string | Machine-readable error category when `is_error=true` |
@@ -55,19 +55,19 @@ Action grains support several optional fields that add context to the invocation
 | `structural_tags` | array[string] | Classification tags |
 | `content_refs` | array[map] | References to external content |
 
-The `action_phase` field is new in v1.2. When an Action grain records only one side of an invocation — the call arguments without a result yet, or the result without the original call — `action_phase` identifies which part of the lifecycle the grain represents. When absent, the grain is a complete record containing both input and content.
+The `tool_phase` field is new in v1.2. When a Tool grain records only one side of an invocation — the call arguments without a result yet, or the result without the original call — `tool_phase` identifies which part of the lifecycle the grain represents. When absent, the grain is a complete record containing both input and content.
 
 The `error_type` field is only meaningful when `is_error` is `true`. It carries a machine-readable error category — useful for grouping failures programmatically. This is distinct from `error`, which carries the human-readable message, and from `content`, which may still contain a structured error payload (like an HTTP error response body).
 
 The `duration_ms` field records how long the action took in wall-clock milliseconds. This is a simple integer, not a float — millisecond precision is sufficient for action timing, and integers avoid the deterministic serialization complexities that floating-point values introduce.
 
 <Callout type="info">
-**New in OMS v1.3:** The `output_schema` field allows Action definition grains (`action_phase: "definition"`) to declare a JSON Schema (draft-07) describing the action's return value. This enables consumers to validate action results structurally and supports the new Integration Domain Profile's trigger/action pipeline.
+**New in OMS v1.3:** The `output_schema` field allows Tool definition grains (`tool_phase: "definition"`) to declare a JSON Schema (draft-07) describing the action's return value. This enables consumers to validate action results structurally and supports the new Integration Domain Profile's trigger/action pipeline.
 </Callout>
 
 ## Field Compaction Keys
 
-OMS uses field compaction to minimize blob size. Human-readable field names are mapped to short keys before serialization. The Action-specific compaction keys, defined in Section 6.5, are:
+OMS uses field compaction to minimize blob size. Human-readable field names are mapped to short keys before serialization. The Tool-specific compaction keys, defined in Section 6.5, are:
 
 | Full Name | Short Key | Type | Notes |
 |-----------|-----------|------|-------|
@@ -75,7 +75,7 @@ OMS uses field compaction to minimize blob size. Human-readable field names are 
 | `input` | `inp` | map | replaces `args` (removed in v1.2) |
 | `content` | `cnt` | any | replaces `res` (removed in v1.2) |
 | `is_error` | `iserr` | bool | replaces `ok` (removed in v1.2) |
-| `action_phase` | `aphase` | string | new in v1.2 |
+| `tool_phase` | `aphase` | string | new in v1.2 |
 | `tool_call_id` | `tcid` | string | new in v1.2 |
 | `error_type` | `etype` | string | new in v1.2 |
 | `error` | `err` | string | |
@@ -90,10 +90,10 @@ The `parent_task_id` field is a content address (SHA-256 hash) pointing to a par
 
 Consider an agent tasked with "research and summarize recent papers on transformer architectures." This high-level task might decompose into:
 
-1. An Action to a search API to find papers
-2. An Action to a PDF extraction tool for each paper
-3. An Action to a summarization service
-4. An Action to format and store the final output
+1. A Tool to a search API to find papers
+2. A Tool to a PDF extraction tool for each paper
+3. A Tool to a summarization service
+4. A Tool to format and store the final output
 
 Each of these sub-actions can set its `parent_task_id` to the content address of the overarching task grain. This creates a tree structure that can be traversed at query time to reconstruct the full execution flow.
 
@@ -101,11 +101,11 @@ Because `parent_task_id` is a content address, the reference is cryptographicall
 
 ## A Concrete Example
 
-Here is a complete Action grain recording an API search, expressed in JSON before field compaction and binary serialization:
+Here is a complete Tool grain recording an API search, expressed in JSON before field compaction and binary serialization:
 
 ```json
 {
-  "type": "action",
+  "type": "tool",
   "tool_name": "web_search",
   "input": {
     "query": "Open Memory Specification agent memory",
@@ -131,33 +131,33 @@ Here is a complete Action grain recording an API search, expressed in JSON befor
 }
 ```
 
-After field compaction, the payload keys become their short forms (`t`, `tn`, `inp`, `cnt`, `iserr`, `dur`, `ca`, `ns`, `adid`, `tags`), the map is sorted lexicographically, and the whole thing is serialized as canonical MessagePack. The 9-byte header is prepended: version `0x01`, flags byte, type byte `0x05` (Action), the first two bytes of `SHA-256("research")` as the namespace hash, and the `created_at` epoch seconds as a 4-byte big-endian uint32. Finally, SHA-256 is computed over the complete blob to produce the content address.
+After field compaction, the payload keys become their short forms (`t`, `tn`, `inp`, `cnt`, `iserr`, `dur`, `ca`, `ns`, `adid`, `tags`), the map is sorted lexicographically, and the whole thing is serialized as canonical MessagePack. The 9-byte header is prepended: version `0x01`, flags byte, type byte `0x05` (Tool), the first two bytes of `SHA-256("research")` as the namespace hash, and the `created_at` epoch seconds as a 4-byte big-endian uint32. Finally, SHA-256 is computed over the complete blob to produce the content address.
 
 The result is a single, self-contained binary object that can be stored, transmitted, verified, and referenced by hash.
 
 ## The Immutable Audit Trail
 
-The fundamental property that makes Action grains valuable for auditing is **immutability**. Each tool invocation creates a new grain. That grain is never modified — its content address is a SHA-256 hash of its bytes, and any change would produce a different hash.
+The fundamental property that makes Tool grains valuable for auditing is **immutability**. Each tool invocation creates a new grain. That grain is never modified — its content address is a SHA-256 hash of its bytes, and any change would produce a different hash.
 
 This means:
 
 - **No after-the-fact editing.** An agent cannot retroactively change what input it passed to a tool or what content it received.
 - **No silent deletion.** While grains can be marked as superseded (via the `superseded_by` field), the original grain's bytes remain in storage, and its content address continues to resolve.
-- **Cryptographic verification.** When an Action grain is wrapped in a COSE Sign1 envelope (indicated by the `signed` flag in byte 1 of the header), a third party can verify both the integrity of the record and the identity of the agent that created it.
+- **Cryptographic verification.** When a Tool grain is wrapped in a COSE Sign1 envelope (indicated by the `signed` flag in byte 1 of the header), a third party can verify both the integrity of the record and the identity of the agent that created it.
 
-This produces a chain of actions where every link is individually verifiable. If an agent claims it called a particular API with particular input, the Action grain either exists with a valid content address or it does not.
+This produces a chain of actions where every link is individually verifiable. If an agent claims it called a particular API with particular input, the Tool grain either exists with a valid content address or it does not.
 
 ## Industry Use Cases
 
 ### API Call Auditing
 
-Every external API call an agent makes can be recorded as an Action grain. This creates a complete audit trail: which APIs were called, with what parameters, what they returned, when, and by which agent. For organizations that need to demonstrate to regulators or auditors what their AI systems did and why, this is foundational.
+Every external API call an agent makes can be recorded as a Tool grain. This creates a complete audit trail: which APIs were called, with what parameters, what they returned, when, and by which agent. For organizations that need to demonstrate to regulators or auditors what their AI systems did and why, this is foundational.
 
 The `author_did` field ties each action to a specific agent identity via a W3C Decentralized Identifier. The `namespace` field partitions actions by project, team, or environment. The `structural_tags` field enables classification — tagging actions as `"production"`, `"pii-access"`, or `"billing"` for targeted auditing.
 
 ### Debugging Agent Failures
 
-When an agent fails, the most valuable debugging information is the exact sequence of actions leading up to the failure. With Action grains, you can:
+When an agent fails, the most valuable debugging information is the exact sequence of actions leading up to the failure. With Tool grains, you can:
 
 1. Filter grains by `author_did` and time range to isolate the agent's activity
 2. Reconstruct the full execution trace via `parent_task_id` references
@@ -165,11 +165,11 @@ When an agent fails, the most valuable debugging information is the exact sequen
 4. Examine the `content` and `error_type` fields to see what the tool returned or why it failed
 5. Replay the sequence by feeding the same input to the same tools
 
-Because Action grains store the actual input map and the actual content (any MessagePack-serializable value), replay is exact. There is no information loss between what happened and what was recorded.
+Because Tool grains store the actual input map and the actual content (any MessagePack-serializable value), replay is exact. There is no information loss between what happened and what was recorded.
 
 ### Cost Tracking and Billing
 
-The `duration_ms` field enables straightforward cost attribution. If your organization bills for agent compute time or tracks API usage costs, you can aggregate `duration_ms` across Action grains filtered by namespace, agent DID, or time range.
+The `duration_ms` field enables straightforward cost attribution. If your organization bills for agent compute time or tracks API usage costs, you can aggregate `duration_ms` across Tool grains filtered by namespace, agent DID, or time range.
 
 Combined with `structural_tags`, you can build cost breakdowns by category: how much time was spent on search actions versus database queries versus LLM inference. The immutability of grains means these numbers cannot be retroactively adjusted — they are what they are.
 
@@ -177,36 +177,36 @@ Combined with `structural_tags`, you can build cost breakdowns by category: how 
 
 Regulated industries need to prove what actions an AI agent took. Healthcare organizations subject to HIPAA, financial institutions under SOX, and any organization processing personal data under GDPR need verifiable records of automated actions.
 
-Action grains provide this by design:
+Tool grains provide this by design:
 
 - Each action is individually content-addressed and optionally signed
 - The `user_id` field links actions to data subjects for GDPR right-of-access requests
 - The `namespace` field enables partitioning by compliance domain
-- The OMS sensitivity classification (bits 6-7 of the flags byte) can mark Action grains as `pii` (binary `10`) or `phi` (binary `11`) at the header level, enabling O(1) filtering without payload deserialization
+- The OMS sensitivity classification (bits 6-7 of the flags byte) can mark Tool grains as `pii` (binary `10`) or `phi` (binary `11`) at the header level, enabling O(1) filtering without payload deserialization
 
 ### Agent Benchmarking
 
-Action grains are a natural fit for measuring agent performance. Given a corpus of Action grains from an agent's operation, you can compute:
+Tool grains are a natural fit for measuring agent performance. Given a corpus of Tool grains from an agent's operation, you can compute:
 
 - **Success rates:** Aggregate the `is_error` field across tools, time ranges, or namespaces (remember: `is_error: false` means success)
 - **Latency distributions:** Analyze `duration_ms` to compute p50, p95, p99 latencies per tool
 - **Error patterns:** Group failed actions by `error_type` to identify systemic issues
 - **Tool usage frequency:** Count grains per `tool_name` to understand agent behavior
 
-Because every Action is a separate, immutable grain, benchmarking data cannot be cherry-picked or retroactively filtered. The content-addressed nature means you can prove that a benchmark dataset has not been tampered with — the set of content addresses constitutes a verifiable manifest.
+Because every Tool is a separate, immutable grain, benchmarking data cannot be cherry-picked or retroactively filtered. The content-addressed nature means you can prove that a benchmark dataset has not been tampered with — the set of content addresses constitutes a verifiable manifest.
 
-## Action and the Broader Memory Graph
+## Tool and the Broader Memory Graph
 
-Action grains do not exist in isolation. They participate in the broader OMS memory graph through several mechanisms:
+Tool grains do not exist in isolation. They participate in the broader OMS memory graph through several mechanisms:
 
-- **Goal satisfaction evidence.** A Goal grain's `satisfaction_evidence` field is an array of content addresses pointing to Action, Belief, or Observation grains that substantiate a `satisfied` state transition. This creates a verifiable link between "what the agent was trying to achieve" and "what the agent actually did."
-- **Rollback on failure.** A Goal grain's `rollback_on_failure` field can reference Action or Workflow grains to execute when a goal fails. This connects failure handling to the specific compensating actions taken.
-- **Provenance chains.** Other grains can reference Action grains in their `derived_from` arrays, indicating that a Belief or Event was produced as a consequence of a tool invocation.
-- **Cross-links.** The `related_to` field (Section 14) enables arbitrary semantic links between Action grains and other grains — `"caused_by"`, `"led_to"`, `"related_to"` relationship types.
+- **Goal satisfaction evidence.** A Goal grain's `satisfaction_evidence` field is an array of content addresses pointing to Tool, Fact, or Observation grains that substantiate a `satisfied` state transition. This creates a verifiable link between "what the agent was trying to achieve" and "what the agent actually did."
+- **Rollback on failure.** A Goal grain's `rollback_on_failure` field can reference Tool or Workflow grains to execute when a goal fails. This connects failure handling to the specific compensating actions taken.
+- **Provenance chains.** Other grains can reference Tool grains in their `derived_from` arrays, indicating that a Fact or Event was produced as a consequence of a tool invocation.
+- **Cross-links.** The `related_to` field (Section 14) enables arbitrary semantic links between Tool grains and other grains — `"caused_by"`, `"led_to"`, `"related_to"` relationship types.
 
 ## Putting It Together
 
-The Action grain type transforms ephemeral tool invocations into durable, verifiable knowledge. Each action becomes a first-class citizen of agent memory — addressable by hash, filterable by header byte, linkable to goals and tasks, and provable through cryptographic signatures.
+The Tool grain type transforms ephemeral tool invocations into durable, verifiable knowledge. Each action becomes a first-class citizen of agent memory — addressable by hash, filterable by header byte, linkable to goals and tasks, and provable through cryptographic signatures.
 
-For teams building agent systems, adopting Action grains means never having to reconstruct what an agent did from scattered logs. The audit trail is built in, one grain at a time.
-For the complete Action schema, field compaction keys, and serialization rules, see [Section 8.5 of the OMS v1.3 specification](https://github.com/openmemoryspec/oms).
+For teams building agent systems, adopting Tool grains means never having to reconstruct what an agent did from scattered logs. The audit trail is built in, one grain at a time.
+For the complete Tool schema, field compaction keys, and serialization rules, see [Section 8.5 of the OMS v1.3 specification](https://github.com/openmemoryspec/oms).

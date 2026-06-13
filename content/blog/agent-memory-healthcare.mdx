@@ -64,13 +64,13 @@ The `observer_type` field accommodates any clinical measurement — `"heart_rate
 
 The content reference schema (Section 7.1) keeps the grain compact — the 50 MB DICOM image is referenced by URI and integrity-checked via its SHA-256 checksum, never embedded in the grain itself. This follows OMS Design Principle 1: "References, not blobs."
 
-### Beliefs for diagnoses and clinical knowledge
+### Facts for diagnoses and clinical knowledge
 
-The Belief type (type byte `0x01`) models structured knowledge as semantic triples. Clinical diagnoses map naturally:
+The Fact type (type byte `0x01`) models structured knowledge as semantic triples. Clinical diagnoses map naturally:
 
 ```json
 {
-  "type": "belief",
+  "type": "fact",
   "subject": "patient-456",
   "relation": "diagnosed_with",
   "object": "Type 2 Diabetes Mellitus",
@@ -108,7 +108,7 @@ Event grains (type byte `0x02`) store raw, unstructured text — perfect for cli
 }
 ```
 
-Events are the input to consolidation — the process of extracting structured Beliefs from unstructured text. A clinical AI agent might process this Event and generate Belief grains: `(patient-456, has_symptom, persistent_cough)`, `(patient-456, prescribed, codeine_cough_suppressant)`. The extracted Beliefs would carry `source_type: "llm_generated"` and reference the Event in their `derived_from` field.
+Events are the input to consolidation — the process of extracting structured Facts from unstructured text. A clinical AI agent might process this Event and generate Fact grains: `(patient-456, has_symptom, persistent_cough)`, `(patient-456, prescribed, codeine_cough_suppressant)`. The extracted Facts would carry `source_type: "llm_generated"` and reference the Event in their `derived_from` field.
 
 ### Goals for treatment plans
 
@@ -143,13 +143,13 @@ The Goal type (type byte `0x07`) has lifecycle semantics that map directly to tr
 
 Goal state transitions — `active` to `satisfied`, `active` to `failed`, `active` to `suspended` — each create a new immutable grain in the supersession chain (Section 8.7). When the patient achieves target HbA1c, the agent creates a new Goal grain with `goal_state: "satisfied"` and `satisfaction_evidence` pointing to the Observation grains with the lab results that prove it. The `priority` field (integer 1-5, where 1 is critical) maps to treatment urgency.
 
-### Actions for lab orders and prescriptions
+### Tools for lab orders and prescriptions
 
-Every interaction with external clinical systems — lab order submissions, prescription fills, EHR API queries — becomes a Action grain (type byte `0x05`):
+Every interaction with external clinical systems — lab order submissions, prescription fills, EHR API queries — becomes a Tool grain (type byte `0x05`):
 
 ```json
 {
-  "type": "action",
+  "type": "tool",
   "tool_name": "lab_order_api",
   "input": {
     "patient_id": "patient-456",
@@ -273,11 +273,11 @@ The OMS specification notes (Section 20.2) that encrypting a grain changes its c
 
 When a primary care physician refers a patient to a specialist, the specialist needs the diagnosis and relevant clinical data — but not necessarily the patient's identity, insurance information, or the referring provider's internal system details. HIPAA's minimum necessary standard (45 CFR Section 164.502(b)) requires that covered entities limit PHI disclosure to the minimum necessary to accomplish the intended purpose.
 
-OMS selective disclosure (Section 10) enables exactly this. The referring system can share a Belief grain about the diagnosis while eliding the `subject` (patient identity) and `user_id` fields:
+OMS selective disclosure (Section 10) enables exactly this. The referring system can share a Fact grain about the diagnosis while eliding the `subject` (patient identity) and `user_id` fields:
 
 ```json
 {
-  "type": "belief",
+  "type": "fact",
   "relation": "diagnosed_with",
   "object": "Type 2 Diabetes Mellitus",
   "confidence": 0.92,
@@ -326,7 +326,7 @@ Every grain in the file carries its original `author_did` — the DID of the age
 
 The result is a patient record that is:
 
-- **Complete** — every Belief, Event, Observation, Goal, Action, and State in one file
+- **Complete** — every Fact, Event, Observation, Goal, Tool, and State in one file
 - **Signed** — cryptographically attributable to the originating system
 - **Verifiable** — any byte change is detectable via content address mismatch
 - **Portable** — the `.mg` format is language-agnostic and platform-independent
@@ -343,8 +343,8 @@ Consider a complete clinical workflow modeled in OMS:
 1. **Patient check-in**: The clinical agent creates a State grain capturing current care plan state
 2. **Vitals collection**: Blood pressure, heart rate, and temperature become Observation grains with appropriate `observer_type` values
 3. **Clinical encounter**: The consultation is recorded as an Event grain with the raw clinical notes
-4. **Diagnosis update**: The agent generates or confirms Belief grains with `relation: "diagnosed_with"`, linking to the Observation and Event grains via `derived_from`
-5. **Lab order**: The agent calls the lab order API, creating a Action grain with the order details and result
+4. **Diagnosis update**: The agent generates or confirms Fact grains with `relation: "diagnosed_with"`, linking to the Observation and Event grains via `derived_from`
+5. **Lab order**: The agent calls the lab order API, creating a Tool grain with the order details and result
 6. **Treatment plan**: Recovery targets become Goal grains with `criteria_structured` for machine-evaluable success conditions and `priority` for treatment urgency
 7. **Specialist referral**: A selectively disclosed subset of grains is shared with the specialist — diagnosis Facts with patient identity elided
 

@@ -5,7 +5,7 @@
     <link>https://memorygrain.org/blog/</link>
     <description>Deep dives into the Open Memory Specification (.mg format) — COSE signing, header bytes, GDPR compliance, autonomous vehicles, IoT device profiles, and portability.</description>
     <language>en-us</language>
-    <lastBuildDate>Thu, 02 Apr 2026 18:43:38 GMT</lastBuildDate>
+    <lastBuildDate>Sat, 13 Jun 2026 13:08:32 GMT</lastBuildDate>
     <atom:link href="https://memorygrain.org/feed.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>Grain Type Deep Dive: Consensus — Multi-Agent Agreement as First-Class Memory</title>
@@ -301,17 +301,17 @@
       <title>Grain Type Deep Dive: Event</title>
       <link>https://memorygrain.org/blog/memory-type-episodes/</link>
       <guid isPermaLink="true">https://memorygrain.org/blog/memory-type-episodes/</guid>
-      <description>OMS v1.2 update: The Episode type is now named Event. Events are the raw, unstructured interaction records in OMS — the input to consolidation that extracts structured Beliefs. Learn about the Event grain type, its fields, the consolidation pipeline, and real-world use cases.</description>
+      <description>OMS v1.2 update: The Episode type is now named Event. Events are the raw, unstructured interaction records in OMS — the input to consolidation that extracts structured Facts. Learn about the Event grain type, its fields, the consolidation pipeline, and real-world use cases.</description>
       <pubDate>Thu, 19 Feb 2026 00:00:00 GMT</pubDate>
       <category>memory-types</category>
       <category>episodes</category>
       <category>interaction-records</category>
     </item>
     <item>
-      <title>Grain Type Deep Dive: Belief</title>
+      <title>Grain Type Deep Dive: Fact</title>
       <link>https://memorygrain.org/blog/memory-type-facts/</link>
       <guid isPermaLink="true">https://memorygrain.org/blog/memory-type-facts/</guid>
-      <description>OMS v1.2 update: The Fact type is now named Belief. A comprehensive guide to the Belief grain type in OMS — the semantic triple model, required and optional fields, confidence scoring, bi-temporal validity, protected beliefs, consolidation levels, and real-world applications.</description>
+      <description>A comprehensive guide to the Fact grain type in OMS — the semantic triple model, required and optional fields, confidence scoring, bi-temporal validity, protected facts, consolidation levels, and real-world applications.</description>
       <pubDate>Thu, 19 Feb 2026 00:00:00 GMT</pubDate>
       <category>memory-types</category>
       <category>facts</category>
@@ -342,13 +342,13 @@
       <category>robotics</category>
     </item>
     <item>
-      <title>Grain Type Deep Dive: Action — The Immutable Audit Trail for Agent Actions</title>
+      <title>Grain Type Deep Dive: Tool — The Immutable Audit Trail for Agent Actions</title>
       <link>https://memorygrain.org/blog/memory-type-toolcalls/</link>
       <guid isPermaLink="true">https://memorygrain.org/blog/memory-type-toolcalls/</guid>
-      <description>OMS v1.2 update: The ToolCall type is now named Action with key field name changes. How OMS Action grains record every tool invocation, argument, and result as an immutable, content-addressed record — enabling replay, debugging, cost tracking, and compliance.</description>
+      <description>How OMS Tool grains record every tool invocation, argument, and result as an immutable, content-addressed record — enabling replay, debugging, cost tracking, and compliance.</description>
       <pubDate>Thu, 19 Feb 2026 00:00:00 GMT</pubDate>
       <category>memory-types</category>
-      <category>tool-calls</category>
+      <category>tools</category>
       <category>audit</category>
       <category>function-calling</category>
     </item>

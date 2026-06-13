@@ -27,9 +27,9 @@ Each of these maps to one or more of the ten OMS grain types. The mapping is not
 
 ## Mapping existing stores to OMS grain types
 
-### Vector DB entries become Belief grains with embedding_refs
+### Vector DB entries become Fact grains with embedding_refs
 
-Vector database entries typically combine a text chunk or metadata document with an embedding vector stored for similarity search. In OMS, the knowledge becomes a Belief grain, and the embedding becomes an `embedding_refs` entry.
+Vector database entries typically combine a text chunk or metadata document with an embedding vector stored for similarity search. In OMS, the knowledge becomes a Fact grain, and the embedding becomes an `embedding_refs` entry.
 
 Section 7.2 defines the embedding reference schema:
 
@@ -47,13 +47,13 @@ The five fields capture everything needed to locate and use the vector: `vector_
 
 The key insight is that OMS does not embed vectors inside grains. Design Principle 1 --- "References, not blobs" --- means the grain references the vector by ID, and the vector continues to live in your vector store. The grain becomes the portable, verifiable metadata layer; the vector store remains the search engine.
 
-### Key-value stores become Belief grains
+### Key-value stores become Fact grains
 
-Key-value pairs map naturally to the Belief type's semantic triple model: `subject` + `relation` form the key, and `object` is the value.
+Key-value pairs map naturally to the Fact type's semantic triple model: `subject` + `relation` form the key, and `object` is the value.
 
 ```json
 {
-  "type": "belief",
+  "type": "fact",
   "subject": "user",
   "relation": "prefers",
   "object": "dark mode",
@@ -77,15 +77,15 @@ Raw conversation transcripts are Event grains --- the simplest grain type. Secti
 }
 ```
 
-Episodes are intentionally unstructured. They are the input to consolidation --- the process by which an agent extracts structured Beliefs from raw interactions. The optional `consolidated` boolean tracks whether an episode has been processed. You can migrate entire conversation histories as Event grains and then run consolidation to produce Facts, preserving the full provenance chain via `derived_from`.
+Episodes are intentionally unstructured. They are the input to consolidation --- the process by which an agent extracts structured Facts from raw interactions. The optional `consolidated` boolean tracks whether an episode has been processed. You can migrate entire conversation histories as Event grains and then run consolidation to produce Facts, preserving the full provenance chain via `derived_from`.
 
-### API call logs become Action grains
+### API call logs become Tool grains
 
-Every tool invocation your agent makes --- API calls, function calls, database queries --- maps to an Action grain. Section 8.5 captures the complete audit record:
+Every tool invocation your agent makes --- API calls, function calls, database queries --- maps to a Tool grain. Section 8.5 captures the complete audit record:
 
 ```json
 {
-  "type": "action",
+  "type": "tool",
   "tool_name": "web_search",
   "input": {"query": "OMS specification"},
   "content": {"hits": 42},
@@ -271,7 +271,7 @@ Document every store that holds agent memory. For each store, record the data fo
 
 ### Step 2: Map to OMS grain types
 
-Using the mappings described above, assign each data source to one or more OMS types. A single source might produce multiple grain types --- a conversation log produces Event grains directly and, after consolidation, Belief grains indirectly.
+Using the mappings described above, assign each data source to one or more OMS types. A single source might produce multiple grain types --- a conversation log produces Event grains directly and, after consolidation, Fact grains indirectly.
 
 ### Step 3: Define namespace strategy
 

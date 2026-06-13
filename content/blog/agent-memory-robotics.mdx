@@ -316,7 +316,7 @@ In multi-robot systems, one robot may delegate sub-tasks to another. The `delega
 
 The `delegate_to` field is a DID (Section 8.7) — a W3C decentralized identifier — so delegation is cryptographically verifiable. The transport robot can verify that the delegation came from an authorized source. The provenance chain uses `method: "goal_delegation"`, another standard method string from the Goal-specific provenance table.
 
-Goal state transitions follow the immutable supersession model. When the "Pick part A" goal is completed, a new grain is created with `goal_state: "satisfied"` and `satisfaction_evidence` referencing the Observation or Action grains that confirm success. The original active goal gets `superseded_by` set in the index layer, preserving the complete state transition history.
+Goal state transitions follow the immutable supersession model. When the "Pick part A" goal is completed, a new grain is created with `goal_state: "satisfied"` and `satisfaction_evidence` referencing the Observation or Tool grains that confirm success. The original active goal gets `superseded_by` set in the index layer, preserving the complete state transition history.
 
 ## Checkpoints for robot state recovery
 
@@ -428,7 +428,7 @@ OMS handles this through the `invalidation_policy` field (Section 23):
 
 ```json
 {
-  "type": "belief",
+  "type": "fact",
   "subject": "assembly-robot-01",
   "relation": "constraint",
   "object": "never apply force > 50N near humans",

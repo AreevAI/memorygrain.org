@@ -6,19 +6,19 @@ readTime: "13 min read"
 tags: ["memory-types", "consensus", "multi-agent", "trust"]
 ---
 
-When a single agent records a belief, it is making a claim. When multiple agents independently agree on the same claim, something fundamentally different has happened: a **consensus** has formed. The claim is no longer one agent's opinion — it is a collective decision backed by a quorum of participants, each bringing their own observations, reasoning, and trust profile.
+When a single agent records a fact, it is making a claim. When multiple agents independently agree on the same claim, something fundamentally different has happened: a **consensus** has formed. The claim is no longer one agent's opinion — it is a collective decision backed by a quorum of participants, each bringing their own observations, reasoning, and trust profile.
 
 Most agent frameworks have no way to represent this distinction. Agreement is implicit, inferred from matching outputs, or tracked in application-specific databases that are mutable, unstructured, and disconnected from the agents' memory. The Open Memory Specification addresses this with a dedicated grain type: **Consensus** (type byte `0x09`). Introduced in OMS v1.2, defined in Section 8.9 of the specification, a Consensus grain is an immutable, content-addressed record of multi-agent agreement with explicit threshold-based voting.
 
-This post covers the Consensus schema in detail: why it exists, every required and optional field, field compaction keys, concrete examples, the v1.3 usage pattern for Action Definition Validation, and how Consensus grains connect to the broader memory graph.
+This post covers the Consensus schema in detail: why it exists, every required and optional field, field compaction keys, concrete examples, the v1.3 usage pattern for Tool Definition Validation, and how Consensus grains connect to the broader memory graph.
 
 ## Why a Dedicated Consensus Type?
 
-The same question that applies to every dedicated grain type applies here: why not just use a Belief grain? You could encode agreement as `subject="deployment-frequency", relation="improved", object="18% over Q4 2025"` with `confidence: 0.95` and a note in `context` about how many agents agreed.
+The same question that applies to every dedicated grain type applies here: why not just use a Fact grain? You could encode agreement as `subject="deployment-frequency", relation="improved", object="18% over Q4 2025"` with `confidence: 0.95` and a note in `context` about how many agents agreed.
 
 Three problems make this inadequate.
 
-**First, header-level filtering.** Consensus grains carry type byte `0x09` in the OMS header (byte 2). Any system scanning a stream of `.mg` blobs can identify all Consensus grains by reading a single byte — O(1) filtering before any MessagePack deserialization. Querying for multi-agent agreements via Belief grains requires full payload decode and inspection of context fields.
+**First, header-level filtering.** Consensus grains carry type byte `0x09` in the OMS header (byte 2). Any system scanning a stream of `.mg` blobs can identify all Consensus grains by reading a single byte — O(1) filtering before any MessagePack deserialization. Querying for multi-agent agreements via Fact grains requires full payload decode and inspection of context fields.
 
 **Second, structured voting semantics.** A Consensus grain has first-class fields for `threshold`, `agreement_count`, and `dissent_count`. These are not ad-hoc metadata crammed into a `context` map — they are validated required fields with defined semantics. The threshold defines the quorum requirement. The agreement and dissent counts record the vote tally. Together they answer the question: "Did this decision meet its quorum?" without any ambiguity about what the numbers mean.
 
@@ -74,7 +74,7 @@ Consider a financial compliance system where multiple risk assessment agents mus
 
 This grain records that four agents participated in a trade approval decision. The threshold was 3, meaning at least three agents needed to agree. All four agreed (unanimous), and the `agreed_content` map captures the decision, the instrument, the notional value, and the collective justification. The grain is immutable — no one can retroactively change the vote tally or the decision.
 
-### A Second Example: Multi-Agent Belief Validation
+### A Second Example: Multi-Agent Fact Validation
 
 Multiple AI research agents independently verify a statistical claim before it enters the knowledge base:
 
@@ -161,16 +161,16 @@ When a Consensus grain is rendered in the Structured Memory Language (SML) conte
 
 The `threshold` attribute shows the quorum requirement, `count` shows the agreement count, and the element content is the human-readable summary of the agreed content. This gives an LLM the essential information — what was agreed, how many agents agreed, and what the quorum bar was — without requiring the model to parse the full JSON payload.
 
-## The v1.3 Usage Pattern: Consensus for Action Definition Validation
+## The v1.3 Usage Pattern: Consensus for Tool Definition Validation
 
-OMS v1.3, Section 27.7, introduced a documented usage pattern for Consensus grains: **validating Action definition grains when multiple sources agree on an action's schema**.
+OMS v1.3, Section 27.7, introduced a documented usage pattern for Consensus grains: **validating Tool definition grains when multiple sources agree on an action's schema**.
 
-The pattern addresses a specific problem in multi-agent systems. When an agent discovers a new external tool or API, it may create an Action definition grain (`action_phase: "definition"`) describing the tool's name, input schema, and output schema. But a single agent's definition may be incomplete, outdated, or wrong. If multiple agents independently discover the same tool and produce compatible definitions, a Consensus grain can record their agreement on the canonical schema.
+The pattern addresses a specific problem in multi-agent systems. When an agent discovers a new external tool or API, it may create a Tool definition grain (`tool_phase: "definition"`) describing the tool's name, input schema, and output schema. But a single agent's definition may be incomplete, outdated, or wrong. If multiple agents independently discover the same tool and produce compatible definitions, a Consensus grain can record their agreement on the canonical schema.
 
 The flow works as follows:
 
-1. **Agent A** discovers an API endpoint and creates an Action definition grain with `input` schema and `output_schema`.
-2. **Agent B** independently discovers the same endpoint and creates its own Action definition grain.
+1. **Agent A** discovers an API endpoint and creates a Tool definition grain with `input` schema and `output_schema`.
+2. **Agent B** independently discovers the same endpoint and creates its own Tool definition grain.
 3. **Agent C** does the same.
 4. A validation orchestrator compares the three definitions. If they agree on the schema (within some tolerance for minor differences), it creates a Consensus grain with:
    - `participating_observers`: the DIDs of Agents A, B, and C
@@ -178,12 +178,12 @@ The flow works as follows:
    - `agreement_count`: 3
    - `dissent_count`: 0
    - `agreed_content`: the canonical schema definition
-   - `related_to`: cross-links to the three Action definition grains with `relation_type: "validates"`
+   - `related_to`: cross-links to the three Tool definition grains with `relation_type: "validates"`
 
-This pattern is particularly valuable in the Integration Domain Profile, where connectors discover and register external API actions. A consensus-validated Action definition carries significantly more trust than a single agent's discovery — it has been independently confirmed by multiple observers.
+This pattern is particularly valuable in the Integration Domain Profile, where connectors discover and register external API actions. A consensus-validated Tool definition carries significantly more trust than a single agent's discovery — it has been independently confirmed by multiple observers.
 
 <Callout type="info">
-The Section 27.7 pattern is a documented usage pattern, not a normative requirement. Implementations are free to use Consensus grains for Action definition validation or to implement their own validation mechanisms. The pattern provides a standardized approach for systems that need multi-source schema agreement.
+The Section 27.7 pattern is a documented usage pattern, not a normative requirement. Implementations are free to use Consensus grains for Tool definition validation or to implement their own validation mechanisms. The pattern provides a standardized approach for systems that need multi-source schema agreement.
 </Callout>
 
 ## Trust-Weighted Confidence Across Participating Agents
@@ -293,7 +293,7 @@ For HIPAA compliance, the `user_id` field links the consensus to the patient, en
 
 In multi-agent architectures where agents specialize in different domains, Consensus grains serve as the coordination primitive. A planning agent, a risk agent, and an execution agent might need to agree on a course of action before proceeding. The Consensus grain records that agreement explicitly, with the `agreed_content` holding the plan and the `threshold` ensuring sufficient buy-in.
 
-The `related_to` field can cross-link the Consensus grain to Goal grains (the objectives being pursued), Action grains (the tools to be invoked), and Workflow grains (the procedures to follow). This creates a rich decision context: "We agreed to do X (Consensus) in pursuit of Y (Goal) by following Z (Workflow)."
+The `related_to` field can cross-link the Consensus grain to Goal grains (the objectives being pursued), Tool grains (the tools to be invoked), and Workflow grains (the procedures to follow). This creates a rich decision context: "We agreed to do X (Consensus) in pursuit of Y (Goal) by following Z (Workflow)."
 
 ### Fleet Coordination
 
@@ -307,9 +307,9 @@ Consensus grains participate in the broader OMS memory graph through several mec
 
 - **Observation as evidence.** Individual agents' Observation grains serve as the inputs to a consensus process. The Consensus grain's `derived_from` array points to these source observations, creating a provenance trail from individual measurements to collective agreement.
 
-- **Belief validation.** A Consensus grain can validate a Belief grain via `related_to` with `relation_type: "validates"`. This strengthens the Belief's credibility: it is not just one agent's claim, but a claim backed by multi-agent agreement.
+- **Fact validation.** A Consensus grain can validate a Fact grain via `related_to` with `relation_type: "validates"`. This strengthens the Fact's credibility: it is not just one agent's claim, but a claim backed by multi-agent agreement.
 
-- **Action definition validation.** Per the v1.3 Section 27.7 pattern, Consensus grains validate Action definition grains when multiple agents agree on an API's schema.
+- **Tool definition validation.** Per the v1.3 Section 27.7 pattern, Consensus grains validate Tool definition grains when multiple agents agree on an API's schema.
 
 - **Goal satisfaction evidence.** A Goal grain's `satisfaction_evidence` array can include the content address of a Consensus grain. "The deployment target was met" is stronger evidence when it comes from a multi-agent consensus rather than a single observation.
 
@@ -321,13 +321,13 @@ Consensus grains participate in the broader OMS memory graph through several mec
 
 The lifecycle follows the standard OMS immutability model:
 
-1. **Voting.** Individual agents produce their assessments as Observation, Belief, or other grain types. These are independent grains with their own content addresses.
+1. **Voting.** Individual agents produce their assessments as Observation, Fact, or other grain types. These are independent grains with their own content addresses.
 
 2. **Aggregation.** An orchestrating agent (or a consensus protocol) collects the votes, evaluates them against the threshold, and creates a Consensus grain recording the outcome. The `agreed_content` captures the decision. The `participating_observers`, `agreement_count`, and `dissent_count` capture the vote.
 
 3. **Protection.** If the decision warrants it, the Consensus grain is created with an `invalidation_policy` — typically `mode: "quorum"` for decisions that should require multi-agent agreement to overturn.
 
-4. **Reference.** Other grains reference the Consensus grain: Goals point to it as satisfaction evidence, Beliefs link to it as validation, downstream Actions cite it as authorization.
+4. **Reference.** Other grains reference the Consensus grain: Goals point to it as satisfaction evidence, Facts link to it as validation, downstream Tools cite it as authorization.
 
 5. **Supersession.** If the consensus is later overturned — new evidence emerges, conditions change — a new Consensus grain is created that supersedes the old one. The protection policy governs whether this supersession is permitted and what authorization is required.
 
@@ -343,7 +343,7 @@ The Consensus grain type elevates multi-agent agreement from an implicit, applic
 | **Introduced** | OMS v1.2 |
 | **Confidence** | Optional float64 in [0.0, 1.0], represents trust-weighted aggregate |
 | **Protection** | Natural fit for `invalidation_policy` with `mode: "quorum"` |
-| **v1.3 pattern** | Section 27.7 — Consensus for Action Definition Validation |
+| **v1.3 pattern** | Section 27.7 — Consensus for Tool Definition Validation |
 | **Compaction keys** | `po`, `thr`, `ac`, `dc`, `agc` |
 
 <Callout type="info">

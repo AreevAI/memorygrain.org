@@ -12,7 +12,7 @@ By the end, you will be able to read raw `.mg` hex and understand exactly what e
 
 ## The blob we are dissecting
 
-Test Vector 1 defines a minimal Fact grain with this input (using the v1.0 type name `"fact"`; in OMS v1.2 the canonical name is `"belief"`, but `"fact"` remains valid as a backward-compatible alias):
+Test Vector 1 defines a minimal Fact grain with this input:
 
 ```json
 {
@@ -131,11 +131,11 @@ The type byte identifies the memory type using a single-byte enum:
 
 | Value | Type |
 |-------|------|
-| `0x01` | Fact (v1.2: Belief) |
+| `0x01` | Fact |
 | `0x02` | Episode (v1.2: Event) |
 | `0x03` | Checkpoint (v1.2: State) |
 | `0x04` | Workflow |
-| `0x05` | ToolCall (v1.2: Action) |
+| `0x05` | Tool |
 | `0x06` | Observation |
 | `0x07` | Goal |
 | `0x08`-`0xEF` | Reserved for future standard types |
@@ -209,7 +209,7 @@ Putting all 9 bytes together for Vector 1:
 |--------|-----|-------|-------|
 | 0 | `01` | Version | 1 |
 | 1 | `00` | Flags | Public, unsigned, MessagePack, no refs |
-| 2 | `01` | Type | Fact (v1.2: Belief) |
+| 2 | `01` | Type | Fact |
 | 3-4 | `a4 d2` | Namespace hash | SHA-256("shared")[0:2] = 42,194 |
 | 5-8 | `69 68 ba a0` | Created-at | 1,768,471,200 = 2026-01-15T10:00:00Z |
 
@@ -364,7 +364,7 @@ a1 74 a4 66 61 63 74
 - `a1` = fixstr(1)
 - `74` = "t"
 - `a4` = fixstr(4)
-- `66 61 63 74` = "fact" (v1.0 canonical name; v1.2 canonical name is `"belief"`)
+- `66 61 63 74` = "fact"
 
 And that is the entire blob. Nine header bytes plus 150 payload bytes equals 159 bytes total, hashing to the content address `3288d0d41cf49a1d428e404f0b6a6fe60388be9536937557f6139b813d53a520`.
 

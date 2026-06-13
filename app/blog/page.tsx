@@ -10,7 +10,7 @@ export const metadata: Metadata = buildMetadata({
     'Deep dives into the .mg Memory Grain Format: COSE signing, header bytes, GDPR compliance, autonomous vehicles, IoT device profiles, and portability — all illustrated with Raven and Trident examples.',
 })
 
-const tagVariants: Record<string, 'fact' | 'episode' | 'checkpoint' | 'workflow' | 'toolcall' | 'observation' | 'default'> = {
+const tagVariants: Record<string, 'fact' | 'episode' | 'checkpoint' | 'workflow' | 'tool' | 'observation' | 'default'> = {
   security: 'checkpoint',
   cryptography: 'checkpoint',
   signing: 'checkpoint',

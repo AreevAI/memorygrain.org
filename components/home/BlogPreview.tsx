@@ -2,7 +2,7 @@ import Link from 'next/link'
 import type { PostFrontmatter } from '@/lib/blog'
 import { Badge } from '@/components/ui/Badge'
 
-const tagVariants: Record<string, 'fact' | 'episode' | 'checkpoint' | 'workflow' | 'toolcall' | 'observation' | 'default'> = {
+const tagVariants: Record<string, 'fact' | 'episode' | 'checkpoint' | 'workflow' | 'tool' | 'observation' | 'default'> = {
   security: 'checkpoint',
   cryptography: 'checkpoint',
   signing: 'checkpoint',

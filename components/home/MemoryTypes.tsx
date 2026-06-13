@@ -27,7 +27,7 @@ const groups: Group[] = [
         icon: Activity,
         byte: '0x06',
         tagline: 'What the agent perceived',
-        description: '"I measured X" — distinct from Belief ("X is true"). Anchored to a specific observer, moment, and method. Covers sensor readings, LLM reflections, and human annotations.',
+        description: '"I measured X" — distinct from Fact ("X is true"). Anchored to a specific observer, moment, and method. Covers sensor readings, LLM reflections, and human annotations.',
       },
       {
         key: 'event',
@@ -35,7 +35,7 @@ const groups: Group[] = [
         icon: ScrollText,
         byte: '0x02',
         tagline: 'What happened',
-        description: 'A raw, timestamped record of a message, interaction, or occurrence. The input to consolidation engines that extract structured Beliefs from conversation.',
+        description: 'A raw, timestamped record of a message, interaction, or occurrence. The input to consolidation engines that extract structured Facts from conversation.',
       },
     ],
   },
@@ -44,8 +44,8 @@ const groups: Group[] = [
     summary: 'What the agent holds',
     types: [
       {
-        key: 'belief',
-        label: 'Belief',
+        key: 'fact',
+        label: 'Fact',
         icon: Database,
         byte: '0x01',
         tagline: 'What the agent knows',
@@ -75,8 +75,8 @@ const groups: Group[] = [
     summary: 'What the agent does',
     types: [
       {
-        key: 'action',
-        label: 'Action',
+        key: 'tool',
+        label: 'Tool',
         icon: Wrench,
         byte: '0x05',
         tagline: 'What the agent did',
@@ -110,7 +110,7 @@ const groups: Group[] = [
         icon: Users,
         byte: '0x09',
         tagline: 'What agents agreed on',
-        description: 'A multi-agent agreement record. Captures when a quorum of agents converges on a shared belief or decision, with trust-weighted confidence across the participating agents.',
+        description: 'A multi-agent agreement record. Captures when a quorum of agents converges on a shared fact or decision, with trust-weighted confidence across the participating agents.',
         isNew: true,
       },
       {

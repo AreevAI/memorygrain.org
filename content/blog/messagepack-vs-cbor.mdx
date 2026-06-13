@@ -75,7 +75,7 @@ Here is the single most important fact about the two encodings:
 
 This is not a bug. It is an inherent consequence of content addressing. The content address is the SHA-256 hash of the blob bytes. MessagePack and CBOR produce different bytes for the same logical data. Different bytes mean different hashes.
 
-Consider a Belief grain with `confidence: 0.9`. In canonical MessagePack, this value is always encoded as float64 (9 bytes: `cb` marker + 8 bytes of IEEE 754 double). In Deterministic CBOR, the encoder checks whether `0.9` can be represented in binary16 (half precision) without loss. It cannot (0.9 is a repeating fraction in binary), so CBOR also uses binary64 for this particular value. But the CBOR binary64 encoding uses different framing bytes than MessagePack's — CBOR uses major type 7 with additional information value 27, while MessagePack uses the `0xcb` format marker. The payload bytes are the same IEEE 754 representation, but the framing differs.
+Consider a Fact grain with `confidence: 0.9`. In canonical MessagePack, this value is always encoded as float64 (9 bytes: `cb` marker + 8 bytes of IEEE 754 double). In Deterministic CBOR, the encoder checks whether `0.9` can be represented in binary16 (half precision) without loss. It cannot (0.9 is a repeating fraction in binary), so CBOR also uses binary64 for this particular value. But the CBOR binary64 encoding uses different framing bytes than MessagePack's — CBOR uses major type 7 with additional information value 27, while MessagePack uses the `0xcb` format marker. The payload bytes are the same IEEE 754 representation, but the framing differs.
 
 For `1.5`, the difference is more dramatic. MessagePack encodes it as float64 (9 bytes). CBOR encodes it as binary16 (3 bytes: `0xf93e00`), because `1.5` can be represented exactly in half precision. Same value, six bytes smaller, completely different blob.
 
@@ -103,7 +103,7 @@ The float encoding difference has a direct impact on blob size:
 
 **Deterministic CBOR:** The shortest floating-point form that preserves the value is used. The encoder attempts half-precision (3 bytes), then single-precision (5 bytes), then double-precision (9 bytes), selecting the shortest that round-trips to the same value. Crucially, this rule does NOT convert floats to integers: `1.0` remains a float, even though it could be represented as the integer `1`.
 
-For a grain with two float fields (confidence and importance), the difference ranges from 0 bytes (when both values require full double precision) to 12 bytes (when both can be represented in half precision). For a minimal Belief grain of roughly 159 bytes, that is a 0-8% size reduction.
+For a grain with two float fields (confidence and importance), the difference ranges from 0 bytes (when both values require full double precision) to 12 bytes (when both can be represented in half precision). For a minimal Fact grain of roughly 159 bytes, that is a 0-8% size reduction.
 
 The trade-off is implementation complexity. A CBOR encoder must implement the precision reduction algorithm: encode as binary64, then test-convert to binary32 and compare; if equal, test-convert to binary16 and compare. This adds code paths and potential for bugs. A MessagePack encoder simply writes float64 every time.
 
@@ -169,7 +169,7 @@ This does not mean you should switch to CBOR just because you use signing. But i
 
 ## Size Comparison
 
-For a concrete comparison, consider the Vector 1 test grain (a minimal Belief with 9 fields). As MessagePack, the blob is 159 bytes. A CBOR encoding of the same grain would use different framing bytes for strings, maps, and integers, but the overall size difference is modest for text-heavy grains.
+For a concrete comparison, consider the Vector 1 test grain (a minimal Fact with 9 fields). As MessagePack, the blob is 159 bytes. A CBOR encoding of the same grain would use different framing bytes for strings, maps, and integers, but the overall size difference is modest for text-heavy grains.
 
 The CBOR shortest-float optimization saves bytes only when float values happen to be representable in half or single precision. Confidence values like `0.9`, `0.95`, and `0.85` are repeating fractions in binary and require full double precision in both formats. Values that benefit are those exact in reduced precision: `0.5`, `0.25`, `1.0`, `0.75` (all representable in binary16). If your application frequently uses these "round" confidence values, CBOR will be slightly more compact. For arbitrary decimal values, the savings are zero.
 

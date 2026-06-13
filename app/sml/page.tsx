@@ -112,7 +112,7 @@ export default async function SmlSpecPage() {
           role="note"
           aria-label="About the Semantic Markup Language"
         >
-          <strong style={{ color: 'var(--fg)' }}>What is SML?</strong> The Semantic Markup Language is a flat, tag-based markup format optimized for LLM context consumption. Tag names map directly to OMS grain types — <code style={{ fontSize: '0.85em' }}>&lt;belief&gt;</code>, <code style={{ fontSize: '0.85em' }}>&lt;goal&gt;</code>, <code style={{ fontSize: '0.85em' }}>&lt;event&gt;</code> — so LLMs understand the epistemic status of each piece of context without parsing schemas.
+          <strong style={{ color: 'var(--fg)' }}>What is SML?</strong> The Semantic Markup Language is a flat, tag-based markup format optimized for LLM context consumption. Tag names map directly to OMS grain types — <code style={{ fontSize: '0.85em' }}>&lt;fact&gt;</code>, <code style={{ fontSize: '0.85em' }}>&lt;goal&gt;</code>, <code style={{ fontSize: '0.85em' }}>&lt;event&gt;</code> — so LLMs understand the epistemic status of each piece of context without parsing schemas.
         </div>
 
         <div dangerouslySetInnerHTML={{ __html: html }} />

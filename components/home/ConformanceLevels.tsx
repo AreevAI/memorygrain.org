@@ -19,7 +19,7 @@ const levels = [
     num: 2,
     label: 'Full Implementation',
     target: 'Agent frameworks, edge gateways',
-    color: 'var(--belief)',
+    color: 'var(--fact)',
     features: [
       'All Level 1 requirements',
       'Serialize (canonical MessagePack)',

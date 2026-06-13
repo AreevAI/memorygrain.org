@@ -10,20 +10,20 @@ Run an experiment. Take this text:
 
 > Alice prefers dark mode. Alice probably prefers dark mode. Alice's calendar shows a meeting at 3pm. The support team agreed that onboarding takes too long. Alice granted the agent permission to access her billing records. The agent concluded that the billing discrepancy is caused by an unprocessed amendment.
 
-Now paste it into a system prompt and ask the model to act on it. The model has no way to know that "prefers dark mode" is a high-confidence belief, that "probably prefers" is low-confidence, that the calendar entry is a passive observation, that the onboarding claim was independently verified by multiple sources, that the billing permission is an explicit consent record, or that the discrepancy conclusion is the agent's own inference. It is all text. The model treats every sentence with equal epistemic weight.
+Now paste it into a system prompt and ask the model to act on it. The model has no way to know that "prefers dark mode" is a high-confidence fact, that "probably prefers" is low-confidence, that the calendar entry is a passive observation, that the onboarding claim was independently verified by multiple sources, that the billing permission is an explicit consent record, or that the discrepancy conclusion is the agent's own inference. It is all text. The model treats every sentence with equal epistemic weight.
 
 This is the problem SML solves. Not by adding more text — by adding structure that carries semantic meaning.
 
 ## What SML Does Differently
 
-SML (Semantic Markup Language) is a flat, tag-based format where the tag name itself is the signal. It uses the 10 OMS grain type names — `belief`, `goal`, `event`, `action`, `observation`, `reasoning`, `state`, `workflow`, `consensus`, `consent` — as element names. Each name tells the LLM what epistemic category the content belongs to before it reads a single word.
+SML (Semantic Markup Language) is a flat, tag-based format where the tag name itself is the signal. It uses the 10 OMS grain type names — `fact`, `goal`, `event`, `action`, `observation`, `reasoning`, `state`, `workflow`, `consensus`, `consent` — as element names. Each name tells the LLM what epistemic category the content belongs to before it reads a single word.
 
 ```sml
-<belief subject="alice" confidence="0.94">prefers dark mode in all tools</belief>
-<belief subject="alice" confidence="0.61">probably prefers dark mode</belief>
+<fact subject="alice" confidence="0.94">prefers dark mode in all tools</fact>
+<fact subject="alice" confidence="0.61">probably prefers dark mode</fact>
 ```
 
-The model now sees two beliefs about dark mode — one at 94% confidence, one at 61%. It can weight them differently. It can mention the stronger belief as fact and the weaker one as a possibility. No prompt instruction needed. The structure communicates the distinction.
+The model now sees two facts about dark mode — one at 94% confidence, one at 61%. It can weight them differently. It can mention the stronger fact as fact and the weaker one as a possibility. No prompt instruction needed. The structure communicates the distinction.
 
 SML is not XML. It does not require an XML parser, does not use escape sequences, does not support nesting, and does not validate against a schema. It is a flat tag format consumed directly by an LLM — designed for one reader, optimised for that reader's strengths.
 
@@ -31,19 +31,19 @@ SML is not XML. It does not require an XML parser, does not use escape sequences
 
 Each OMS grain type maps to one SML tag name. Here is every type with examples drawn from production agent scenarios.
 
-### `<belief>` — What the System Knows (With Calibrated Certainty)
+### `<fact>` — What the System Knows (With Calibrated Certainty)
 
-Beliefs are semantic triples with a confidence score. They represent structured knowledge — user preferences, relationships between entities, operational facts.
+Facts are semantic triples with a confidence score. They represent structured knowledge — user preferences, relationships between entities, operational facts.
 
 ```sml
-<belief subject="marcus" confidence="0.96">enterprise plan customer since 2023-01</belief>
-<belief subject="marcus" confidence="0.89">consistently pays on net-30 terms; no prior late payments</belief>
-<belief subject="marcus" confidence="0.74">tends to escalate billing issues directly to VP of Customer Success</belief>
-<belief subject="server-room-3" confidence="0.98">temperature must stay between 18C and 24C</belief>
-<belief subject="deployment-v4.2" confidence="0.82">caused 12% latency increase in checkout flow</belief>
+<fact subject="marcus" confidence="0.96">enterprise plan customer since 2023-01</fact>
+<fact subject="marcus" confidence="0.89">consistently pays on net-30 terms; no prior late payments</fact>
+<fact subject="marcus" confidence="0.74">tends to escalate billing issues directly to VP of Customer Success</fact>
+<fact subject="server-room-3" confidence="0.98">temperature must stay between 18C and 24C</fact>
+<fact subject="deployment-v4.2" confidence="0.82">caused 12% latency increase in checkout flow</fact>
 ```
 
-The confidence score is not decorative. When an LLM sees `0.74`, it should treat that belief as likely but unconfirmed. When it sees `0.98`, it should treat it as a hard constraint. The tag name (`belief`) plus the attribute (`confidence`) create a two-dimensional signal that plain text cannot carry.
+The confidence score is not decorative. When an LLM sees `0.74`, it should treat that fact as likely but unconfirmed. When it sees `0.98`, it should treat it as a hard constraint. The tag name (`fact`) plus the attribute (`confidence`) create a two-dimensional signal that plain text cannot carry.
 
 ### `<goal>` — What the User is Trying to Achieve
 
@@ -69,22 +69,22 @@ Events are interaction records — conversation turns with role attribution and 
 
 The `time` attribute uses human-relative values (`5m ago`, `2d ago`, `yesterday`). The model immediately understands recency. The `role` attribute prevents confusion about who said what — a problem that plagues unstructured conversation logs pasted into prompts.
 
-### `<action>` — What Tools Have Already Been Called
+### `<tool>` — What Tools Have Already Been Called
 
-Actions record tool invocations and their results. The `phase` attribute signals whether the action is pending, completed, or errored.
+Tools record tool invocations and their results. The `phase` attribute signals whether the action is pending, completed, or errored.
 
 ```sml
-<action tool="get_invoice" phase="completed">INV-2024-8831: $4,200 for 28 seats at $150/seat</action>
-<action tool="get_contract" phase="completed">contract shows 24 seats at $150/seat = $3,600/month</action>
-<action tool="get_seat_history" phase="completed">4 seats added 2026-02-14; amendment not yet executed</action>
-<action tool="send_amendment" phase="error">failed — legal review required for mid-term amendments</action>
+<tool tool="get_invoice" phase="completed">INV-2024-8831: $4,200 for 28 seats at $150/seat</tool>
+<tool tool="get_contract" phase="completed">contract shows 24 seats at $150/seat = $3,600/month</tool>
+<tool tool="get_seat_history" phase="completed">4 seats added 2026-02-14; amendment not yet executed</tool>
+<tool tool="send_amendment" phase="error">failed — legal review required for mid-term amendments</tool>
 ```
 
 When the LLM sees `phase="completed"` for `get_invoice`, it knows the data is available. It will not suggest calling the tool again. When it sees `phase="error"`, it knows to acknowledge the failure and route around it. This eliminates a class of redundant tool calls that waste tokens and latency.
 
 ### `<observation>` — What the System Noticed Passively
 
-Observations carry lower implied certainty than explicit beliefs. They are things the system perceived without the user stating them.
+Observations carry lower implied certainty than explicit facts. They are things the system perceived without the user stating them.
 
 ```sml
 <observation observer="system">marcus opened the billing dashboard at 09:14 UTC</observation>
@@ -130,7 +130,7 @@ An LLM that sees a workflow knows there is a prescribed sequence. It will not sk
 
 ### `<consensus>` — What Multiple Sources Agree On
 
-Consensus grains carry more epistemic weight than single beliefs. They represent claims independently verified by multiple observers.
+Consensus grains carry more epistemic weight than single facts. They represent claims independently verified by multiple observers.
 
 ```sml
 <consensus threshold="3" count="5">Q1 deployment frequency improved 18% over Q4 2025</consensus>
@@ -156,13 +156,13 @@ SML controls metadata density without changing structure. The element shape stay
 
 ```sml
 <!-- summary: subject + content only -->
-<belief subject="marcus">enterprise plan customer since 2023-01</belief>
+<fact subject="marcus">enterprise plan customer since 2023-01</fact>
 
 <!-- standard: adds confidence -->
-<belief subject="marcus" confidence="0.96">enterprise plan customer since 2023-01</belief>
+<fact subject="marcus" confidence="0.96">enterprise plan customer since 2023-01</fact>
 
 <!-- full: adds source, observation time, provenance -->
-<belief subject="marcus" confidence="0.96" source="crm-sync" observed="1d ago">enterprise plan customer since 2023-01</belief>
+<fact subject="marcus" confidence="0.96" source="crm-sync" observed="1d ago">enterprise plan customer since 2023-01</fact>
 ```
 
 In [CAL](/blog/cal-agent-memory-query-language), you control this with `WITH progressive_disclosure(summary|standard|full)`. Summary level maximises information density for tight budgets. Full level is for debugging and audit.
@@ -174,9 +174,9 @@ Here is a complete SML context block for a support agent resolving Marcus's bill
 ```sml
 <context intent="resolving marcus's billing dispute for invoice INV-2024-8831">
 
-  <belief subject="marcus" confidence="0.96">enterprise plan customer since 2023-01</belief>
-  <belief subject="marcus" confidence="0.89">consistently pays on net-30; no prior late payments</belief>
-  <belief subject="marcus" confidence="0.82">primary contact for billing decisions</belief>
+  <fact subject="marcus" confidence="0.96">enterprise plan customer since 2023-01</fact>
+  <fact subject="marcus" confidence="0.89">consistently pays on net-30; no prior late payments</fact>
+  <fact subject="marcus" confidence="0.82">primary contact for billing decisions</fact>
 
   <goal subject="marcus" state="active" deadline="2026-04-01">resolve disputed charge before renewal date</goal>
 
@@ -184,9 +184,9 @@ Here is a complete SML context block for a support agent resolving Marcus's bill
   <event role="assistant" time="5m ago">Pulling your contract and the March invoice now.</event>
   <event role="user" time="2m ago">We added 4 seats in February. Is this related?</event>
 
-  <action tool="get_invoice" phase="completed">INV-2024-8831: $4,200 for 28 seats at $150/seat</action>
-  <action tool="get_contract" phase="completed">contract: 24 seats at $150/seat = $3,600/month; renewal 2026-04-01</action>
-  <action tool="get_seat_history" phase="completed">4 seats added 2026-02-14; amendment not executed</action>
+  <tool tool="get_invoice" phase="completed">INV-2024-8831: $4,200 for 28 seats at $150/seat</tool>
+  <tool tool="get_contract" phase="completed">contract: 24 seats at $150/seat = $3,600/month; renewal 2026-04-01</tool>
+  <tool tool="get_seat_history" phase="completed">4 seats added 2026-02-14; amendment not executed</tool>
 
   <observation observer="billing-system">invoice reflects provisioned seats (28); contract reflects signed quantity (24)</observation>
 
@@ -201,7 +201,7 @@ Here is a complete SML context block for a support agent resolving Marcus's bill
 
 From this single context block, an LLM can give Marcus a precise, empathetic, accurate response: acknowledge the discrepancy, explain the root cause (4 seats without amendment), confirm the data is verified by two independent systems, and propose a resolution — all without asking Marcus to repeat himself.
 
-The tag names do the heavy lifting. The model knows what to trust (`consensus`), what is certain (`belief` at 0.96), what was inferred (`reasoning`), and what it is authorised to access (`consent`). This is not prompt engineering. It is structural communication.
+The tag names do the heavy lifting. The model knows what to trust (`consensus`), what is certain (`fact` at 0.96), what was inferred (`reasoning`), and what it is authorised to access (`consent`). This is not prompt engineering. It is structural communication.
 
 ---
 
