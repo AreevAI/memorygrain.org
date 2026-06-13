@@ -65,13 +65,13 @@ For phone calls, the `content_refs` field (Section 7.1) can reference the origin
 }
 ```
 
-### Beliefs for customer preferences
+### Facts for customer preferences
 
-As interactions accumulate, the consolidation pipeline (Section 8.1) extracts structured knowledge. Customer preferences become Belief grains with the semantic triple model:
+As interactions accumulate, the consolidation pipeline (Section 8.1) extracts structured knowledge. Customer preferences become Fact grains with the semantic triple model:
 
 ```json
 {
-  "type": "belief",
+  "type": "fact",
   "subject": "user",
   "relation": "prefers",
   "object": "dark mode",
@@ -87,7 +87,7 @@ This follows the exact pattern from the spec's Test Vector 1 (Section 21.1). The
 
 ```json
 {
-  "type": "belief",
+  "type": "fact",
   "subject": "customer-456",
   "relation": "preferred_language",
   "object": "Spanish",
@@ -98,13 +98,13 @@ This follows the exact pattern from the spec's Test Vector 1 (Section 21.1). The
 }
 ```
 
-### Beliefs for account knowledge
+### Facts for account knowledge
 
-Account-level information uses the same Belief structure but adds temporal validity for accuracy over time:
+Account-level information uses the same Fact structure but adds temporal validity for accuracy over time:
 
 ```json
 {
-  "type": "belief",
+  "type": "fact",
   "subject": "customer-456",
   "relation": "subscription_tier",
   "object": "enterprise",
@@ -117,7 +117,7 @@ Account-level information uses the same Belief structure but adds temporal valid
 }
 ```
 
-The `valid_from` and `valid_to` fields (Section 15.1) mark when this subscription tier was active. When the customer upgrades or downgrades, the old Belief is superseded by a new one — the supersession chain preserves the full history. Bi-temporal queries (Section 15.2) can answer both "What is the customer's current tier?" and "What tier were they on when they filed this complaint?"
+The `valid_from` and `valid_to` fields (Section 15.1) mark when this subscription tier was active. When the customer upgrades or downgrades, the old Fact is superseded by a new one — the supersession chain preserves the full history. Bi-temporal queries (Section 15.2) can answer both "What is the customer's current tier?" and "What tier were they on when they filed this complaint?"
 
 The `source_type` of `"imported"` indicates this data came from an external system (the billing database), not from a conversation or agent inference.
 
@@ -148,13 +148,13 @@ The `goal_state` field cycles through `"active"`, `"satisfied"`, `"failed"`, and
 
 The `criteria` array lists human-readable success conditions: `"customer confirms resolution"` and `"credit applied to account"`. Both must be verified before the Goal can transition to `"satisfied"`.
 
-### Actions for system interactions
+### Tools for system interactions
 
-Every API call the agent makes — CRM lookups, ticket updates, payment processing — is recorded as a Action grain (Section 8.5):
+Every API call the agent makes — CRM lookups, ticket updates, payment processing — is recorded as a Tool grain (Section 8.5):
 
 ```json
 {
-  "type": "action",
+  "type": "tool",
   "tool_name": "crm_lookup_customer",
   "input": {"customer_id": "customer-456", "fields": ["subscription", "history"]},
   "content": {"subscription_tier": "enterprise", "tenure_years": 6, "lifetime_value": 28400},
@@ -168,7 +168,7 @@ Every API call the agent makes — CRM lookups, ticket updates, payment processi
 
 ```json
 {
-  "type": "action",
+  "type": "tool",
   "tool_name": "apply_account_credit",
   "input": {"customer_id": "customer-456", "amount": 499.00, "invoice": "INV-789", "reason": "erroneous_charge"},
   "content": {"credit_id": "CR-20260115-001", "new_balance": 0.00},
@@ -229,9 +229,9 @@ Learned escalation procedures are captured as Workflow grains (Section 8.4):
 }
 ```
 
-Workflows are procedural memory — learned sequences of actions that should be triggered under specific conditions. The `trigger` field defines when the workflow activates. The `steps` array defines the ordered sequence. As agents observe which escalation patterns work and which do not, the `success_count` and `failure_count` fields on related Beliefs track effectiveness.
+Workflows are procedural memory — learned sequences of actions that should be triggered under specific conditions. The `trigger` field defines when the workflow activates. The `steps` array defines the ordered sequence. As agents observe which escalation patterns work and which do not, the `success_count` and `failure_count` fields on related Facts track effectiveness.
 
-## Event-to-Belief consolidation
+## Event-to-Fact consolidation
 
 The real power of OMS in customer service comes from the consolidation pipeline. After many conversations with the same customer, the system does not just have a pile of transcripts — it has structured knowledge extracted from them.
 
@@ -244,9 +244,9 @@ The `consolidation_level` field (Section 6.1) tracks the depth of extraction:
 | 2 | Pattern | Billing issues correlate with subscription renewals |
 | 3 | Sequence | Customer contacts support before renewal, then disputes charge after |
 
-A consolidation level 0 Belief is directly extracted from a single Event. A level 1 Belief emerges from frequency analysis across multiple Events. Level 2 identifies co-occurrence patterns. Level 3 detects temporal sequences.
+A consolidation level 0 Fact is directly extracted from a single Event. A level 1 Fact emerges from frequency analysis across multiple Events. Level 2 identifies co-occurrence patterns. Level 3 detects temporal sequences.
 
-Each consolidated Belief carries `derived_from` (an array of content addresses pointing to source Events) and `source_type: "consolidated"`, creating a complete provenance chain from structured knowledge back to raw interaction data.
+Each consolidated Fact carries `derived_from` (an array of content addresses pointing to source Events) and `source_type: "consolidated"`, creating a complete provenance chain from structured knowledge back to raw interaction data.
 
 ## Namespace partitioning
 
@@ -265,7 +265,7 @@ Namespaces can also partition by customer: `"customer:customer-456"` would scope
 
 When an organization switches customer service platforms, OMS provides a clean migration path through the .mg file format (Section 11).
 
-A customer's complete service memory — every Event, Belief, Goal, Action, State, and Workflow — can be exported as a single .mg file. The file structure (Section 11.2) includes:
+A customer's complete service memory — every Event, Fact, Goal, Tool, State, and Workflow — can be exported as a single .mg file. The file structure (Section 11.2) includes:
 
 - A 16-byte header with magic bytes `"MG\x01"`, flags, grain count, and compression settings
 - An offset index enabling random access to individual grains
@@ -300,11 +300,11 @@ Header flags byte: 0b10000000 = 0x80
 Header sensitivity bits are advisory routing metadata, not a compliance guarantee (Section 13.3). Systems processing customer PII should treat them as a fast-path hint and perform payload inspection for sensitive decisions. The serializer must set the header bits to the highest classification present in the structural tags (Section 13.4).
 </Callout>
 
-**Selective disclosure** (Section 10) enables sharing customer insights across teams without exposing PII. A billing team might share a Belief about a customer's payment pattern with the product team, eliding the `user_id` and `subject` fields:
+**Selective disclosure** (Section 10) enables sharing customer insights across teams without exposing PII. A billing team might share a Fact about a customer's payment pattern with the product team, eliding the `user_id` and `subject` fields:
 
 ```json
 {
-  "type": "belief",
+  "type": "fact",
   "relation": "payment_pattern",
   "object": "consistently_late_by_3_days",
   "confidence": 0.88,
@@ -322,11 +322,11 @@ The product team can see the pattern (late payments) and the confidence level, b
 
 ## Tracking what works: success and failure counts
 
-The `success_count` and `failure_count` fields on Belief grains (Section 6.1) track which pieces of customer knowledge actually help resolve issues. When an agent uses a Belief — say, that a customer prefers email over phone — and the interaction goes well, `success_count` increments. When a Belief leads to a poor outcome, `failure_count` increments.
+The `success_count` and `failure_count` fields on Fact grains (Section 6.1) track which pieces of customer knowledge actually help resolve issues. When an agent uses a Fact — say, that a customer prefers email over phone — and the interaction goes well, `success_count` increments. When a Fact leads to a poor outcome, `failure_count` increments.
 
-Over time, this creates a feedback loop. Beliefs with high success counts become more reliable. Beliefs with rising failure counts signal outdated or inaccurate knowledge that needs reverification. Combined with the `confidence` field (which represents the initial credibility of the knowledge claim), `success_count` and `failure_count` provide empirical validation of customer knowledge.
+Over time, this creates a feedback loop. Facts with high success counts become more reliable. Facts with rising failure counts signal outdated or inaccurate knowledge that needs reverification. Combined with the `confidence` field (which represents the initial credibility of the knowledge claim), `success_count` and `failure_count` provide empirical validation of customer knowledge.
 
-For example, a Belief recording that a customer prefers Spanish might start with `confidence: 0.95` (high, because the customer explicitly stated it) and accumulate `success_count: 12` over subsequent interactions where routing to Spanish-speaking agents produced positive outcomes. If the customer later switches language preferences and the agent does not catch the update, `failure_count` would start rising — a signal that the knowledge needs refreshing.
+For example, a Fact recording that a customer prefers Spanish might start with `confidence: 0.95` (high, because the customer explicitly stated it) and accumulate `success_count: 12` over subsequent interactions where routing to Spanish-speaking agents produced positive outcomes. If the customer later switches language preferences and the agent does not catch the update, `failure_count` would start rising — a signal that the knowledge needs refreshing.
 
 ## Putting it all together
 
@@ -334,17 +334,17 @@ Consider the full lifecycle for the billing discrepancy scenario:
 
 1. **Capture**: The phone call is recorded as an Event with `user_id: "customer-456"` and `namespace: "support:billing"`.
 
-2. **Extract**: Consolidation produces Beliefs — the customer's subscription tier, their 6-year tenure, the specific charge they dispute.
+2. **Extract**: Consolidation produces Facts — the customer's subscription tier, their 6-year tenure, the specific charge they dispute.
 
 3. **Track**: A Goal grain is created with `description: "Resolve billing discrepancy for invoice #789"` and `goal_state: "active"`.
 
-4. **Act**: Action grains record the CRM lookup, the credit application, and the ticket update.
+4. **Act**: Tool grains record the CRM lookup, the credit application, and the ticket update.
 
 5. **Snapshot**: A State grain captures the current state for handoff to the next session.
 
 6. **Learn**: A Workflow grain captures the resolution pattern — if a long-tenured enterprise customer disputes a charge, apply immediate credit and follow up within 24 hours.
 
-7. **Resolve**: The Goal transitions to `"satisfied"` with `satisfaction_evidence` pointing to the Action that applied the credit and the Event where the customer confirmed resolution.
+7. **Resolve**: The Goal transitions to `"satisfied"` with `satisfaction_evidence` pointing to the Tool that applied the credit and the Event where the customer confirmed resolution.
 
 Every grain in this chain is immutable, content-addressed, and linked through `derived_from` and `provenance_chain`. The entire resolution history is auditable. The customer's memory is portable. And the PII is protected by sensitivity classification, per-user encryption, and selective disclosure.
 

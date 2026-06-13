@@ -6,7 +6,7 @@ readTime: "12 min read"
 tags: ["field-compaction", "optimization", "binary-format", "technical"]
 ---
 
-A Belief grain in the Open Memory Specification has fields like `subject`, `relation`, `object`, `confidence`, `source_type`, `created_at`, `author_did`, and `namespace`. Those are clear, readable names — exactly what you want when designing a schema. But when you are serializing millions of grains into compact binary blobs, every byte counts.
+A Fact grain in the Open Memory Specification has fields like `subject`, `relation`, `object`, `confidence`, `source_type`, `created_at`, `author_did`, and `namespace`. Those are clear, readable names — exactly what you want when designing a schema. But when you are serializing millions of grains into compact binary blobs, every byte counts.
 
 The string `"confidence"` is 10 bytes in UTF-8. The string `"c"` is 1 byte. Multiply that saving across every field in every grain in a store with millions of entries, and field compaction becomes a significant optimization.
 
@@ -28,7 +28,7 @@ The core field map applies to all ten grain types. Here is the complete table:
 
 | Full Name | Short Key | Type | Description |
 |-----------|-----------|------|-------------|
-| `type` | `t` | string | Grain type: "belief", "event", "state", "action", etc. |
+| `type` | `t` | string | Grain type: "fact", "event", "state", "action", etc. |
 | `subject` | `s` | string | Entity being described (RDF subject) |
 | `relation` | `r` | string | Semantic relationship (RDF predicate) |
 | `object` | `o` | string | Value or target (RDF object) |
@@ -96,7 +96,7 @@ Like Event, State fields are already short and retain their names.
 
 Again, these field names are short enough that the mapping is an identity function.
 
-### Action (Section 6.5)
+### Tool (Section 6.5)
 
 | Full Name | Short Key | Type | Notes |
 |-----------|-----------|------|-------|
@@ -104,14 +104,14 @@ Again, these field names are short enough that the mapping is an identity functi
 | `input` | `inp` | map | v1.2 (replaces `arguments`/`args`, removed) |
 | `content` | `cnt` | any | v1.2 (replaces `result`/`res`, removed) |
 | `is_error` | `iserr` | bool | v1.2 (replaces `success`/`ok`, removed; polarity inverted) |
-| `action_phase` | `aphase` | string | v1.2 new: `"definition"` \| `"call"` \| `"result"` |
+| `tool_phase` | `aphase` | string | v1.2 new: `"definition"` \| `"call"` \| `"result"` |
 | `tool_call_id` | `tcid` | string | v1.2 new |
 | `error_type` | `etype` | string | v1.2 new |
 | `error` | `err` | string | |
 | `duration_ms` | `dur` | int | |
 | `parent_task_id` | `ptid` | string | |
 
-Action fields see meaningful compaction. `tool_name` (9 bytes) becomes `tn` (2 bytes). `input` (5 bytes) becomes `inp` (3 bytes). Note: the old `arguments`/`args`, `result`/`res`, and `success`/`ok` short keys were **removed** in v1.2 — implementations emitting those keys are non-conformant.
+Tool fields see meaningful compaction. `tool_name` (9 bytes) becomes `tn` (2 bytes). `input` (5 bytes) becomes `inp` (3 bytes). Note: the old `arguments`/`args`, `result`/`res`, and `success`/`ok` short keys were **removed** in v1.2 — implementations emitting those keys are non-conformant.
 
 ### Observation (Section 6.6)
 
@@ -151,13 +151,13 @@ Sixteen Goal-specific mappings. Fields like `satisfaction_evidence` (23 bytes) c
 
 ## Before and After: A Compaction Example
 
-To see the impact, consider a Belief grain before and after field compaction.
+To see the impact, consider a Fact grain before and after field compaction.
 
 **Before compaction (human-readable):**
 
 ```json
 {
-  "type": "belief",
+  "type": "fact",
   "subject": "Alice",
   "relation": "works_at",
   "object": "ACME Corp",
@@ -175,7 +175,7 @@ To see the impact, consider a Belief grain before and after field compaction.
 
 ```json
 {
-  "t": "belief",
+  "t": "fact",
   "s": "Alice",
   "r": "works_at",
   "o": "ACME Corp",

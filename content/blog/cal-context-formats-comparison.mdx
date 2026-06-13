@@ -12,20 +12,20 @@ CAL's `FORMAT` clause lets you make that trade explicitly. Six formats, same dat
 
 ## One Scenario, Four Formats
 
-A customer success agent is helping Elena with her account renewal. The memory store has three beliefs, one goal, and one tool result. Here is the same data rendered four ways.
+A customer success agent is helping Elena with her account renewal. The memory store has three facts, one goal, and one tool result. Here is the same data rendered four ways.
 
 ### SML — Semantic Tags for LLM Reasoning
 
 ```sml
 <context intent="helping elena with account renewal negotiation">
 
-  <belief subject="elena" confidence="0.93">prefers multi-year terms when pricing is fixed</belief>
-  <belief subject="elena" confidence="0.88">has budget authority up to $500k annually</belief>
-  <belief subject="elena" confidence="0.81">makes renewal decisions in Q1</belief>
+  <fact subject="elena" confidence="0.93">prefers multi-year terms when pricing is fixed</fact>
+  <fact subject="elena" confidence="0.88">has budget authority up to $500k annually</fact>
+  <fact subject="elena" confidence="0.81">makes renewal decisions in Q1</fact>
 
   <goal subject="elena" state="active" deadline="2026-03-31">negotiate renewal before fiscal year close</goal>
 
-  <action tool="get_renewal_quote" phase="completed">450 seats at $290/seat = $1.44M/yr; 3-year at $265/seat; 18% discount for 3-year commit</action>
+  <tool tool="get_renewal_quote" phase="completed">450 seats at $290/seat = $1.44M/yr; 3-year at $265/seat; 18% discount for 3-year commit</tool>
 
 </context>
 ```
@@ -35,7 +35,7 @@ A customer success agent is helping Elena with her account renewal. The memory s
 ```markdown
 ## Context: helping elena with account renewal negotiation
 
-### Beliefs about elena
+### Facts about elena
 - **prefers multi-year terms when pricing is fixed** (confidence: 0.93)
 - **has budget authority up to $500k annually** (confidence: 0.88)
 - **makes renewal decisions in Q1** (confidence: 0.81)
@@ -43,14 +43,14 @@ A customer success agent is helping Elena with her account renewal. The memory s
 ### Active Goals
 - Negotiate renewal before fiscal year close — deadline: 2026-03-31
 
-### Recent Actions
+### Recent Tools
 - `get_renewal_quote` (completed): 450 seats at $290/seat = $1.44M/yr; 3-year at $265/seat; 18% discount for 3-year commit
 ```
 
 ### TOON — Tabular, Token-Efficient
 
 ```
-beliefs[3]{subject,confidence,content}:
+facts[3]{subject,confidence,content}:
 elena,0.93,prefers multi-year terms when pricing is fixed
 elena,0.88,has budget authority up to $500k annually
 elena,0.81,makes renewal decisions in Q1
@@ -72,16 +72,16 @@ get_renewal_quote,completed,450 seats at $290/seat = $1.44M/yr; 3-year at $265/s
     "budget_used": 380
   },
   "grains": [
-    {"type": "belief", "subject": "elena", "confidence": 0.93,
+    {"type": "fact", "subject": "elena", "confidence": 0.93,
      "content": "prefers multi-year terms when pricing is fixed"},
-    {"type": "belief", "subject": "elena", "confidence": 0.88,
+    {"type": "fact", "subject": "elena", "confidence": 0.88,
      "content": "has budget authority up to $500k annually"},
-    {"type": "belief", "subject": "elena", "confidence": 0.81,
+    {"type": "fact", "subject": "elena", "confidence": 0.81,
      "content": "makes renewal decisions in Q1"},
     {"type": "goal", "subject": "elena", "state": "active",
      "deadline": "2026-03-31",
      "content": "negotiate renewal before fiscal year close"},
-    {"type": "action", "tool": "get_renewal_quote",
+    {"type": "tool", "tool": "get_renewal_quote",
      "phase": "completed",
      "content": "450 seats at $290/seat..."}
   ]
@@ -103,18 +103,18 @@ Same five grains. Radically different token budgets:
 
 At 5 grains the difference is ~120 tokens. At 50 grains it is ~1,200 tokens. At scale, format choice is a budget decision.
 
-TOON achieves its savings through tabular layout: the grain type and column names appear once per section, not once per grain. For uniform arrays (50 beliefs about the same user), the savings compound. For mixed-type assemblies, TOON groups by type and each group gets its own header — still compact, but the per-section overhead adds up.
+TOON achieves its savings through tabular layout: the grain type and column names appear once per section, not once per grain. For uniform arrays (50 facts about the same user), the savings compound. For mixed-type assemblies, TOON groups by type and each group gets its own header — still compact, but the per-section overhead adds up.
 
 ## When to Use Each
 
 ### SML — Default for LLM System Prompts
 
-Use SML when the model needs to distinguish between types of information. The tag name is the signal: `<belief confidence="0.65">` tells the model to hedge. `<consent action="denied">` tells it what it cannot do. `<reasoning type="abductive">` tells it an inference has already been drawn.
+Use SML when the model needs to distinguish between types of information. The tag name is the signal: `<fact confidence="0.65">` tells the model to hedge. `<consent action="denied">` tells it what it cannot do. `<reasoning type="abductive">` tells it an inference has already been drawn.
 
 ```sql
 ASSEMBLE user_context
   FOR "resolving elena's renewal"
-  FROM beliefs: (RECALL beliefs ABOUT "elena" LIMIT 10),
+  FROM facts: (RECALL facts ABOUT "elena" LIMIT 10),
        goals:   (RECALL goals ABOUT "elena" WHERE goal_state = "active")
   BUDGET 3000 tokens
   FORMAT sml
@@ -129,13 +129,13 @@ SML is the right default when your agent reasons about user preferences, active 
 Use TOON when you have 20+ grains of the same type and every token matters. TOON's CSV-tabular layout writes column headers once, then emits rows:
 
 ```sql
-RECALL beliefs ABOUT "elena"
+RECALL facts ABOUT "elena"
   WHERE relation IS PREFERENCE
   | ORDER BY confidence DESC | LIMIT 50
   AS toon
 ```
 
-50 beliefs in TOON uses roughly the same tokens as 30 beliefs in JSON. If you are building a knowledge retrieval step that feeds a second LLM call, TOON preserves more information within the same budget.
+50 facts in TOON uses roughly the same tokens as 30 facts in JSON. If you are building a knowledge retrieval step that feeds a second LLM call, TOON preserves more information within the same budget.
 
 TOON follows the [TOON specification v3.0](https://github.com/toon-format/spec). It combines YAML-like indentation for nested structures with CSV-style rows for uniform arrays — the common case for CAL output.
 
@@ -149,7 +149,7 @@ Use Markdown when the output will be read by a human — support dashboards, esc
 ASSEMBLE escalation_summary
   FOR "escalation review for elena's account"
   FROM history: (RECALL events ABOUT "elena" RECENT 20),
-       actions: (RECALL actions ABOUT "elena" RECENT 10)
+       actions: (RECALL tools ABOUT "elena" RECENT 10)
   BUDGET 4000 tokens
   FORMAT markdown
 ```
@@ -165,7 +165,7 @@ Use JSON when the output goes to code, not an LLM — analytics pipelines, repor
 ```sql
 ASSEMBLE account_snapshot
   FOR "account health report"
-  FROM beliefs: (RECALL beliefs ABOUT "elena"),
+  FROM facts: (RECALL facts ABOUT "elena"),
        consent: (RECALL consents WHERE subject = "elena")
   BUDGET 200 grains
   FORMAT json
@@ -180,7 +180,7 @@ JSON includes the full machine envelope — assembly metadata, grain counts, bud
 Use text when you need the smallest prose footprint and the LLM does not need to distinguish grain types:
 
 ```sql
-RECALL beliefs ABOUT "elena"
+RECALL facts ABOUT "elena"
   WHERE relation IS PREFERENCE | LIMIT 5 AS text
 ```
 
@@ -201,16 +201,16 @@ CAL's `AS` clause controls format per-source. The `FORMAT` clause controls the o
 CAL/1 ASSEMBLE mixed_context
   FOR "support review for elena"
   FROM
-    profile: (RECALL beliefs ABOUT "elena"
+    profile: (RECALL facts ABOUT "elena"
                WHERE relation IS PREFERENCE | LIMIT 10 AS toon),
     history: (RECALL events ABOUT "elena" RECENT 10 AS sml),
-    actions: (RECALL actions ABOUT "elena" RECENT 5 AS markdown)
+    actions: (RECALL tools ABOUT "elena" RECENT 5 AS markdown)
   BUDGET 4000 tokens
   PRIORITY history > profile > actions
   FORMAT sml
 ```
 
-Profile data comes as compact TOON — saves tokens on a uniform array of beliefs. Conversation history comes as SML — preserves epistemic signals for the model. Actions come as Markdown — readable in an audit trail. Each source is optimised independently.
+Profile data comes as compact TOON — saves tokens on a uniform array of facts. Conversation history comes as SML — preserves epistemic signals for the model. Tools come as Markdown — readable in an audit trail. Each source is optimised independently.
 
 ## Quick Reference: Which Format?
 

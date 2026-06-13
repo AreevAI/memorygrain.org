@@ -14,15 +14,15 @@ The Open Memory Specification provides a structured approach. Every piece of fin
 
 ## Memory types in financial context
 
-### Beliefs for market knowledge and trading signals
+### Facts for market knowledge and trading signals
 
-The Belief type (type byte `0x01`, Section 8.1) models structured knowledge as semantic triples. In financial services, this covers both static market knowledge and time-bounded trading signals.
+The Fact type (type byte `0x01`, Section 8.1) models structured knowledge as semantic triples. In financial services, this covers both static market knowledge and time-bounded trading signals.
 
 Static market data:
 
 ```json
 {
-  "type": "belief",
+  "type": "fact",
   "subject": "AAPL",
   "relation": "sector",
   "object": "Technology",
@@ -40,7 +40,7 @@ Trading signals are Facts with temporal validity:
 
 ```json
 {
-  "type": "belief",
+  "type": "fact",
   "subject": "AAPL",
   "relation": "signal",
   "object": "bullish_momentum",
@@ -84,13 +84,13 @@ The Workflow type (type byte `0x04`, Section 8.4) captures procedural memory —
 
 Each Workflow is immutable — the strategy as it existed when it was created is preserved as a content-addressed blob. If the strategy is refined, a new Workflow grain is created and the old one is superseded through the `superseded_by` field. The complete evolution of a trading strategy is preserved in the supersession chain.
 
-### Actions for order execution
+### Tools for order execution
 
-Every order submitted to an exchange or broker API becomes a Action grain (type byte `0x05`, Section 8.5):
+Every order submitted to an exchange or broker API becomes a Tool grain (type byte `0x05`, Section 8.5):
 
 ```json
 {
-  "type": "action",
+  "type": "tool",
   "tool_name": "submit_order",
   "input": {
     "symbol": "AAPL",
@@ -123,7 +123,7 @@ Failed orders are equally important:
 
 ```json
 {
-  "type": "action",
+  "type": "tool",
   "tool_name": "submit_order",
   "input": {
     "symbol": "AAPL",
@@ -240,7 +240,7 @@ Event grains (type byte `0x02`, Section 8.2) store raw, unstructured text. In fi
 }
 ```
 
-Like clinical Events in healthcare, these are the input to consolidation — the process of extracting structured Beliefs. The trading agent might process this Event and generate Belief grains: `(AAPL, earnings_surprise, +12%)`, `(AAPL, revenue_growth, 18% YoY)`. The extracted Beliefs carry `source_type: "llm_generated"` and reference the Event in their `derived_from` field.
+Like clinical Events in healthcare, these are the input to consolidation — the process of extracting structured Facts. The trading agent might process this Event and generate Fact grains: `(AAPL, earnings_surprise, +12%)`, `(AAPL, revenue_growth, 18% YoY)`. The extracted Facts carry `source_type: "llm_generated"` and reference the Event in their `derived_from` field.
 
 ## Bi-temporal modeling for decision reconstruction
 
@@ -259,7 +259,7 @@ OMS provides four query patterns (Section 15.2):
 | "What did the agent know at time T?" | `system_valid_from <= T` AND (`system_valid_to` is null OR &gt; T) | What the agent knew when it placed the order |
 | "Reconstruct state at audit time T" | Combine event-time and system-time | Complete decision context for regulatory review |
 
-The third query pattern is the one regulators need most. Consider this scenario: at 14:30 on February 19, the trading agent bought 100 shares of AAPL. At 14:25, a bullish momentum signal (Belief grain) was generated with `system_valid_from: 14:25`. At 14:35, a contradictory bearish signal was generated, and the 14:25 signal was superseded (its `system_valid_to` was set to 14:35 by the index layer).
+The third query pattern is the one regulators need most. Consider this scenario: at 14:30 on February 19, the trading agent bought 100 shares of AAPL. At 14:25, a bullish momentum signal (Fact grain) was generated with `system_valid_from: 14:25`. At 14:35, a contradictory bearish signal was generated, and the 14:25 signal was superseded (its `system_valid_to` was set to 14:35 by the index layer).
 
 The bi-temporal query "What did the agent know at 14:30?" returns the bullish signal — because at 14:30, that signal had `system_valid_from <= 14:30` and `system_valid_to` was still null (it had not yet been superseded). The bearish signal, with `system_valid_from: 14:35`, does not appear because it did not exist in the system at 14:30.
 
@@ -283,7 +283,7 @@ Section 20.6 of the OMS specification explicitly addresses SOX: ".mg blobs are t
 
 ### Provenance chain for derivation tracking
 
-Every grain carries a `provenance_chain` — the full derivation trail showing where the grain came from and how it was produced. For a trading decision, this chain might trace from raw market data (Event) through signal generation (Belief) through strategy trigger (Workflow reference) to order execution (Action).
+Every grain carries a `provenance_chain` — the full derivation trail showing where the grain came from and how it was produced. For a trading decision, this chain might trace from raw market data (Event) through signal generation (Fact) through strategy trigger (Workflow reference) to order execution (Tool).
 
 Each provenance entry records:
 - `source_hash` — the content address of the source grain (cryptographically verifiable)
@@ -326,7 +326,7 @@ COSE_Sign1 {
 
 For regulatory inquiries — "which agent made this trade?" — the answer is cryptographically provable. The DID resolves to a public key (for `did:key`, the key is embedded in the DID itself). The signature over the grain bytes proves the grain was created by the holder of the corresponding private key.
 
-This is particularly important when an organization operates multiple AI trading agents with different strategies and risk profiles. COSE signing establishes non-repudiation: Agent A cannot claim that Agent B placed the trade, because the signature on the Action grain is verifiable.
+This is particularly important when an organization operates multiple AI trading agents with different strategies and risk profiles. COSE signing establishes non-repudiation: Agent A cannot claim that Agent B placed the trade, because the signature on the Tool grain is verifiable.
 
 ## Sensitivity classification for financial data
 
@@ -362,11 +362,11 @@ At write time, the serializer scans tags and sets header sensitivity bits to the
 
 When sharing trading analytics with clients, the firm may need to demonstrate performance without revealing proprietary strategy details. OMS selective disclosure (Section 10) enables this:
 
-A portfolio performance Belief shared with a client might elide the `provenance_chain` (which reveals the firm's analytical methods) and `namespace` (which reveals organizational structure):
+A portfolio performance Fact shared with a client might elide the `provenance_chain` (which reveals the firm's analytical methods) and `namespace` (which reveals organizational structure):
 
 ```json
 {
-  "type": "belief",
+  "type": "fact",
   "subject": "portfolio-client-789",
   "relation": "annual_return",
   "object": "12.4%",
@@ -430,19 +430,19 @@ The `threshold: 2` means at least two of the three authorized DIDs must co-sign 
 
 Here is how a complete trading workflow maps to OMS memory types:
 
-1. **Market data ingestion**: Raw analyst reports and earnings transcripts become Event grains. Market reference data becomes Belief grains with `source_type: "imported"`.
+1. **Market data ingestion**: Raw analyst reports and earnings transcripts become Event grains. Market reference data becomes Fact grains with `source_type: "imported"`.
 
-2. **Signal generation**: The trading agent analyzes Episodes and market Facts, generating signal Belief grains with `source_type: "llm_generated"`, temporal validity windows (`valid_from`/`valid_to`), and `provenance_chain` tracing the analysis inputs.
+2. **Signal generation**: The trading agent analyzes Episodes and market Facts, generating signal Fact grains with `source_type: "llm_generated"`, temporal validity windows (`valid_from`/`valid_to`), and `provenance_chain` tracing the analysis inputs.
 
 3. **Strategy evaluation**: Active Workflow grains define the trading strategies. When a trigger condition matches (e.g., "RSI crosses below 30"), the corresponding Workflow is activated.
 
 4. **Pre-trade checks**: The agent verifies position limits and risk constraints against active Goal grains. If a locked Goal grain says "max 5% single-position exposure," the order is rejected before submission.
 
-5. **Order execution**: The agent submits an order via the broker API, creating a Action grain with complete arguments, result, fill price, and execution time.
+5. **Order execution**: The agent submits an order via the broker API, creating a Tool grain with complete arguments, result, fill price, and execution time.
 
 6. **Session state**: At regular intervals and after significant events, State grains capture the complete trading session state — positions, P&L, margin, risk exposure.
 
-7. **Regulatory audit**: Years later, a regulator asks what the agent knew when it made a specific trade. The bi-temporal query reconstructs the exact system state at the moment of the decision. The provenance chain traces from the trade (Action) back through the strategy (Workflow), the signals (Beliefs), and the raw data (Events). Every grain is content-addressed, COSE-signed, and immutable.
+7. **Regulatory audit**: Years later, a regulator asks what the agent knew when it made a specific trade. The bi-temporal query reconstructs the exact system state at the moment of the decision. The provenance chain traces from the trade (Tool) back through the strategy (Workflow), the signals (Facts), and the raw data (Events). Every grain is content-addressed, COSE-signed, and immutable.
 
 Every grain in this workflow carries `structural_tags: ["reg:sox"]`, routing it to seven-year retention storage. Every grain is content-addressed, making any tampering detectable. Every grain carries `author_did`, making every decision attributable. And the bi-temporal model ensures that historical reconstruction is precise — what the system knew, when it knew it, and what it did with that knowledge.
 

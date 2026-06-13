@@ -1,11 +1,11 @@
-type BadgeVariant = 'fact' | 'episode' | 'checkpoint' | 'workflow' | 'toolcall' | 'observation' | 'default'
+type BadgeVariant = 'fact' | 'episode' | 'checkpoint' | 'workflow' | 'tool' | 'observation' | 'default'
 
 const variantColors: Record<BadgeVariant, string> = {
   fact: 'var(--fact)',
   episode: 'var(--episode)',
   checkpoint: 'var(--checkpoint)',
   workflow: 'var(--workflow)',
-  toolcall: 'var(--toolcall)',
+  tool: 'var(--tool)',
   observation: 'var(--observation)',
   default: 'var(--fg-muted)',
 }

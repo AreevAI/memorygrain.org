@@ -38,13 +38,13 @@ Two agents on different continents, running different implementations, in differ
 
 Every grain carries a `type` field indicating what kind of knowledge it represents. OMS defines ten standard grain types, each with its own required and optional fields. The type is also encoded in byte 2 of the fixed header, enabling O(1) filtering without deserializing the payload.
 
-### Belief (0x01)
+### Fact (0x01)
 
 A structured knowledge claim modeled as a semantic triple: subject-relation-object with confidence and temporal validity.
 
 ```json
 {
-  "type": "belief",
+  "type": "fact",
   "subject": "user",
   "relation": "prefers",
   "object": "dark mode",
@@ -58,7 +58,7 @@ Facts are the core knowledge representation primitive. The subject-relation-obje
 
 ### Event (0x02)
 
-A raw, unstructured interaction record. Episodes are the input to consolidation — the process of extracting structured Beliefs from unstructured text.
+A raw, unstructured interaction record. Episodes are the input to consolidation — the process of extracting structured Facts from unstructured text.
 
 ```json
 {
@@ -99,13 +99,13 @@ Procedural memory — a learned sequence of actions triggered by a specific cond
 
 Workflows capture how to do things, not what is true. Required fields: `type`, `steps` (non-empty array), `trigger` (non-empty string), `created_at`.
 
-### Action (0x05)
+### Tool (0x05)
 
 A record of a tool or function invocation and its result.
 
 ```json
 {
-  "type": "action",
+  "type": "tool",
   "tool_name": "web_search",
   "input": {"query": "OMS specification"},
   "content": {"hits": 42},
@@ -114,7 +114,7 @@ A record of a tool or function invocation and its result.
 }
 ```
 
-Action grains provide a complete audit trail of what an agent did, what arguments it passed, what came back, and whether it succeeded. Optional fields include `duration_ms` for execution time and `error` for failure messages.
+Tool grains provide a complete audit trail of what an agent did, what arguments it passed, what came back, and whether it succeeded. Optional fields include `duration_ms` for execution time and `error` for failure messages.
 
 ### Observation (0x06)
 
@@ -245,11 +245,11 @@ New fields never break old implementations. Parsers must ignore unknown fields a
 
 ### 3. Minimal required fields
 
-Each memory type defines only the essential fields. A Belief requires just six fields: `type`, `subject`, `relation`, `object`, `confidence`, `created_at`. Everything else is optional. This means a simple knowledge claim and a richly annotated one with temporal validity, provenance chains, cross-links, and content references coexist in the same format without separate type hierarchies.
+Each memory type defines only the essential fields. A Fact requires just six fields: `type`, `subject`, `relation`, `object`, `confidence`, `created_at`. Everything else is optional. This means a simple knowledge claim and a richly annotated one with temporal validity, provenance chains, cross-links, and content references coexist in the same format without separate type hierarchies.
 
 ### 4. Semantic triples
 
-The subject-relation-object model maps naturally to knowledge graphs. Every Belief is an RDF triple. This makes the transition from `.mg` grains to graph databases, SPARQL queries, or ontological reasoning a direct mapping rather than an impedance mismatch.
+The subject-relation-object model maps naturally to knowledge graphs. Every Fact is an RDF triple. This makes the transition from `.mg` grains to graph databases, SPARQL queries, or ontological reasoning a direct mapping rather than an impedance mismatch.
 
 ### 5. Compliance by design
 

@@ -27,7 +27,7 @@ import { Callout } from '@/components/ui/Callout'
 import { ExpandableImage } from '@/components/ui/ExpandableImage'
 import { ArrowLeft } from 'lucide-react'
 
-const tagVariants: Record<string, 'fact' | 'episode' | 'checkpoint' | 'workflow' | 'toolcall' | 'observation' | 'default'> = {
+const tagVariants: Record<string, 'fact' | 'episode' | 'checkpoint' | 'workflow' | 'tool' | 'observation' | 'default'> = {
   security: 'checkpoint',
   cryptography: 'checkpoint',
   signing: 'checkpoint',

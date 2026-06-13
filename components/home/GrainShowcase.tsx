@@ -19,16 +19,16 @@ type GrainCard = {
 
 const cards: GrainCard[] = [
   {
-    type: 'Belief',
+    type: 'Fact',
     typeHex: '0x01',
-    color: 'var(--belief)',
+    color: 'var(--fact)',
     agent: 'FitCoach',
     company: 'KineticAI',
     description:
       'Learned from three months of workout data. Nutrition and scheduling agents use this grain to personalize recovery plans.',
     hash: 'a7f3e812…9c21',
     payload: {
-      type: 'belief',
+      type: 'fact',
       subject: 'user:john-smith',
       relation: 'preferred_activity',
       object: 'morning_run_5k',
@@ -121,16 +121,16 @@ const cards: GrainCard[] = [
     ],
   },
   {
-    type: 'Action',
+    type: 'Tool',
     typeHex: '0x05',
-    color: 'var(--action)',
+    color: 'var(--tool)',
     agent: 'WealthSense',
     company: 'FinEdge',
     description:
       'Full input/output audit trail preserved after a portfolio rebalance execution. Tax and compliance agents reference the record.',
     hash: '7b21ea63…d0f8',
     payload: {
-      type: 'action',
+      type: 'tool',
       tool_name: 'portfolio.rebalance',
       input: { account: '401k-primary', target_bonds: 0.4, strategy: 'tax_loss_harvest' },
       content: { status: 'executed', trades: 3, net_change_pct: -0.12 },

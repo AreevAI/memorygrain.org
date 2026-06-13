@@ -165,7 +165,7 @@ export function Hero() {
               href: '/cal',
             },
             {
-              mono: '<belief>',
+              mono: '<fact>',
               title: 'Semantic Markup Language',
               description: 'The output format — flat, tag-based markup optimized for LLM context consumption.',
               link: 'Read SML spec \u2192',
