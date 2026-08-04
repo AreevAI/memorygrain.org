@@ -1,9 +1,24 @@
+# Deploy memorygrain.org to the Odin cluster (Hetzner Mumbai).
+#
+# Replaces the former deploy-atlas.yaml. Atlas (Azure Dublin) was
+# decommissioned 2026-06-15 and the websites moved to Odin — see
+# services/WEBSITE-MIGRATION-ODIN.md in the devops repo. The atlas overlays
+# were deleted along with it, so the old pipeline could no longer have applied
+# even if it ran.
+#
+# Trigger: push to deploy/odin (notify.sh routes that branch to #odin).
+#
+# The deployment pins image tag `latest` with imagePullPolicy: Always, so a
+# rollout restart is required after the push — set-image alone is a no-op when
+# the tag has not changed.
+
 when:
+  - event: manual
   - event: push
-    branch: deploy/atlas
+    branch: deploy/odin
 
 labels:
-  location: odin
+  location: office
 
 steps:
   - name: slack-start
@@ -17,6 +32,8 @@ steps:
 
   - name: build
     image: docker:27
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     commands:
       - docker login registry.atmatic.ai -u $HARBOR_USERNAME -p $HARBOR_PASSWORD
       - >-
@@ -37,7 +54,7 @@ steps:
   - name: clone-devops
     image: alpine/git
     commands:
-      - git clone https://$GITHUB_TOKEN@github.com/mindgryd/devops.git /tmp/devops
+      - git clone --depth 1 https://$GITHUB_TOKEN@github.com/mindgryd/devops.git /tmp/devops
     environment:
       GITHUB_TOKEN:
         from_secret: github_token
@@ -46,13 +63,14 @@ steps:
     image: bitnami/kubectl:latest
     commands:
       - mkdir -p ~/.kube
-      - echo "$ATLAS_KUBECONFIG" > ~/.kube/config
-      - kubectl apply -k /tmp/devops/services/memorygrain-web/overlays/atlas
+      - echo "$ODIN_KUBECONFIG" > ~/.kube/config
+      - kubectl apply -k /tmp/devops/services/memorygrain-web/overlays/odin-prod
       - kubectl rollout restart deployment/memorygrain-web -n memorygrain-web
       - kubectl rollout status deployment/memorygrain-web -n memorygrain-web --timeout=300s
+      - kubectl get pods,ingress,certificate -n memorygrain-web
     environment:
-      ATLAS_KUBECONFIG:
-        from_secret: atlas_kubeconfig
+      ODIN_KUBECONFIG:
+        from_secret: odin_kubeconfig
 
   - name: slack-success
     image: registry.atmatic.ai/mindgryd/wp-notify
