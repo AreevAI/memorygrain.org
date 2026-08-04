@@ -187,11 +187,17 @@ One of the most valuable capabilities in manufacturing AI is learning procedures
 {
   "type": "workflow",
   "trigger": "vibration_exceeds_threshold",
-  "steps": [
+  "nodes": [
     "reduce_spindle_speed",
     "alert_maintenance",
     "log_incident",
     "schedule_inspection"
+  ],
+  "edges": [
+    {"src": "reduce_spindle_speed", "dst": "alert_maintenance"},
+    {"src": "reduce_spindle_speed", "dst": "log_incident"},
+    {"src": "alert_maintenance", "dst": "schedule_inspection"},
+    {"src": "log_incident", "dst": "schedule_inspection"}
   ],
   "created_at": 1768471200000,
   "importance": 0.7,
@@ -199,7 +205,7 @@ One of the most valuable capabilities in manufacturing AI is learning procedures
 }
 ```
 
-The `trigger` field defines the condition that activates the workflow. The `steps` array encodes the ordered sequence of actions. As the agent observes more instances of this procedure — different operators handling similar situations — it can refine the Workflow through supersession, adding or reordering steps based on observed outcomes.
+The `trigger` field defines the condition that activates the workflow. The `nodes` array names the steps and `edges` wires them together. Here the spindle slows first, then alerting and logging fan out in parallel — they are independent, and the machine should not wait on a logging call before paging maintenance. `schedule_inspection` is the target of both, making it an AND-join. As the agent observes more instances of this procedure — different operators handling similar situations — it can refine the Workflow through supersession, rewiring the graph based on observed outcomes.
 
 More complex procedures can be learned for specific scenarios:
 
@@ -207,12 +213,20 @@ More complex procedures can be learned for specific scenarios:
 {
   "type": "workflow",
   "trigger": "quality_defect_rate_above_threshold",
-  "steps": [
+  "nodes": [
     "pause_production_line",
     "run_calibration_sequence",
     "inspect_last_50_parts",
     "adjust_tool_offset",
     "resume_with_increased_inspection_frequency"
+  ],
+  "edges": [
+    {"src": "pause_production_line", "dst": "run_calibration_sequence"},
+    {"src": "pause_production_line", "dst": "inspect_last_50_parts"},
+    {"src": "run_calibration_sequence", "dst": "adjust_tool_offset"},
+    {"src": "inspect_last_50_parts", "dst": "adjust_tool_offset"},
+    {"src": "adjust_tool_offset", "dst": "run_calibration_sequence", "cond": "still_out_of_spec", "max_cycles": 3},
+    {"src": "adjust_tool_offset", "dst": "resume_with_increased_inspection_frequency", "cond": "within_spec"}
   ],
   "created_at": 1768471200000,
   "importance": 0.7,
@@ -220,7 +234,9 @@ More complex procedures can be learned for specific scenarios:
 }
 ```
 
-The Workflow type requires only `type`, `steps` (non-empty array), `trigger` (non-empty string), and `created_at`. This minimal schema keeps workflow definitions lean while the `importance` field (default 0.7 for Workflows) signals that procedural knowledge is higher-value than raw observations.
+The Workflow type requires only `type`, `nodes` (a non-empty array of unique node IDs), and `created_at` — `trigger` and `edges` are both optional (Section 8.4). This minimal schema keeps workflow definitions lean while the `importance` field signals that procedural knowledge is higher-value than raw observations.
+
+This second example uses a **bounded cycle**: if the tool offset adjustment leaves the part still out of spec, the back-edge returns to calibration and tries again. The `max_cycles: 3` bound is not optional decoration — a conforming implementation SHOULD reject an unbounded cycle, because a retry loop with no ceiling is a procedure that may never terminate on a factory floor.
 
 ## Checkpoints for production line state
 

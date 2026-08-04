@@ -120,7 +120,7 @@ The rationale is threefold:
 
 Array elements MUST **preserve insertion order**. Arrays are NOT sorted.
 
-This is the complement to Rule 1 (key ordering). While map keys are sorted lexicographically, arrays maintain the order their elements were added. This is important for fields like `provenance_chain` (where order implies derivation sequence), `plan` (where order implies execution sequence), and `steps` (where order defines workflow progression).
+This is the complement to Rule 1 (key ordering). While map keys are sorted lexicographically, arrays maintain the order their elements were added. This is important for fields like `provenance_chain` (where order implies derivation sequence), `plan` (where order implies execution sequence), and a Workflow's `nodes` (whose first element is the graph's entry point).
 
 Sorting arrays would destroy semantic information. The first step in a workflow is not interchangeable with the last.
 

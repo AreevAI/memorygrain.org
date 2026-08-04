@@ -1,51 +1,53 @@
 ---
 title: "Memory Type Deep Dive: Workflows"
-description: "Workflows are procedural memory in OMS — learned sequences of actions that agents can replay. Learn about the Workflow memory type, the trigger-steps model, how agents learn workflows, versioning through supersession, and industry use cases."
+description: "Workflows are procedural memory in OMS — directed graphs of procedural steps that agents can replay. Learn the nodes-and-edges model introduced in OMS v1.4, how topology encodes forks and joins, node-to-Tool binding, versioning through supersession, and industry use cases."
 date: "2026-02-19"
-readTime: "10 min read"
+readTime: "13 min read"
 tags: ["memory-types", "workflows", "procedural-memory"]
 ---
 
 You know how to ride a bicycle. You know how to make coffee. You know how to deploy a new release to production. These are all examples of **procedural memory** — knowing *how* to do something, as opposed to knowing *what* is true.
 
-In the Open Memory Specification, procedural memory is captured by the **Workflow** memory type. Defined in Section 8.4 of OMS v1.0, Workflows encode learned sequences of actions with explicit triggers — when some condition is met, execute these steps in this order. They are the reusable playbooks that agents can follow, share, and improve over time.
+In the Open Memory Specification, procedural memory is captured by the **Workflow** memory type. Defined in Section 8.4, a Workflow is a **directed graph of procedural steps** — plans, pipelines, and multi-path processes. Real procedures branch, fan out, wait on multiple predecessors, and retry. OMS v1.4 redesigned the type to say so directly: the flat `steps` array of earlier revisions was replaced by a graph of `nodes` and `edges`.
 
-This post covers the Workflow memory type in depth: its trigger-steps model, how agents learn workflows from patterns, versioning through supersession, serialization details, and practical use cases across industries.
+This post covers the Workflow memory type in depth: the graph model, how structure is inferred from topology rather than declared, node-to-Tool binding, how agents learn workflows from patterns, versioning through supersession, serialization details, and practical use cases across industries.
 
 ## What is a Workflow?
 
 The spec defines a Workflow as:
 
-> Procedural memory — learned sequence of actions.
+> Directed graph of procedural steps — plans, pipelines, and multi-path processes.
 
-A Workflow has two core components: a **trigger** that describes when to execute, and **steps** that describe what to do, in order. This is a simple but powerful model that captures everything from "if disk is full, run these cleanup commands" to "when a new employee starts, follow this onboarding checklist."
+A Workflow has one required structural component — a set of **nodes** — and three optional ones: the **edges** connecting them, the **bindings** that attach nodes to concrete tools, and the **retries** that bound repetition. An optional **trigger** describes when the procedure should activate.
 
-The key word in the spec definition is *learned*. Workflows are not just static procedures written by humans — they can be extracted from observed patterns in an agent's behavior. When an agent notices that it keeps performing the same sequence of tool calls in response to the same kind of situation, that pattern can be formalized as a Workflow grain and reused.
+The graph model matters because the alternative degrades badly. A flat ordered list can only express "do A, then B, then C." It cannot express "run the security scan and the compliance check in parallel, wait for both, then branch on the approval decision, retrying the staging deploy up to three times." Encoding that in a list means smuggling control flow into step *text*, where no implementation can read it reliably.
+
+Workflows can be authored by humans, but they can also be extracted from observed patterns in an agent's behavior. When an agent notices that it keeps performing the same sequence of tool calls in response to the same kind of situation, that pattern can be formalized as a Workflow grain and reused.
 
 ## Required Fields
 
-The Workflow type has four required fields (Section 8.4):
+The Workflow type has three required fields (Section 8.4):
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `type` | string | Must be `"workflow"` |
-| `steps` | array[string] | Non-empty array of action steps, in order |
-| `trigger` | string | Non-empty string describing when to execute |
+| `nodes` | array[string] | Non-empty array of graph node identifiers, unique within the grain |
 | `created_at` | int64 | Creation timestamp in epoch milliseconds |
 
-Both `steps` and `trigger` must be non-empty — a workflow without a trigger condition or without any steps is meaningless. The `steps` array must contain at least one element, and `trigger` must be a non-empty string.
+Each element of `nodes` serves as both the node's ID and its human-readable label — there is no separate label field to keep in sync. Node IDs must be unique within the grain.
 
-Here is a minimal Workflow:
+Note what is *not* required: `trigger`. A Workflow is a plan, and a plan is meaningful whether or not anything fires it automatically. In earlier OMS revisions `trigger` was mandatory; since v1.4 it is optional.
+
+Here is a minimal Workflow — a linear pipeline:
 
 ```json
 {
   "type": "workflow",
-  "trigger": "disk usage exceeds 90%",
-  "steps": [
-    "Check largest files in /var/log",
-    "Archive logs older than 30 days",
-    "Clear temporary files in /tmp",
-    "Notify admin via Slack"
+  "trigger": "merge to main",
+  "nodes": ["build", "test", "deploy"],
+  "edges": [
+    {"src": "build", "dst": "test"},
+    {"src": "test", "dst": "deploy"}
   ],
   "created_at": 1768471200000
 }
@@ -53,110 +55,205 @@ Here is a minimal Workflow:
 
 The header byte for Workflow is `0x04` (Section 3.1.1, Type enum), so this grain's 9-byte fixed header would begin with `01 00 04` — version 1, no flags set, Workflow type.
 
-<Callout type="info">
-The `steps` and `trigger` fields use their full names as short keys in the compacted form (Section 6.4). Like the Event-specific fields `content` and `consolidated`, the Workflow-specific fields are not shortened further during compaction.
-</Callout>
-
 ## Optional Fields
-
-Workflows have just two optional fields:
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `importance` | float64 | `0.7` | Importance weighting, range [0.0, 1.0] |
-| `namespace` | string | `"shared"` | Memory partition/category |
-
-The default importance of `0.7` is the same as Facts, reflecting that procedural knowledge — knowing how to do something — is as valuable as declarative knowledge. This is higher than Episodes (default `0.5`) and Observations (default `0.3`), which serve as raw input data rather than refined knowledge.
-
-Workflows also inherit the common optional fields available to all grain types through the core field map (Section 6.1):
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `author_did` | string | DID of creating agent |
-| `user_id` | string | Associated data subject |
-| `structural_tags` | array[string] | Classification tags |
-| `superseded_by` | string | Content address of superseding grain |
-| `derived_from` | array[string] | Parent content addresses |
-| `provenance_chain` | array[map] | Derivation trail |
-| `related_to` | array[map] | Cross-links to related grains |
+| `trigger` | string | Condition that activates this workflow |
+| `edges` | array[map] | Directed edges between nodes. When absent, nodes are unconnected |
+| `bindings` | map[string→string] | Maps node IDs to Tool definition grain hashes |
+| `retries` | map[string→int] | Maps node IDs to a maximum repeat count on failure |
 
-These inherited fields enable rich metadata, provenance tracking, and inter-grain relationships — but for many Workflows, the four required fields plus namespace and importance are sufficient.
+Workflows also inherit the common optional fields available to all grain types through the core field map (Section 6.1) — `author_did`, `user_id`, `namespace`, `importance`, `structural_tags`, `derived_from`, `provenance_chain`, `related_to`, and the rest.
 
-## The Trigger-Steps Model
+### The Edge Schema
 
-The trigger-steps model is deliberately simple:
+Each element of `edges` is a map with two required fields and two optional ones:
 
-- **Trigger**: A natural-language string describing the condition under which this workflow should execute. It is a description, not executable code.
-- **Steps**: An ordered array of strings, each describing one action to take. The order matters — per Section 4.6, array elements preserve insertion order.
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `src` | string | yes | ID of the source node (must exist in `nodes`) |
+| `dst` | string | yes | ID of the target node (must exist in `nodes`) |
+| `cond` | string | no | Opaque condition string; absent means unconditional |
+| `max_cycles` | int | no | Maximum traversal count for back-edges; absent means unlimited |
 
-This design choice is important. OMS is a data format, not an execution engine. The trigger is not a boolean expression that can be evaluated mechanically — it is a description that an agent (or human) interprets. Similarly, each step is a description, not a function call. The agent decides how to interpret and execute each step.
+Like `trigger`, `cond` is an opaque string, not an expression the format evaluates. OMS is a data format, not an execution engine.
 
-This keeps the format simple and universal. A trigger like "customer reports billing discrepancy" is understandable by any agent, regardless of its implementation language or tool ecosystem. An execution-ready format like `if customer.report_type == 'billing_discrepancy'` would tie the Workflow to a specific data model.
+## Structure Is Inferred, Never Declared
 
-### Trigger Examples
+This is the most important design decision in the redesigned type: **node roles come from graph topology, not from a declared node-type field.**
 
-Triggers describe *when*:
+| Topology | Inferred role |
+|----------|---------------|
+| Multiple outgoing unconditional edges | Parallel fan-out (fork) |
+| Target of multiple edges | AND-join — all predecessors must complete |
+| Multiple outgoing conditional edges (`cond` present) | Decision point |
+| No outgoing edges | Terminal node |
+| First element of `nodes` | Entry point |
 
-```
-"disk usage exceeds 90%"
-"new employee starts onboarding"
-"customer requests account cancellation"
-"RSI crosses below 30"
-"build fails on main branch"
-"patient vital signs exceed threshold"
-"monthly reporting period begins"
-```
+Back-edges — edges that form cycles — are permitted when bounded by `max_cycles` or by an entry in `retries`.
 
-### Steps Examples
+<Callout type="info">
+Inference over declaration removes a whole class of corrupt grains. If a node carried `node_type: "fork"` alongside its edges, the two could disagree, and every reader would need a rule for which one wins. With the graph as the single source of truth, a fork *is* a node with multiple outgoing unconditional edges. There is nothing to contradict.
+</Callout>
 
-Steps describe *what*, in order:
+Here is a fork/join in practice — two review gates that run in parallel, both of which must finish before evaluation:
 
 ```json
 {
-  "trigger": "customer requests account cancellation",
-  "steps": [
-    "Verify customer identity through two-factor authentication",
-    "Check for outstanding balance or pending transactions",
-    "Offer retention incentives based on customer tier",
-    "If customer confirms cancellation, process refund for unused period",
-    "Schedule data export delivery within 30 days",
-    "Send cancellation confirmation email",
-    "Log cancellation reason in CRM"
-  ]
+  "type": "workflow",
+  "trigger": "PR opened",
+  "nodes": ["lint", "security", "compliance", "evaluate"],
+  "edges": [
+    {"src": "lint", "dst": "security"},
+    {"src": "lint", "dst": "compliance"},
+    {"src": "security", "dst": "evaluate"},
+    {"src": "compliance", "dst": "evaluate"}
+  ],
+  "created_at": 1768471200000
 }
 ```
 
-Each step is a self-contained instruction. The agent processes them sequentially, using whatever tools and capabilities it has available.
+`lint` has two outgoing unconditional edges, so it forks. `evaluate` is the target of two edges, so it is an AND-join. No field says either of those things.
+
+## Validation Constraints
+
+An implementation validating a Workflow grain checks (Section 8.4):
+
+- Every `src` and `dst` in `edges` MUST reference an element of `nodes`.
+- Every key in `bindings` MUST reference an element of `nodes`.
+- Every key in `retries` MUST reference an element of `nodes`.
+- Node IDs MUST be unique within `nodes`.
+- Unbounded cycles — a back-edge with no `max_cycles` and no `retries` entry for the target node — SHOULD be rejected.
+
+That last constraint is the one worth dwelling on. A cycle without a bound is a procedure that may never terminate. The spec does not forbid cycles, because retry loops and iterative refinement are legitimate procedures; it requires that they be *bounded*.
+
+## Node-to-Tool Binding
+
+A node is a step. What actually runs it? OMS defines a three-tier resolution:
+
+| Tier | Condition | Resolution |
+|------|-----------|------------|
+| Bound | Node ID present in `bindings` | Fetch the Tool definition grain by hash; use its `tool_name`, `input_schema`, `output_schema` |
+| Named | No binding, but a Tool definition grain exists with a matching `tool_name` | Resolve by convention (implementation-defined lookup) |
+| Abstract | No binding, no matching tool | The node label is a human-readable instruction; the executor — an LLM or agent — interprets it |
+
+This tiering is what lets one type serve both a fully wired CI pipeline and a loosely sketched playbook. A node named `"Notify the customer's account manager"` needs no binding to be useful; a node named `prod_deploy` probably wants one.
+
+Here is a full pipeline using conditional branching, a bounded retry, and bindings:
+
+```json
+{
+  "type": "workflow",
+  "trigger": "release requested",
+  "nodes": ["build", "unit_test", "lint", "integration_test", "stage_deploy", "approval", "prod_deploy", "rollback", "notify"],
+  "edges": [
+    {"src": "build", "dst": "unit_test"},
+    {"src": "build", "dst": "lint"},
+    {"src": "unit_test", "dst": "integration_test"},
+    {"src": "lint", "dst": "integration_test"},
+    {"src": "integration_test", "dst": "stage_deploy"},
+    {"src": "stage_deploy", "dst": "approval"},
+    {"src": "approval", "dst": "prod_deploy", "cond": "approved"},
+    {"src": "approval", "dst": "rollback", "cond": "rejected"},
+    {"src": "prod_deploy", "dst": "notify"},
+    {"src": "rollback", "dst": "notify"}
+  ],
+  "bindings": {
+    "build": "sha256:def111...",
+    "stage_deploy": "sha256:def333...",
+    "prod_deploy": "sha256:def444..."
+  },
+  "retries": {
+    "stage_deploy": 3
+  },
+  "created_at": 1711324800000
+}
+```
+
+`approval` has two outgoing edges, both carrying `cond` — a decision point. `notify` is reachable from either branch. `stage_deploy` may repeat up to three times on failure.
+
+## Execution Records Never Touch the Plan
+
+When an agent executes a workflow node, it does **not** modify the Workflow grain — grains are immutable, and the plan must stay stable while runs come and go.
+
+Instead, the agent creates a Tool grain (Section 8.5) with a relation of type `mg:step_action:<node_id>` targeting the Workflow grain's hash. One plan, many execution traces, all linked back by relation, none of them mutating the original.
+
+This also means the plan and its history have separate lifecycles. You can re-run a two-year-old Workflow and the new Tool grains attach cleanly, because the Workflow's content address never moved.
+
+<Callout type="info">
+The `mg:` standard relation vocabulary was updated alongside the redesign: `mg:requires_steps` became **`mg:has_graph`**. The old name described a list; the new one describes what a Workflow actually holds.
+</Callout>
+
+## Writing Workflows in CAL
+
+Hand-writing edge arrays is tedious, so CAL — the Context Assembly Language — gives Workflows a dedicated graph syntax for `ADD` and `SUPERSEDE` rather than the usual `SET` clauses:
+
+```sql
+-- Simple linear workflow
+ADD workflow "nightly backup"
+  ON "cron 0 2 * * *"
+  snapshot -> compress -> upload
+  REASON "automate database backups"
+
+-- Parallel fork/join
+ADD workflow "code review"
+  ON "PR opened"
+  lint -> (security_review, compliance_review) -> evaluate
+  REASON "parallel review gates"
+
+-- Conditional branching with a bounded retry and a binding
+ADD workflow "release gate"
+  ON "release requested"
+  build -> deploy * 3
+  deploy -> promote WHEN "healthy"
+  deploy -> rollback WHEN "degraded"
+  BIND deploy = sha256:def333...
+  REASON "approval-based routing"
+```
+
+The operators map directly onto the grain fields: `->` produces an edge, `(a, b)` produces a fork/join pair, `WHEN "cond"` sets `cond`, `* N` sets `retries`, `BIND` populates `bindings`, and `ON` sets `trigger`. Precedence runs `* N` (highest), then `WHEN`, then `->` (lowest). Clause order is fixed: name → `ON` → graph lines → `BIND` → `REASON`.
+
+Node names are bare identifiers or quoted strings; reserved words must be quoted. A `SUPERSEDE` with graph syntax replaces the graph in full rather than patching it — which is the right default for an immutable type, since a partial edit would be ambiguous about what the resulting topology is.
 
 ## How Agents Learn Workflows
 
-Workflows can be authored by humans, but the most powerful use case is agent-learned workflows. Here is how the learning pipeline works:
-
 ### From Tools to Workflows
 
-The Tool memory type (Section 8.5) records every tool invocation an agent makes: the tool name, arguments, result, success/failure, and duration. Over time, these records reveal patterns:
+The Tool memory type (Section 8.5) records every tool invocation an agent makes: the tool name, input, content, error status, and duration. Over time, these records reveal patterns:
 
-1. **Observation**: The agent (or a meta-agent) notices that in response to situation X, it consistently executes tools A, B, C in that order.
+1. **Observation**: The agent (or a meta-agent) notices that in response to situation X, it consistently executes tools A, B, C — sometimes B and C concurrently.
 
-2. **Extraction**: The repeated pattern is extracted as a Workflow grain with trigger describing situation X and steps describing the A, B, C sequence.
+2. **Extraction**: The repeated pattern is extracted as a Workflow grain whose `nodes` are the recurring steps and whose `edges` encode the observed ordering and concurrency.
 
 3. **Provenance**: The new Workflow carries `derived_from` pointing to the Tool grain content addresses that informed the pattern, and `provenance_chain` entries recording the extraction method.
 
-For example, an agent that repeatedly runs the same sequence when debugging a service outage might generate:
+Because the target is a graph rather than a list, extraction can preserve something a list would flatten away: steps that were observed running concurrently stay concurrent, and steps that were observed retrying carry their bound.
 
 ```json
 {
   "type": "workflow",
   "trigger": "service returns 503 errors",
-  "steps": [
-    "Check service health endpoint",
-    "Review recent deployment history",
-    "Inspect pod resource utilization",
-    "Check database connection pool status",
-    "Review application error logs for root cause",
-    "If resource exhaustion detected, scale horizontally",
-    "Verify recovery via health endpoint"
+  "nodes": [
+    "check_health_endpoint",
+    "review_deploy_history",
+    "inspect_pod_resources",
+    "check_db_pool",
+    "diagnose",
+    "scale_horizontally",
+    "verify_recovery"
   ],
+  "edges": [
+    {"src": "check_health_endpoint", "dst": "review_deploy_history"},
+    {"src": "check_health_endpoint", "dst": "inspect_pod_resources"},
+    {"src": "check_health_endpoint", "dst": "check_db_pool"},
+    {"src": "review_deploy_history", "dst": "diagnose"},
+    {"src": "inspect_pod_resources", "dst": "diagnose"},
+    {"src": "check_db_pool", "dst": "diagnose"},
+    {"src": "diagnose", "dst": "scale_horizontally", "cond": "resource_exhaustion"},
+    {"src": "scale_horizontally", "dst": "verify_recovery"}
+  ],
+  "retries": {"verify_recovery": 3},
   "created_at": 1768471200000,
   "namespace": "incident-response",
   "importance": 0.8,
@@ -176,54 +273,52 @@ For example, an agent that repeatedly runs the same sequence when debugging a se
 }
 ```
 
-### From Episodes to Workflows
+The three diagnostic checks fan out from the health check and converge on `diagnose` — an accurate record of how a competent operator actually works, and one a flat list could not have held.
 
-Episodes (Section 8.2) capture raw interaction records. When multiple Episodes describe similar sequences of actions, consolidation can extract the common procedure as a Workflow:
+### From Events to Workflows
 
-1. Episodes record conversations where users describe their processes: "First I check the logs, then I restart the service, then I verify the fix."
-2. A consolidation process identifies the repeated pattern across Episodes.
-3. The pattern is extracted as a Workflow with `source_type: "consolidated"` and appropriate `consolidation_level` on any related Facts.
+Event grains (Section 8.2) capture raw interaction records. When multiple Events describe similar sequences of actions, consolidation can extract the common procedure as a Workflow: users describe their processes in conversation, a consolidation process identifies the repeated pattern, and the pattern becomes a graph.
 
 ## Procedural vs. Declarative Memory
 
 Understanding the distinction between Workflows and Facts is crucial for correct use of OMS memory types:
 
 | Dimension | Workflow | Fact |
-|-----------|----------|--------|
+|-----------|----------|------|
 | Memory type | Procedural (knowing HOW) | Declarative (knowing WHAT) |
-| Core structure | Trigger + ordered steps | Subject-relation-object triple |
+| Core structure | Directed graph of nodes and edges | Subject-relation-object triple |
 | Purpose | Encode a procedure to follow | Encode a knowledge claim |
-| Default importance | 0.7 | 0.7 |
 | Type byte | `0x04` | `0x01` |
-| Required fields | 4 (`type`, `steps`, `trigger`, `created_at`) | 6 (`type`, `subject`, `relation`, `object`, `confidence`, `created_at`) |
+| Required fields | 3 (`type`, `nodes`, `created_at`) | 6 (`type`, `subject`, `relation`, `object`, `confidence`, `created_at`) |
 | Has `confidence` | No | Yes (required, [0.0, 1.0]) |
-| Has `steps` | Yes (required) | No |
+| Standard relation | `mg:has_graph` | `mg:knows` |
 
 The absence of a `confidence` field on Workflows is notable. Facts require a confidence score because they are claims that may or may not be true. Workflows are procedures — they either work or they do not. Their effectiveness is tracked through other mechanisms: the `success_count` and `failure_count` fields (available on all grains via the core field map, Section 6.1) and through supersession when an improved workflow replaces an underperforming one.
 
 <Callout type="info">
-Workflows and Facts serve complementary roles. A Fact might record `subject="disk_cleanup", relation="best_practice", object="archive before delete"`. A Workflow encodes the actual procedure: `trigger="disk usage exceeds 90%", steps=["archive old logs", "delete archived files", "verify space freed"]`. The Fact says what is true; the Workflow says what to do about it.
+Workflows and Facts serve complementary roles. A Fact might record `subject="disk_cleanup", relation="best_practice", object="archive before delete"`. A Workflow encodes the actual procedure as a graph: archive, then delete, then verify. The Fact says what is true; the Workflow says what to do about it.
 </Callout>
+
+A third type sits nearby and is worth distinguishing. A **Skill** grain (`0x0B`, Section 8.11) is a packaged, transferable *capability* — instructions, permitted tools, bundled resources, and optional learned proficiency. A Workflow is a single fixed procedure. A Skill may reference several Workflows as context-dependent `strategies`: the capability is "incident triage," and the strategies are the specific graphs it runs under specific conditions.
 
 ## Workflow Versioning Through Supersession
 
-Workflows evolve. An incident response playbook gets refined after each incident. A customer onboarding procedure gets updated when new compliance requirements emerge. A deployment pipeline gets improved when a new tool becomes available.
+Workflows evolve. An incident response playbook gets refined after each incident. A deployment pipeline gets improved when a new tool becomes available.
 
 In OMS, workflow evolution is modeled through **supersession**, not mutation. Since all grains are immutable, you cannot edit an existing Workflow. Instead, you create a new Workflow grain that supersedes the old one.
 
-Here is how the supersession chain works:
+**Version 1** — deploy straight to production after staging:
 
-**Version 1** — Initial workflow:
 ```json
 {
   "type": "workflow",
   "trigger": "new deployment to production",
-  "steps": [
-    "Run integration tests",
-    "Deploy to staging",
-    "Run smoke tests on staging",
-    "Deploy to production",
-    "Monitor error rates for 15 minutes"
+  "nodes": ["integration_tests", "stage_deploy", "smoke_tests", "prod_deploy", "monitor"],
+  "edges": [
+    {"src": "integration_tests", "dst": "stage_deploy"},
+    {"src": "stage_deploy", "dst": "smoke_tests"},
+    {"src": "smoke_tests", "dst": "prod_deploy"},
+    {"src": "prod_deploy", "dst": "monitor"}
   ],
   "created_at": 1768471200000,
   "namespace": "deployment"
@@ -232,20 +327,22 @@ Here is how the supersession chain works:
 
 Content address: `<hash-v1>`
 
-**Version 2** — Improved workflow (adds canary deployment):
+**Version 2** — a canary stage is inserted, and the rollout now branches on canary health:
+
 ```json
 {
   "type": "workflow",
   "trigger": "new deployment to production",
-  "steps": [
-    "Run integration tests",
-    "Deploy to staging",
-    "Run smoke tests on staging",
-    "Deploy canary to 5% of production traffic",
-    "Monitor canary error rates for 10 minutes",
-    "If canary healthy, proceed to full rollout",
-    "Deploy to all production instances",
-    "Monitor error rates for 15 minutes"
+  "nodes": ["integration_tests", "stage_deploy", "smoke_tests", "canary", "monitor_canary", "full_rollout", "rollback", "monitor"],
+  "edges": [
+    {"src": "integration_tests", "dst": "stage_deploy"},
+    {"src": "stage_deploy", "dst": "smoke_tests"},
+    {"src": "smoke_tests", "dst": "canary"},
+    {"src": "canary", "dst": "monitor_canary"},
+    {"src": "monitor_canary", "dst": "full_rollout", "cond": "canary_healthy"},
+    {"src": "monitor_canary", "dst": "rollback", "cond": "canary_degraded"},
+    {"src": "full_rollout", "dst": "monitor"},
+    {"src": "rollback", "dst": "monitor"}
   ],
   "created_at": 1768557600000,
   "namespace": "deployment",
@@ -264,7 +361,7 @@ Content address: `<hash-v2>`
 
 After the new grain is written, the index layer sets `superseded_by: "<hash-v2>"` on the v1 grain (Section 15.3). The `system_valid_to` timestamp is also set on v1, marking when it was replaced. Any agent looking for the current deployment workflow finds v2. But v1 is never deleted — it remains as an immutable historical record, reachable by its content address.
 
-The `derived_from` and `provenance_chain` fields on v2 explicitly link it to v1, creating a traceable lineage. An auditor can follow the chain to see how the deployment procedure evolved over time, who made each change (via `author_did`), and when each version was active.
+The `derived_from` and `provenance_chain` fields on v2 explicitly link it to v1, creating a traceable lineage. An auditor can follow the chain to see how the deployment procedure evolved, who made each change (via `author_did`), and when each version was active.
 
 <Callout type="success">
 The immutability guarantee means workflow versioning is naturally auditable. You cannot secretly modify a workflow — every change creates a new grain with a new content address, a new timestamp, and explicit provenance links to the previous version. This is critical for regulated industries where procedure changes must be documented and traceable.
@@ -274,19 +371,23 @@ The immutability guarantee means workflow versioning is naturally auditable. You
 
 ### IT Operations Runbooks
 
-IT runbooks are a natural fit for the Workflow type. Every standard operating procedure — server provisioning, incident response, backup verification, capacity planning — can be encoded as a trigger-steps Workflow.
+Runbooks are a natural fit. Most real runbooks have a diagnostic fan-out at the top — check several things at once — followed by a decision point:
 
 ```json
 {
   "type": "workflow",
   "trigger": "disk usage exceeds 90%",
-  "steps": [
-    "Identify largest files and directories with du -sh",
-    "Check for core dumps in /var/crash",
-    "Archive application logs older than 7 days",
-    "Clear package manager cache",
-    "If still above 85%, notify infrastructure team",
-    "Document findings in incident ticket"
+  "nodes": ["survey_usage", "check_core_dumps", "archive_old_logs", "clear_pkg_cache", "recheck", "notify_infra", "document"],
+  "edges": [
+    {"src": "survey_usage", "dst": "check_core_dumps"},
+    {"src": "survey_usage", "dst": "archive_old_logs"},
+    {"src": "survey_usage", "dst": "clear_pkg_cache"},
+    {"src": "check_core_dumps", "dst": "recheck"},
+    {"src": "archive_old_logs", "dst": "recheck"},
+    {"src": "clear_pkg_cache", "dst": "recheck"},
+    {"src": "recheck", "dst": "notify_infra", "cond": "still_above_85pct"},
+    {"src": "recheck", "dst": "document"},
+    {"src": "notify_infra", "dst": "document"}
   ],
   "created_at": 1768471200000,
   "namespace": "ops-runbooks",
@@ -295,25 +396,26 @@ IT runbooks are a natural fit for the Workflow type. Every standard operating pr
 }
 ```
 
-When an AI operations agent detects the trigger condition, it can retrieve the relevant Workflow and execute the steps in order. The `structural_tags` enable quick filtering: `namespace="ops-runbooks"` narrows to operational procedures, and tags further narrow by domain.
+The three cleanup actions are independent, so they fan out and rejoin. Escalation happens only on the conditional edge. Both paths document.
 
 ### Manufacturing Standard Operating Procedures
 
-Manufacturing SOPs define step-by-step procedures for operating equipment, handling materials, and performing quality checks. Encoding these as Workflows makes them machine-readable and executable by factory floor agents:
+Manufacturing SOPs are full of quarantine branches — a quality check either passes or it does not, and the two outcomes diverge sharply:
 
 ```json
 {
   "type": "workflow",
   "trigger": "batch quality check required for production line B",
-  "steps": [
-    "Pause production line B conveyor",
-    "Select 5 random samples from current batch",
-    "Measure dimensional tolerances using CMM",
-    "Record surface roughness measurements",
-    "Compare all measurements against spec sheet QC-2024-B",
-    "If any measurement out of tolerance, quarantine batch",
-    "If all pass, approve batch and log results",
-    "Resume production line B conveyor"
+  "nodes": ["pause_line", "sample", "measure_cmm", "measure_roughness", "compare_spec", "quarantine", "approve", "resume_line"],
+  "edges": [
+    {"src": "pause_line", "dst": "sample"},
+    {"src": "sample", "dst": "measure_cmm"},
+    {"src": "sample", "dst": "measure_roughness"},
+    {"src": "measure_cmm", "dst": "compare_spec"},
+    {"src": "measure_roughness", "dst": "compare_spec"},
+    {"src": "compare_spec", "dst": "quarantine", "cond": "out_of_tolerance"},
+    {"src": "compare_spec", "dst": "approve", "cond": "within_tolerance"},
+    {"src": "approve", "dst": "resume_line"}
   ],
   "created_at": 1768471200000,
   "namespace": "manufacturing-sops",
@@ -321,23 +423,28 @@ Manufacturing SOPs define step-by-step procedures for operating equipment, handl
 }
 ```
 
+Note that `quarantine` is a terminal node — it has no outgoing edges, so the line does not resume. That is expressed purely by topology.
+
 ### Automated Trading Strategies
 
-Trading strategies are procedures triggered by market conditions. The trigger describes the market signal; the steps describe the response:
+Trading strategies are procedures triggered by market conditions, and their pre-trade checks are naturally concurrent:
 
 ```json
 {
   "type": "workflow",
   "trigger": "RSI crosses below 30 on 4-hour timeframe",
-  "steps": [
-    "Confirm RSI reading on daily timeframe for convergence",
-    "Check if current price is above 200-day moving average",
-    "Verify volume is above 20-day average",
-    "Calculate position size based on 2% portfolio risk",
-    "Place limit buy order at current support level",
-    "Set stop-loss at recent swing low minus 1 ATR",
-    "Set take-profit at 2:1 risk-reward ratio",
-    "Log trade setup with entry rationale"
+  "nodes": ["confirm_daily_rsi", "check_ma_200", "check_volume", "size_position", "place_limit_buy", "set_stop_loss", "set_take_profit", "log_setup", "stand_down"],
+  "edges": [
+    {"src": "confirm_daily_rsi", "dst": "check_ma_200"},
+    {"src": "confirm_daily_rsi", "dst": "check_volume"},
+    {"src": "check_ma_200", "dst": "size_position", "cond": "all_filters_pass"},
+    {"src": "check_volume", "dst": "size_position", "cond": "all_filters_pass"},
+    {"src": "check_ma_200", "dst": "stand_down", "cond": "filter_failed"},
+    {"src": "check_volume", "dst": "stand_down", "cond": "filter_failed"},
+    {"src": "size_position", "dst": "place_limit_buy"},
+    {"src": "place_limit_buy", "dst": "set_stop_loss"},
+    {"src": "set_stop_loss", "dst": "set_take_profit"},
+    {"src": "set_take_profit", "dst": "log_setup"}
   ],
   "created_at": 1768471200000,
   "namespace": "trading-strategies",
@@ -347,30 +454,28 @@ Trading strategies are procedures triggered by market conditions. The trigger de
 ```
 
 <Callout type="warning">
-Workflow steps are natural-language descriptions, not executable code. In a trading context, the agent must interpret each step and translate it into actual API calls (which would be recorded as Tool grains, Section 8.5). The Workflow captures the strategy; the Tools capture the execution.
+Node labels and `cond` strings are descriptions, not executable code. In a trading context, the agent must interpret each node and translate it into actual API calls — which are recorded as Tool grains (Section 8.5) related back by `mg:step_action:<node_id>`. The Workflow captures the strategy; the Tool grains capture the execution.
 </Callout>
-
-### DevOps Deployment Playbooks
-
-Deployment workflows benefit from the versioning model. As the deployment pipeline matures — adding canary releases, feature flags, rollback procedures — each iteration creates a new Workflow grain that supersedes the previous one. The full version history is preserved in the supersession chain.
 
 ### Customer Escalation Procedures
 
-Support teams have escalation procedures that vary by issue severity, customer tier, and time of day. Each variation can be a separate Workflow with specific triggers:
+Support escalation is where bounded cycles earn their place. A "provide customer update every 30 minutes" step is a genuine loop — it repeats until the incident resolves, and it needs a bound so an agent cannot spin forever:
 
 ```json
 {
   "type": "workflow",
   "trigger": "enterprise customer reports data loss incident",
-  "steps": [
-    "Immediately page on-call engineering lead",
-    "Create P1 incident ticket in tracking system",
-    "Acknowledge to customer within 15 minutes",
-    "Assign dedicated incident commander",
-    "Begin root cause investigation with database team",
-    "Provide customer update every 30 minutes",
-    "Once resolved, schedule post-incident review within 48 hours",
-    "Deliver written incident report to customer within 5 business days"
+  "nodes": ["page_oncall", "open_p1_ticket", "acknowledge_customer", "assign_commander", "investigate", "update_customer", "schedule_review", "deliver_report"],
+  "edges": [
+    {"src": "page_oncall", "dst": "open_p1_ticket"},
+    {"src": "page_oncall", "dst": "acknowledge_customer"},
+    {"src": "open_p1_ticket", "dst": "assign_commander"},
+    {"src": "acknowledge_customer", "dst": "assign_commander"},
+    {"src": "assign_commander", "dst": "investigate"},
+    {"src": "investigate", "dst": "update_customer"},
+    {"src": "update_customer", "dst": "investigate", "cond": "unresolved", "max_cycles": 48},
+    {"src": "update_customer", "dst": "schedule_review", "cond": "resolved"},
+    {"src": "schedule_review", "dst": "deliver_report"}
   ],
   "created_at": 1768471200000,
   "namespace": "customer-support",
@@ -379,24 +484,24 @@ Support teams have escalation procedures that vary by issue severity, customer t
 }
 ```
 
+The back-edge from `update_customer` to `investigate` carries `max_cycles: 48` — 24 hours of half-hourly updates. Without that bound, a conforming implementation should reject the grain.
+
 ## Serialization Details
 
 When a Workflow grain is serialized following the canonical algorithm (Section 4.9):
 
-1. **Validate** required fields: `type` must be `"workflow"`, `steps` must be a non-empty array of strings, `trigger` must be a non-empty string, `created_at` must be present.
-2. **Compact** field names via the field map: `type` becomes `t`, `created_at` becomes `ca`, `namespace` becomes `ns`, `importance` becomes `im`. The Workflow-specific fields `steps` and `trigger` keep their full names (Section 6.4).
-3. **Preserve array order**: The `steps` array maintains insertion order (Section 4.6). This is critical — the whole point of a Workflow is that steps execute in sequence.
-4. **NFC-normalize** all strings (Section 4.4), including every step string and the trigger string.
+1. **Validate** required fields: `type` must be `"workflow"`, `nodes` must be a non-empty array of unique strings, `created_at` must be present. Validate that every `src`, `dst`, `bindings` key, and `retries` key references a declared node, and that no cycle is unbounded.
+2. **Compact** field names via the field map: `type` becomes `t`, `created_at` becomes `ca`, `namespace` becomes `ns`, `importance` becomes `im`. Among the Workflow-specific fields, only `bindings` shortens — to `bind`. `trigger`, `nodes`, `edges`, and `retries` keep their full names (Section 6.4). Inside each edge map, `src`, `dst`, and `cond` keep their names; `max_cycles` compacts to `mxc`.
+3. **Preserve array order**: The `nodes` array maintains insertion order (Section 4.6). This is critical — the entry point is defined as the first element.
+4. **NFC-normalize** all strings (Section 4.4), including every node ID, condition string, and the trigger.
 5. **Omit null values** (Section 4.5).
-6. **Sort map keys** lexicographically (Section 4.1).
+6. **Sort map keys** lexicographically (Section 4.1) — including the keys inside each edge map and inside `bind` and `retries`.
 7. **Encode** as MessagePack.
 8. **Prepend** the 9-byte fixed header with type byte `0x04`.
 9. **Hash** with SHA-256.
 
-For a Workflow with `namespace` and `importance` set, the compacted and sorted keys would be: `ca`, `im`, `ns`, `steps`, `t`, `trigger` — six keys in lexicographic order.
-
 <Callout type="info">
-Section 4.6 is explicit: "Array elements MUST preserve insertion order. Arrays are NOT sorted." This means the `steps` array is serialized in the exact order provided, not sorted alphabetically. The lexicographic sorting rule applies only to map keys, never to array elements. If a serializer sorted the steps, it would change the procedure's meaning and produce a different content address.
+Section 4.6 is explicit: "Array elements MUST preserve insertion order. Arrays are NOT sorted." This applies to both `nodes` and `edges`. Sorting `nodes` would silently reassign the entry point, and would produce a different content address for what is meant to be the same plan.
 </Callout>
 
 ## Workflows and the Success/Failure Feedback Loop
@@ -406,9 +511,9 @@ While Workflows do not have a `confidence` field, they participate in a feedback
 - `success_count` (int, non-negative) — number of times this workflow was executed successfully
 - `failure_count` (int, non-negative) — number of times execution failed
 
-Because grains are immutable, these counts are tracked by creating new Workflow grains that supersede the current one with updated counts. Over time, the ratio of successes to failures provides an empirical reliability measure.
+Because grains are immutable, these counts are tracked by creating new Workflow grains that supersede the current one with updated counts. Over time, the ratio provides an empirical reliability measure.
 
-A workflow with a high failure count is a candidate for revision — the agent (or a human) can analyze the failure patterns and create a superseding Workflow with improved steps. The `provenance_chain` on the new grain links back to the old one, and the method might be `"workflow_revision"` or `"pattern_extraction"` depending on how the improvement was derived.
+The graph model sharpens this feedback considerably. Because every execution writes Tool grains tagged `mg:step_action:<node_id>`, failure is attributable to a *specific node* rather than to the procedure as a whole. A workflow whose failures cluster on one node does not need a rewrite — it needs a `retries` entry, a better binding, or a conditional bypass around that node.
 
 ## Sharing Workflows Across Agents
 
@@ -416,22 +521,28 @@ Because Workflows are self-contained grains with standard serialization, they ca
 
 - **Within a team**: Agents in the same namespace can discover and use each other's Workflows.
 - **Cross-team**: The `related_to` field (Section 14.2) can link a Workflow to related Workflows in other namespaces, with `relation_type: "similar"` or `"elaborates"`.
-- **Cross-organization**: Workflows can be exported as `.mg` files (Section 11) and imported by other systems. The content address provides integrity verification — the receiving system can confirm the Workflow has not been tampered with.
+- **Cross-organization**: Workflows can be exported as `.mg` files (Section 11) and imported by other systems. The content address provides integrity verification.
 - **With signing**: For high-trust sharing, Workflows can be wrapped in COSE Sign1 envelopes (Section 9) with the author's DID, providing cryptographic proof of authorship.
+
+One caveat travels with the graph model: `bindings` are content addresses of Tool definition grains, and a receiving store that does not hold those grains cannot resolve tier one. That is not a defect — resolution falls through to the Named and Abstract tiers, so a shared workflow degrades to a readable plan rather than breaking. But an exporter that wants full fidelity should include the bound Tool definitions in the same `.mg` container.
 
 ## Design Considerations
 
-### Step Granularity
+### Node Granularity
 
-How detailed should each step be? There is no spec-defined rule, but practical guidance:
+How detailed should each node be? There is no spec-defined rule, but practical guidance:
 
-- Each step should be a single, actionable instruction
-- Steps should be understandable in isolation
-- If a step has sub-steps, consider creating a separate Workflow for the sub-procedure and referencing it with `related_to`
+- Each node should be a single, actionable step
+- Node IDs should be understandable in isolation, since they double as labels
+- If a node has real internal structure, consider a separate Workflow for the sub-procedure and reference it with `related_to`
 
-### Trigger Specificity
+### Model Concurrency Honestly
 
-Triggers should be specific enough that the agent can reliably determine when to activate the workflow, but general enough to apply across similar situations. A trigger like "something goes wrong" is too vague. A trigger like "PostgreSQL connection pool at IP 10.0.1.42 exceeds 95% utilization on the read replica" is too specific. "Database connection pool utilization exceeds 90%" strikes a better balance.
+The temptation is to serialize everything — a straight line is easier to reason about. Resist it where the real procedure branches. A plan that says three checks run in sequence, when they actually run in parallel, will mislead every executor and every auditor who reads it. If steps are independent, give them independent edges.
+
+### Bound Every Cycle
+
+If you add a back-edge, add `max_cycles` or a `retries` entry in the same commit. A conforming implementation should reject an unbounded cycle, so an unbounded one is not "permissive" — it is a grain that may fail validation on import.
 
 ### Namespace Organization
 
@@ -439,14 +550,16 @@ Use namespaces to organize Workflows by domain: `"ops-runbooks"`, `"deployment"`
 
 ## Summary
 
-Workflows encode procedural memory — the knowledge of *how* to do things. Their trigger-steps model is deliberately simple: a natural-language condition paired with an ordered list of natural-language actions. This simplicity makes them universally portable across agents, languages, and domains.
+Workflows encode procedural memory — the knowledge of *how* to do things. Since OMS v1.4 the model is a directed graph: `nodes` name the steps, `edges` connect them, `bindings` attach them to real tools, and `retries` bound repetition. Structure is inferred from topology rather than declared, so a fork, a join, a decision point, and a terminal node are all consequences of how the graph is wired — with nothing to contradict.
 
-The real power comes from three characteristics:
+The real power comes from four characteristics:
 
-1. **Learnability**: Agents can extract Workflows from observed patterns in Tool and Event grains, formalizing ad-hoc behavior into reusable procedures.
+1. **Expressiveness**: Parallel fan-out, AND-joins, conditional branching, and bounded cycles are first-class, so a plan can say what a real procedure actually does instead of flattening it into prose.
 
-2. **Versioning**: The immutability model and supersession chain provide automatic, auditable version history. Every workflow revision is traceable, every change is documented, and every previous version is recoverable.
+2. **Learnability**: Agents can extract Workflows from observed patterns in Tool and Event grains — and the graph target preserves the concurrency and retry structure a flat list would discard.
 
-3. **Shareability**: As standard OMS grains, Workflows can be shared across agents, teams, and organizations with integrity verification via content addressing and optional cryptographic signing.
+3. **Versioning**: The immutability model and supersession chain provide automatic, auditable version history. Execution records attach by relation, so runs never mutate the plan.
+
+4. **Shareability**: As standard OMS grains, Workflows can be shared across agents, teams, and organizations with integrity verification via content addressing and optional cryptographic signing.
 
 Whether encoding IT runbooks, manufacturing SOPs, trading strategies, or customer escalation procedures, Workflows turn informal knowledge into structured, verifiable, portable procedural memory. They are the playbooks that agents can follow, share, improve, and trust.

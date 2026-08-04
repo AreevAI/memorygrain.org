@@ -392,7 +392,7 @@ The spec defines clear size boundaries for `.mg` blobs (Section 3.3):
 
 ### Minimum: 10 bytes
 
-The smallest valid blob is a 9-byte header followed by `0x80` -- an empty MessagePack fixmap (a map with zero entries). This is technically valid at the format level, though it would fail schema validation for any of the ten grain types (all require at least `type` and `created_at`).
+The smallest valid blob is a 9-byte header followed by `0x80` -- an empty MessagePack fixmap (a map with zero entries). This is technically valid at the format level, though it would fail schema validation for any of the twelve grain types (all require at least `type` and `created_at`).
 
 ```
 01 00 01 00 00 00 00 00 00 80
@@ -438,4 +438,4 @@ The design choices in the `.mg` blob format are mutually reinforcing:
 
 **Content addressing over the complete blob** (header plus payload) means the creation timestamp is part of the grain's identity. Two writes of the same knowledge at different times produce different grains -- each uniquely identifiable, each independently verifiable.
 
-For a conceptual overview of the ten grain types and the ten design principles that shape this format, see [What Is a Memory Grain?](/blog/what-is-a-memory-grain). For the motivation behind persistent agent memory and the eight requirements OMS addresses, see [Why AI Agents Need Persistent Memory](/blog/why-ai-agents-need-persistent-memory).
+For a conceptual overview of the twelve grain types and the ten design principles that shape this format, see [What Is a Memory Grain?](/blog/what-is-a-memory-grain). For the motivation behind persistent agent memory and the eight requirements OMS addresses, see [Why AI Agents Need Persistent Memory](/blog/why-ai-agents-need-persistent-memory).

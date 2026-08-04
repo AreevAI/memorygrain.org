@@ -359,22 +359,33 @@ Robots learn procedural skills — sequences of actions triggered by specific co
 {
   "type": "workflow",
   "trigger": "object_detected_at_location",
-  "steps": [
+  "nodes": [
     "approach",
     "pre_grasp",
     "grasp",
     "lift",
-    "verify_grasp"
+    "verify_grasp",
+    "report_failure"
   ],
+  "edges": [
+    {"src": "approach", "dst": "pre_grasp"},
+    {"src": "pre_grasp", "dst": "grasp"},
+    {"src": "grasp", "dst": "lift"},
+    {"src": "lift", "dst": "verify_grasp"},
+    {"src": "verify_grasp", "dst": "pre_grasp", "cond": "slip_detected", "max_cycles": 3},
+    {"src": "verify_grasp", "dst": "report_failure", "cond": "retries_exhausted"}
+  ],
+  "retries": {"grasp": 2},
   "created_at": 1768471200000,
-  "importance": 0.7,
   "namespace": "robotics:manipulation-skills"
 }
 ```
 
-The `trigger` field defines when this workflow activates — in this case, when an object is detected at a graspable location. The `steps` array defines the ordered sequence of actions. Both are required fields (Section 8.4).
+The `trigger` field defines when this workflow activates — in this case, when an object is detected at a graspable location. `nodes` names the steps and `edges` wires them; only `type`, `nodes`, and `created_at` are required (Section 8.4).
 
-The default importance for Workflows is `0.7` (Section 8.4), higher than Observations (`0.3`) and Episodes (`0.5`). This reflects the value of learned procedural knowledge — a grasp sequence refined through experience is more important than any individual sensor reading.
+Manipulation is where the graph model earns its place. A grasp that slips needs to retry from `pre_grasp`, not from the beginning — that is the back-edge, bounded by `max_cycles: 3` so a robot cannot loop indefinitely on an object it cannot hold. The separate `retries` entry bounds in-place repetition of the `grasp` node itself. Both bounds are required in practice: a conforming implementation SHOULD reject a cycle that has neither.
+
+Workflows carry no `confidence` field. A grasp sequence refined through experience proves itself through the `success_count` and `failure_count` fields available on every grain (Section 6.1), and improves through supersession rather than mutation.
 
 Workflows can be linked to specific Goals through cross-links (Section 14.2). A Goal grain with `related_to` pointing to a Workflow grain, using `relation_type: "depends_on"`, expresses that completing the goal requires executing the workflow. The `rollback_on_failure` field on Goal grains (Section 8.7) can reference Workflow grains to execute when a goal fails — enabling automated error recovery procedures.
 

@@ -13,7 +13,7 @@ import { buildMetadata } from '@/lib/metadata'
 export const metadata: Metadata = buildMetadata({
   title: 'SML Specification',
   description:
-    'Semantic Markup Language (SML) v1.0: A flat, tag-based markup format optimized for LLM context consumption. The default output format for CAL ASSEMBLE statements. Part of the Open Memory Specification (OMS) v1.3.',
+    'Semantic Markup Language (SML) v1.1: A flat, tag-based markup format optimized for LLM context consumption. The default output format for CAL ASSEMBLE statements. Part of the Open Memory Specification (OMS) v1.5.',
 })
 
 async function getSpecHtml(): Promise<string> {
@@ -36,13 +36,14 @@ async function getSpecHtml(): Promise<string> {
 }
 
 const tocSections = [
-  { id: 'sml-semantic-markup-language-specification-v10', label: 'SML · Semantic Markup' },
+  { id: 'sml-semantic-markup-language-specification-v11', label: 'SML · Semantic Markup' },
   { id: 'abstract', label: 'Abstract' },
   { id: '1-what-is-sml', label: '1. What is SML?' },
   { id: '2-structural-rules', label: '2. Structural Rules' },
-  { id: '3-comprehensive-example--all-10-grain-types', label: '3. Comprehensive Example' },
+  { id: '3-comprehensive-example--all-12-grain-types', label: '3. Comprehensive Example' },
   { id: '4-progressive-disclosure', label: '4. Progressive Disclosure' },
   { id: 'appendix-a-relationship-to-cal', label: 'Appendix A: Relationship to CAL' },
+  { id: 'appendix-b-version-history', label: 'Appendix B: Version History' },
 ]
 
 export default async function SmlSpecPage() {

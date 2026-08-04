@@ -1,6 +1,6 @@
 ---
 title: "What Is a Memory Grain?"
-description: "The memory grain is the atomic unit of agent knowledge in the Open Memory Specification. This post covers the ten grain types, the immutability model, content addressing, the .mg container capabilities, and the ten design principles that shape the format."
+description: "The memory grain is the atomic unit of agent knowledge in the Open Memory Specification. This post covers the twelve grain types, the immutability model, content addressing, the .mg container capabilities, and the ten design principles that shape the format."
 date: "2026-02-19"
 readTime: "11 min read"
 tags: ["memory-grain", "fundamentals", "architecture"]
@@ -34,9 +34,11 @@ This content address serves five roles simultaneously (Section 5.4):
 
 Two agents on different continents, running different implementations, in different programming languages, that independently learn the same fact at the same timestamp will produce byte-identical blobs with the same content address. This is not a coincidence — it is a direct consequence of canonical serialization.
 
-## Ten grain types (v1.2)
+## Twelve grain types
 
-Every grain carries a `type` field indicating what kind of knowledge it represents. OMS defines ten standard grain types, each with its own required and optional fields. The type is also encoded in byte 2 of the fixed header, enabling O(1) filtering without deserializing the payload.
+Every grain carries a `type` field indicating what kind of knowledge it represents. OMS defines twelve standard grain types, each with its own required and optional fields. The type is also encoded in byte 2 of the fixed header, enabling O(1) filtering without deserializing the payload.
+
+The seven foundational types are covered in detail below; the five added since — Reasoning, Consensus, Consent, Skill, and Recommendation — are summarized at the end of this section.
 
 ### Fact (0x01)
 
@@ -86,18 +88,23 @@ Checkpoints enable mission recovery — an agent that restarts mid-task can load
 
 ### Workflow (0x04)
 
-Procedural memory — a learned sequence of actions triggered by a specific condition.
+Procedural memory — a directed graph of steps, optionally activated by a trigger condition.
 
 ```json
 {
   "type": "workflow",
-  "steps": ["fetch_data", "validate_schema", "transform", "load"],
   "trigger": "new CSV file uploaded",
+  "nodes": ["fetch_data", "validate_schema", "transform", "load"],
+  "edges": [
+    {"src": "fetch_data", "dst": "validate_schema"},
+    {"src": "validate_schema", "dst": "transform"},
+    {"src": "transform", "dst": "load"}
+  ],
   "created_at": 1768471200000
 }
 ```
 
-Workflows capture how to do things, not what is true. Required fields: `type`, `steps` (non-empty array), `trigger` (non-empty string), `created_at`.
+Workflows capture how to do things, not what is true. Required fields: `type`, `nodes` (non-empty array of unique IDs), `created_at`. `trigger` and `edges` are optional, and node roles — fork, join, decision point, terminal — are inferred from the graph's shape rather than declared.
 
 ### Tool (0x05)
 
@@ -153,8 +160,22 @@ An explicit objective with lifecycle semantics. Goals have states — `active`, 
 
 Goals exist as a dedicated type rather than being encoded as Facts with `relation="has_goal"` for a specific reason: at scale, a dedicated type byte enables O(1) header-level filtering before any MessagePack decode, and `goal_state` is a first-class indexable field rather than metadata buried in a `context` map.
 
+### The five later types (0x08–0x0C)
+
+The seven types above have been in OMS since v1.0. Five more were added as the format grew to cover reasoning, multi-agent trust, and governance:
+
+| Type | Byte | What it records | Added |
+|------|------|-----------------|-------|
+| **Reasoning** | `0x08` | An inference chain — premises, conclusion, and method. Captures extended thinking from LLMs. Grains with `requires_human_review` block automated decisions until cleared. | v1.2 |
+| **Consensus** | `0x09` | A multi-agent agreement record: a quorum converging on a shared fact or decision, with trust-weighted confidence. | v1.2 |
+| **Consent** | `0x0A` | A DID-scoped, purpose-bounded permission grant or withdrawal. Revoking one triggers cascading erasure of grains whose processing depended on it. | v1.2 |
+| **Skill** | `0x0B` | A packaged, transferable capability — instructions, permitted tools, bundled resources — plus optional learned proficiency that improves by supersession. | v1.4 |
+| **Recommendation** | `0x0C` | A governed, auditable proposal to change memory or agent configuration. It never mutates anything by itself; every lifecycle transition is an immutable audit grain. | v1.5 |
+
+Each has a dedicated deep dive: [Reasoning](/blog/memory-type-reasoning), [Consensus](/blog/memory-type-consensus), [Consent](/blog/memory-type-consent), [Skills](/blog/memory-type-skills), and [Recommendations](/blog/memory-type-recommendations).
+
 <Callout type="info">
-The type byte also reserves ranges for future use: `0x08-0xEF` for future standard types, and `0xF0-0xFF` for application-defined types that extend the format for domain-specific needs.
+The type byte also reserves ranges for future use: `0x0D-0xEF` for future standard types, and `0xF0-0xFF` for application-defined types that extend the format for domain-specific needs. Realizing a type from the reserved range is additive — Skill (`0x0B`) and Recommendation (`0x0C`) both left every existing content address valid.
 </Callout>
 
 ## Immutability and supersession
@@ -283,6 +304,6 @@ The `.mg` file format mirrors familiar paradigms: `.sqlite` is a database file c
 
 A memory grain is simple in concept and precise in specification. It is one piece of knowledge, encoded deterministically, identified by its content hash, carrying its own provenance, compliance metadata, and temporal validity. It is never modified — only superseded. It is never locked to a platform — only addressed by its hash.
 
-The ten grain types cover the range of agent knowledge: declarative facts, raw interactions, state snapshots, procedural steps, tool invocations, sensor readings, and explicit objectives. The ten design principles ensure the format stays compact, interoperable, verifiable, and compliant.
+The twelve grain types cover the range of agent knowledge: declarative facts, raw interactions, state snapshots, procedural graphs, tool invocations, sensor readings, explicit objectives, inference chains, multi-agent agreement, permission grants, packaged capabilities, and proposed changes. The ten design principles ensure the format stays compact, interoperable, verifiable, and compliant.
 
 For the byte-level details of how a grain is actually encoded — the 9-byte header, the flags bitfield, the namespace hash, and the MessagePack payload — see [Anatomy of a .mg Blob](/blog/anatomy-of-a-mg-blob). For the broader context of why persistent memory matters for production AI agents, see [Why AI Agents Need Persistent Memory](/blog/why-ai-agents-need-persistent-memory).

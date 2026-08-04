@@ -1,6 +1,6 @@
 ---
 title: "SML: The Context Format That Tells LLMs What to Trust"
-description: "Semantic Markup Language (SML) uses grain type tag names as epistemic signals — telling an LLM not just what information is, but what kind of information it is. Hands-on examples across all 10 grain types, from customer support to incident response."
+description: "Semantic Markup Language (SML) uses grain type tag names as epistemic signals — telling an LLM not just what information is, but what kind of information it is. Hands-on examples across the grain-type elements, from customer support to incident response."
 date: "2026-03-04"
 readTime: "12 min read"
 tags: ["sml", "context-format", "llm", "agent-memory", "cal"]
@@ -149,6 +149,22 @@ Consent grains are authoritative and non-negotiable. They represent explicit per
 ```
 
 When the LLM sees `action="denied"`, that scope is off-limits. Period. The consent record overrides anything the user might say later in the conversation. This is how SML enforces authorization in the context layer.
+
+### `<skill>` and `<recommendation>` — Capability and Proposed Change
+
+Two later elements round out the tag set. `<skill>` (OMS v1.4) signals a packaged, reusable capability the agent can apply, rather than a fact it knows:
+
+```sml
+<skill name="incident_triage" proficiency="0.87" domain="software">classify a production alert, assess blast radius, and route to the right on-call rotation</skill>
+```
+
+`<recommendation>` (SML 1.1, for the OMS v1.5 Recommendation grain) signals a *proposed* change that has not been applied:
+
+```sml
+<recommendation target="entity:marcus/billing_preference" severity="low">consolidate 3 duplicate "prefers quarterly invoicing" facts into one</recommendation>
+```
+
+The epistemic distinction is the entire point. A `<fact>` is something the agent holds to be true; a `<recommendation>` is something an analysis layer wants to change and a human has not yet approved. An LLM reading the tag knows not to treat the proposal as settled — which is exactly the signal a flat prose summary would have lost.
 
 ## Progressive Disclosure
 

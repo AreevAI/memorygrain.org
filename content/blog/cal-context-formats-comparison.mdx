@@ -120,7 +120,7 @@ ASSEMBLE user_context
   FORMAT sml
 ```
 
-SML is the right default when your agent reasons about user preferences, active objectives, prior inferences, or permission boundaries. See the [SML deep dive](/blog/sml-context-format-for-llms) for all 10 grain types with examples.
+SML is the right default when your agent reasons about user preferences, active objectives, prior inferences, or permission boundaries. See the [SML deep dive](/blog/sml-context-format-for-llms) for the grain-type elements with examples.
 
 **Use when:** LLM system prompts, epistemic-sensitive applications (support, legal, medical, financial).
 
@@ -131,7 +131,7 @@ Use TOON when you have 20+ grains of the same type and every token matters. TOON
 ```sql
 RECALL facts ABOUT "elena"
   WHERE relation IS PREFERENCE
-  | ORDER BY confidence DESC | LIMIT 50
+  ORDER BY confidence DESC LIMIT 50
   AS toon
 ```
 
@@ -181,7 +181,7 @@ Use text when you need the smallest prose footprint and the LLM does not need to
 
 ```sql
 RECALL facts ABOUT "elena"
-  WHERE relation IS PREFERENCE | LIMIT 5 AS text
+  WHERE relation IS PREFERENCE LIMIT 5 AS text
 ```
 
 Output:
@@ -202,7 +202,7 @@ CAL/1 ASSEMBLE mixed_context
   FOR "support review for elena"
   FROM
     profile: (RECALL facts ABOUT "elena"
-               WHERE relation IS PREFERENCE | LIMIT 10 AS toon),
+               WHERE relation IS PREFERENCE LIMIT 10 AS toon),
     history: (RECALL events ABOUT "elena" RECENT 10 AS sml),
     actions: (RECALL tools ABOUT "elena" RECENT 5 AS markdown)
   BUDGET 4000 tokens
@@ -227,4 +227,4 @@ The right format is the one that gets the most information into the context wind
 
 ---
 
-*The FORMAT system is defined in the [CAL specification](/cal). For how CAL queries work end-to-end, see [CAL: The Query Language Your Agent Orchestrator Has Been Missing](/blog/cal-agent-memory-query-language). For a deep dive into SML's 10 grain types, see [SML: The Context Format That Tells LLMs What to Trust](/blog/sml-context-format-for-llms). TOON is defined in the [TOON specification v3.0](https://github.com/toon-format/spec).*
+*The FORMAT system is defined in the [CAL specification](/cal). For how CAL queries work end-to-end, see [CAL: The Query Language Your Agent Orchestrator Has Been Missing](/blog/cal-agent-memory-query-language). For a deep dive into SML's grain-type elements, see [SML: The Context Format That Tells LLMs What to Trust](/blog/sml-context-format-for-llms). TOON is defined in the [TOON specification v3.0](https://github.com/toon-format/spec).*

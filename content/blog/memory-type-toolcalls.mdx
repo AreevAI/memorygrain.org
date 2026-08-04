@@ -25,7 +25,7 @@ Every complete Tool grain MUST include these six fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `type` | string | Must be `"action"` |
+| `type` | string | Must be `"tool"` |
 | `created_at` | int64 (epoch ms) | When the invocation occurred |
 | `tool_name` | non-empty string | Name of the tool or function invoked (for `function_call` mode) |
 | `input` | map | The input passed to the tool (was `arguments` in v1.0/v1.1) |

@@ -152,14 +152,20 @@ const cards: GrainCard[] = [
     agent: 'FitCoach',
     company: 'KineticAI',
     description:
-      'Learned trigger-response pattern. Home automation and calendar agents execute the steps when the trigger fires.',
+      'A learned procedure stored as a directed graph. The fan-out after the breathing step runs in parallel; both branches must complete before the outcome is logged.',
     hash: 'f5c086b2…1e4c',
     payload: {
       type: 'workflow',
       trigger: 'hr_above_baseline_15min',
-      steps: ['breathing_exercise', 'dim_lights_40pct', 'journal_prompt'],
+      nodes: ['breathing', 'dim_lights', 'journal_prompt', 'log_outcome'],
+      edges: [
+        { src: 'breathing', dst: 'dim_lights' },
+        { src: 'breathing', dst: 'journal_prompt' },
+        { src: 'dim_lights', dst: 'log_outcome' },
+        { src: 'journal_prompt', dst: 'log_outcome' },
+      ],
+      bindings: { dim_lights: 'sha256:9f2c41…' },
       created_at: 1740016400000,
-      importance: 0.82,
       namespace: 'wellness:routines',
     },
     readers: [
@@ -265,18 +271,87 @@ const cards: GrainCard[] = [
       { agent: 'ErasureBot', use: 'deletion scoping' },
     ],
   },
+  {
+    type: 'Skill',
+    typeHex: '0x0B',
+    color: 'var(--skill)',
+    agent: 'SprintBot',
+    company: 'TaskForge',
+    description:
+      'A packaged capability — instructions, permitted tools, and 143 practice runs of learned competence. Proficiency only moves by supersession, so the chain is the full learning history.',
+    hash: '6d1a94ff…8b35',
+    payload: {
+      type: 'skill',
+      name: 'incident_triage',
+      description: 'Classify a production alert, assess blast radius, route to on-call.',
+      when_to_use: 'A P0/P1 alert fires with no owning team identified',
+      domain: 'software',
+      allowed_tools: ['sha256:c91f7a…', 'sha256:2ad70e…'],
+      holder_did: 'did:web:taskforge.io#sprintbot',
+      proficiency: 0.87,
+      practice_count: 143,
+      transferable: true,
+      created_at: 1740031200000,
+      namespace: 'agent:skills',
+    },
+    readers: [
+      { agent: 'OpsBot', use: 'skill acquisition' },
+      { agent: 'RosterAI', use: 'capability discovery' },
+    ],
+  },
+  {
+    type: 'Recommendation',
+    typeHex: '0x0C',
+    color: 'var(--recommendation)',
+    agent: 'MemoryCurator',
+    company: 'TrustLayer',
+    description:
+      'A curation pass found seven duplicate preference facts and proposes the merge as a CAL evolve-batch. It changes nothing on its own — review state lives in the index layer, and every transition is an immutable audit grain.',
+    hash: '0ac57e39…f184',
+    payload: {
+      type: 'recommendation',
+      target_ref: 'entity:fitness:preferences/user:john-smith',
+      analyzer: { id: 'curator.duplicate_sweep/1' },
+      summary: { template_id: 'merge_duplicate_facts', args: { count: 7 } },
+      dedup_key: '4f8c1ba9…e206',
+      proposal_cal: 'SUPERSEDE facts WHERE relation = "preferred_activity" …',
+      severity: 'low',
+      confidence: 0.83,
+      created_at: 1740034800000,
+      namespace: 'agent:recommendations',
+    },
+    readers: [
+      { agent: 'ReviewQueue', use: 'human approval' },
+      { agent: 'AuditBot', use: 'rollback trail' },
+    ],
+  },
 ]
 
 /* ── JSON formatting ──────────────────────────────────────── */
 
+// Tuned so a collapsed line fits the card without horizontal scroll
+const MAX_COLLAPSED_LEN = 56
+
 function formatJson(payload: Record<string, unknown>): string {
   let json = JSON.stringify(payload, null, 2)
-  // Collapse short primitive arrays to a single line
-  json = json.replace(/\[\n\s+([\s\S]*?)\n\s+\]/g, (match, inner) => {
-    const collapsed = '[' + inner.replace(/\n\s+/g, ' ') + ']'
-    if (collapsed.length < 65 && !collapsed.includes('{')) return collapsed
-    return match
+
+  // Collapse innermost short objects onto one line, repeatedly, so nested maps
+  // (analyzer, summary.args, edge entries) stay readable at card height.
+  for (;;) {
+    const next = json.replace(/\{\n\s+([^{}]*?)\n\s+\}/g, (match, inner: string) => {
+      const collapsed = '{' + inner.replace(/\s*\n\s+/g, ' ') + '}'
+      return collapsed.length <= MAX_COLLAPSED_LEN ? collapsed : match
+    })
+    if (next === json) break
+    json = next
+  }
+
+  // Collapse short arrays whose elements now fit on one line
+  json = json.replace(/\[\n\s+([^[\]]*?)\n\s+\]/g, (match, inner: string) => {
+    const collapsed = '[' + inner.replace(/\s*\n\s+/g, ' ') + ']'
+    return collapsed.length <= MAX_COLLAPSED_LEN ? collapsed : match
   })
+
   return json
 }
 
@@ -290,83 +365,48 @@ const C = {
   punct: 'var(--fg-secondary)',
 }
 
-function renderValue(val: string): ReactNode {
-  const trimmed = val.trimEnd()
-  const comma = trimmed.endsWith(',')
-  const clean = comma ? trimmed.slice(0, -1) : trimmed
+// Token-level pass so collapsed single-line objects highlight like expanded ones.
+const TOKEN = /("(?:[^"\\]|\\.)*")(\s*:)?|(-?\d+(?:\.\d+)?)|\b(true|false)\b|\b(null)\b/g
 
-  if (clean.startsWith('"') && clean.endsWith('"'))
-    return (
-      <>
-        <span style={{ color: C.str }}>{clean}</span>
-        {comma && <span style={{ color: C.punct }}>,</span>}
-      </>
-    )
-  if (clean === 'true' || clean === 'false')
-    return (
-      <>
-        <span style={{ color: C.bool }}>{clean}</span>
-        {comma && <span style={{ color: C.punct }}>,</span>}
-      </>
-    )
-  if (clean === 'null')
-    return <span style={{ color: C.punct }}>{val}</span>
-  if (/^-?\d+\.?\d*$/.test(clean))
-    return (
-      <>
-        <span style={{ color: C.num }}>{clean}</span>
-        {comma && <span style={{ color: C.punct }}>,</span>}
-      </>
-    )
-  return <span style={{ color: C.punct }}>{val}</span>
+function highlightLine(line: string): ReactNode {
+  const out: ReactNode[] = []
+  let last = 0
+  let key = 0
+  let m: RegExpExecArray | null
+
+  TOKEN.lastIndex = 0
+  while ((m = TOKEN.exec(line)) !== null) {
+    if (m.index > last) {
+      out.push(<span key={key++} style={{ color: C.punct }}>{line.slice(last, m.index)}</span>)
+    }
+    if (m[1]) {
+      // A quoted string is a key when a colon follows it
+      out.push(<span key={key++} style={{ color: m[2] ? C.key : C.str }}>{m[1]}</span>)
+      if (m[2]) out.push(<span key={key++} style={{ color: C.punct }}>{m[2]}</span>)
+    } else if (m[3]) {
+      out.push(<span key={key++} style={{ color: C.num }}>{m[3]}</span>)
+    } else if (m[4]) {
+      out.push(<span key={key++} style={{ color: C.bool }}>{m[4]}</span>)
+    } else {
+      out.push(<span key={key++} style={{ color: C.punct }}>{m[5]}</span>)
+    }
+    last = TOKEN.lastIndex
+  }
+  if (last < line.length) {
+    out.push(<span key={key++} style={{ color: C.punct }}>{line.slice(last)}</span>)
+  }
+  return <>{out}</>
 }
 
 function highlightJson(payload: Record<string, unknown>): ReactNode {
-  const json = formatJson(payload)
-  const lines = json.split('\n')
+  const lines = formatJson(payload).split('\n')
 
-  return lines.map((line, i) => {
-    let content: ReactNode
-
-    // Key-value: "key": value
-    const kv = line.match(/^(\s*)"([^"]+)":\s*(.*)$/)
-    if (kv) {
-      content = (
-        <>
-          <span style={{ color: C.punct }}>{kv[1]}</span>
-          <span style={{ color: C.key }}>&quot;{kv[2]}&quot;</span>
-          <span style={{ color: C.punct }}>: </span>
-          {renderValue(kv[3])}
-        </>
-      )
-    }
-    // Standalone string in array: "value",
-    else if (/^\s*"/.test(line)) {
-      const sv = line.match(/^(\s*)"((?:[^"\\]|\\.)*)"(,?)$/)
-      if (sv) {
-        content = (
-          <>
-            <span style={{ color: C.punct }}>{sv[1]}</span>
-            <span style={{ color: C.str }}>&quot;{sv[2]}&quot;</span>
-            <span style={{ color: C.punct }}>{sv[3]}</span>
-          </>
-        )
-      } else {
-        content = <span style={{ color: C.punct }}>{line}</span>
-      }
-    }
-    // Everything else: brackets, braces, etc.
-    else {
-      content = <span style={{ color: C.punct }}>{line}</span>
-    }
-
-    return (
-      <Fragment key={i}>
-        {content}
-        {i < lines.length - 1 ? '\n' : ''}
-      </Fragment>
-    )
-  })
+  return lines.map((line, i) => (
+    <Fragment key={i}>
+      {highlightLine(line)}
+      {i < lines.length - 1 ? '\n' : ''}
+    </Fragment>
+  ))
 }
 
 /* ── Component ────────────────────────────────────────────── */
