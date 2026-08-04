@@ -101,7 +101,7 @@ export function Footer() {
           </a>
         </p>
         <p style={{ fontSize: '0.75rem', color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)' }}>
-          OMS v1.3 · memorygrain.org
+          OMS v1.5 · memorygrain.org
         </p>
       </div>
     </footer>

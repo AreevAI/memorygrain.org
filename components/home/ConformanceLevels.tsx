@@ -10,7 +10,7 @@ const levels = [
       'Deserialize and verify grain blobs',
       'Compute & verify SHA-256 content addresses',
       'Field compaction (short keys ↔ full names)',
-      'All ten grain types (0x01–0x0A)',
+      'All twelve grain types (0x01–0x0C)',
       'Ignore unknown fields',
       'Constant-time hash comparison',
     ],

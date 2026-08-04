@@ -59,7 +59,7 @@ export default function AboutPage() {
 
           <h2>The .mg Container Definition</h2>
           <p>
-            OMS v1.3 spans 28 sections and 7 appendices covering blob layout, canonical serialization, content addressing, field compaction, ten grain types, cryptographic signing (COSE Sign1), selective disclosure, the .mg file format, identity (W3C DIDs), sensitivity classification, provenance, temporal modeling, conformance levels, device profiles, grain protection, observer type registry, query conventions, domain profile extensions (healthcare, legal, finance, robotics, science, consumer, integration), and security considerations.
+            OMS v1.5 spans 28 sections and 7 appendices covering blob layout, canonical serialization, content addressing, field compaction, twelve grain types, cryptographic signing (COSE Sign1), selective disclosure, the .mg file format, identity (W3C DIDs), sensitivity classification, provenance, temporal modeling, conformance levels, device profiles, grain protection, observer type registry, query conventions, domain profile extensions (healthcare, legal, finance, robotics, science, consumer, integration), and security considerations.
           </p>
           <p>
             <Link href="/spec">Read the OMS specification →</Link>
@@ -67,13 +67,13 @@ export default function AboutPage() {
 
           <h2>Companion Specifications</h2>
           <p>
-            <strong>CAL (Context Assembly Language)</strong> is a non-destructive, deterministic query language for assembling agent context from OMS memory stores. CAL cannot delete data — this is enforced at the grammar level. It covers safety model, type system, streaming, compliance, and 6 appendices across 27 sections.
+            <strong>CAL (Context Assembly Language) v1.2</strong> is a non-destructive, deterministic query language for assembling agent context from OMS memory stores. CAL cannot delete data — this is enforced at the grammar level, which is also what makes every Recommendation proposal invertible. It covers safety model, type system, multi-format output, streaming, compliance, and 6 appendices across 27 sections.
           </p>
           <p>
             <Link href="/cal">Read the CAL specification →</Link>
           </p>
           <p>
-            <strong>SML (Semantic Markup Language)</strong> is a flat, tag-based markup format optimized for LLM context consumption. Tag names map directly to OMS grain types, so LLMs understand the epistemic status of each piece of context without parsing schemas. SML is the default output format for CAL ASSEMBLE statements.
+            <strong>SML (Semantic Markup Language) v1.1</strong> is a flat, tag-based markup format optimized for LLM context consumption. Tag names map directly to OMS grain types, so LLMs understand the epistemic status of each piece of context without parsing schemas. SML is the default output format for CAL ASSEMBLE statements.
           </p>
           <p>
             <Link href="/sml">Read the SML specification →</Link>
@@ -114,6 +114,16 @@ export default function AboutPage() {
                   <td><code>1.3</code></td>
                   <td>2026-03-03</td>
                   <td>Integration Domain Profile (int: namespace, Appendix A.7) with 25 action/trigger fields; Action output_schema field (JSON Schema draft-07); Trigger Definitions via Observation Grains (§27.6); Consensus Grain for Action Definition Validation (§27.7); 25 new compact keys; 5 compact key collision fixes; CAL v1.0 and SML v1.0 bundled as companion specifications</td>
+                </tr>
+                <tr>
+                  <td><code>1.4</code></td>
+                  <td>2026-06-13</td>
+                  <td>Eleven grain types — breaking type renames (Belief→Fact 0x01, Action→Tool 0x05; byte values and content addresses unchanged); new Skill type (0x0B, §8.11) promoting the former Skill Convention to a first-class type with definition and learned-competence fields; Workflow redesigned as a directed graph (nodes, edges, bindings, retries) replacing the flat steps array; mg:requires_steps renamed mg:has_graph; embedding_text common field for retrieval; §6.12 Skill compaction table; CAL 1.1 (multi-format output, workflow graph syntax, BECAUSE alias, pipeline operators removed)</td>
+                </tr>
+                <tr>
+                  <td><code>1.5</code></td>
+                  <td>2026-08-03</td>
+                  <td>Twelve grain types — new Recommendation type (0x0C, §8.12): a governed, auditable proposal to change memory or agent configuration, with a normative dedup_key construction, exactly one proposal form (proposal_cal / proposal_edit / proposal_data), and a propose → review → apply → roll-back lifecycle recorded as immutable audit Observation grains; rec_status added as a rebuildable index-layer field; applier obligations bind execution to the approving principal&apos;s capability; §6.13 Recommendation compaction table; CAL 1.2 (recommendation queries, ELEMENT template shorthand, two 1.1 errata); SML 1.1 (&lt;recommendation&gt; element)</td>
                 </tr>
               </tbody>
             </table>

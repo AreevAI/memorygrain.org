@@ -7,7 +7,7 @@ tags: ["memory-types", "episodes", "interaction-records"]
 ---
 Every conversation an AI agent has, every support ticket it processes, every meeting transcript it ingests — these are raw, messy, unstructured records of what happened. In the Open Memory Specification, these records have a name: **Events**.
 
-Events are one of the ten grain types defined in OMS v1.2 (Section 8.2). They serve a specific and deliberate purpose in the memory lifecycle: they capture raw interaction text as-is, without any attempt to structure or interpret it. That interpretation comes later, through a process called **consolidation**, which extracts structured Facts from the unstructured event content.
+Events are one of the twelve grain types defined in OMS (Section 8.2). They serve a specific and deliberate purpose in the memory lifecycle: they capture raw interaction text as-is, without any attempt to structure or interpret it. That interpretation comes later, through a process called **consolidation**, which extracts structured Facts from the unstructured event content.
 
 This post covers everything you need to know about the Event grain type: its required and optional fields, how it fits into the consolidation pipeline, how to use content references for multi-modal events, and where Events provide real value in production systems.
 

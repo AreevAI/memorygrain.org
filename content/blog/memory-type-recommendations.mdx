@@ -1,0 +1,385 @@
+---
+title: "Grain Type Deep Dive: Recommendations"
+description: "A comprehensive guide to the Recommendation grain type (0x0C), introduced in OMS v1.5 — governed, auditable proposals to change memory or agent configuration. Covers the propose/review/apply/roll-back lifecycle, why rec_status lives in the index layer, the normative dedup_key construction, applier execution authority, and reproducible undo."
+date: "2026-08-03"
+readTime: "17 min read"
+tags: ["memory-types", "recommendations", "governance", "self-improvement", "audit"]
+---
+
+Every other grain type in OMS records something that already happened or is already believed. A Fact records what the agent knows. An Observation records what it perceived. A Tool grain records what it did. Even a Goal records an intention the agent already holds.
+
+The **Recommendation** grain type (`0x0C`, Section 8.12), introduced in OMS v1.5, records something categorically different: **a change an autonomous layer wants to make, but has not made.**
+
+It is a proposal. It names a target, the analyzer that produced it, a deterministic summary, and exactly one described change. And then it does nothing — until a reviewer approves it, an applier executes it, and the whole sequence is written down in a tamper-evident chain.
+
+This post covers the full Recommendation schema: why a dedicated type was required, every required and optional field, the lifecycle state machine, why review status deliberately lives outside the blob, the normative `dedup_key` construction, applier obligations, and how rollback is derived rather than guessed.
+
+## The Problem: Self-Improvement Without Governance
+
+Agent memory decays in predictable ways. Duplicate facts accumulate from repeated extraction. Preferences go stale. Saved queries drift from the data they were written against. Prompt templates and instruction documents fall behind the systems they describe.
+
+The obvious response is an autonomous curation layer: a process that analyzes the store, finds these problems, and fixes them. The obvious problem with that response is that you have just given an unsupervised process write access to memory.
+
+The `Fact + mg:proposes` pattern is expressible — you can write a Fact grain that asserts a proposal exists. It becomes impractical the moment the proposal queue, its deduplication identity, and its audit chain are trust- and compliance-critical:
+
+**A proposal queue needs stable identity.** The same analyzer, re-run tomorrow on refreshed evidence, produces the same *proposal* with different *content*. Without a defined identity separate from the content address, every re-run looks like a brand-new suggestion, and a reviewer who dismissed it once sees it again forever.
+
+**Review state needs to be forgery-resistant.** If "approved" is a field in the payload, anything with write access can set it. The one property a review gate must have — that approval comes from a reviewer — is the one property a payload field cannot provide.
+
+**The audit trail needs to be the source of truth, not a side effect.** In a regulated setting, "who approved this change to the agent's instructions, on what evidence, and when" is the question that matters. A convention that leaves it to application logging answers it inconsistently or not at all.
+
+The result was type byte `0x0C`, realized from the `0x0C–0xEF` reserved range following the Skill (`0x0B`) precedent from v1.4. Byte values `0x01`–`0x0B` were unchanged, so existing content addresses remain valid, and the reserved range narrowed to `0x0D–0xEF`.
+
+<Callout type="info">
+Placement in the type table is meaningful. Where a Reasoning grain (§8.8) records *why the agent believes something* and a Goal (§8.7) records *what the agent intends*, a Recommendation records *a specific, reviewable change an analysis layer proposes to the memory or the agent itself* — bounded by evidence and gated by review.
+</Callout>
+
+## Required Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `type` | string | Must be `"recommendation"` |
+| `target_ref` | string | The change target, as `<scheme>:<opaque>` |
+| `analyzer` | map | The producing logic: `{id, params?}` |
+| `summary` | map | Deterministic description: `{template_id, args}` |
+| `dedup_key` | string | Stable proposal identity, computed per rule 5 |
+| *one* proposal field | — | Exactly one of `proposal_cal`, `proposal_edit`, `proposal_data` |
+| `created_at` | int64 | Creation timestamp in epoch milliseconds |
+
+### `target_ref` — What Is Being Changed
+
+The scheme is the target-kind discriminator, and the scheme set is open for host-defined targets:
+
+| Scheme | Target |
+|--------|--------|
+| `grain:sha256:<hash>` | A specific grain |
+| `entity:<namespace>/<subject>` | An entity |
+| `query:<namespace>/<name>` | A saved query |
+| `template:<namespace>/<name>` | A template |
+| `doc:<host-id>` | A host document, e.g. `doc:claude.md` |
+| `host:<opaque>` | An opaque host object |
+
+That last pair is what takes Recommendations beyond memory hygiene. A `doc:` target means an agent can propose an edit to its own instruction file; a `host:` target means it can propose a configuration change. Governed self-modification, with the same review gate as a duplicate merge.
+
+### `analyzer` — Who Proposed It
+
+```json
+"analyzer": {
+  "id": "waiser.duplicate_sweep/1",
+  "params": {"window": "90d", "min_cluster": 2}
+}
+```
+
+`id` is a versioned identifier in the form `publisher.name/major`. `params` is an optional snapshot of the parameters the analyzer ran with. Together they give full "why" provenance without requiring a second grain — you can tell not just which analyzer fired, but how it was configured when it did.
+
+### `summary` — Deterministic, Never Free Prose
+
+```json
+"summary": {
+  "template_id": "merge_duplicate_facts",
+  "args": {"count": 7, "subject": "user:john-smith"}
+}
+```
+
+This is the field most likely to be implemented wrong, so the spec is blunt about it (rule 4): an analyzer **MUST NOT** store free prose here. The human-readable string is produced by rendering `template_id` with `args`.
+
+The reason is worth internalizing. If summaries were prose, an LLM-backed analyzer would write a slightly different sentence every run, so two identical proposals would look different to a reviewer and to any deduplication logic. Templating makes summaries reproducible, diffable, and translatable — the same proposal renders identically in every locale and every re-run.
+
+### The Proposal — Exactly One
+
+Rule 1: exactly one of the three MUST be present.
+
+**`proposal_cal` (string)** is the standard form: a CAL batch of Tier-1 *evolve* writes — `ADD`, `SUPERSEDE`, `REVERT`. This is where CAL's central design property pays off. CAL has **no destructive verb**: `FORGET`, `DELETE` and their kin are excluded at the grammar level and are parse errors, not keywords. A `proposal_cal` is therefore always non-destructive and always invertible — not by convention, but structurally.
+
+**`proposal_edit` (map)** is `{format, base_digest, diff}`, for `doc:` targets. `base_digest` lets an applier detect that the document moved since the proposal was written.
+
+**`proposal_data` (map)** is an opaque host-config change for `host:` targets. A destructive change, where a host supports one at all, MUST be proposed this way and executed outside CAL — which keeps the destructive path visible and separately gated rather than smuggled into a CAL batch.
+
+## Optional Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `severity` | string | `"info"`, `"low"`, `"medium"`, `"high"` — advisory triage signal |
+| `metric_snapshot` | map | The measurable claim the recommendation rests on |
+| `evidence_query` | string | CAL that regenerates the full evidence set |
+
+`metric_snapshot` is `{metric, baseline, unit?, n?, window?, query?, review_after?}` — where `query` is a CAL expression that reproduces the measurement and `review_after` is an epoch-ms checkpoint to re-measure at. It exists so that "did this change actually help?" is answerable later with the same measurement that motivated the change.
+
+A Recommendation also reuses several common fields with type-specific meaning:
+
+- **`derived_from`** — the **evidence**: content addresses of the grains the recommendation is grounded in. Bounded to a representative set, RECOMMENDED ≤ 64. Provenance traversal (Section 23.6) works unchanged.
+- **`evidence_query`** — regenerates the full evidence set when `derived_from` was truncated.
+- **`confidence`** — the reviewer's or verifier's calibrated credence that the recommendation is correct and useful.
+- **`importance`** — triage weighting.
+- **`valid_to`** — when the recommendation expires.
+
+<Callout type="info">
+Expiry is computed from `valid_to`, never by a background daemon. This is consistent with how OMS handles temporal validity everywhere: state is derived from timestamps on read, not maintained by a sweeper that might not have run.
+</Callout>
+
+## The Lifecycle
+
+A Recommendation moves through states, and the state machine is small enough to hold in your head:
+
+```
+pending  ──→ approved ──→ applied ──→ rolled_back
+   │             │
+   │             └──→ (expired)
+   ↓
+rejected ──→ pending          (re-review on refreshed evidence)
+
+pending ──→ applied           ONLY when observer_type is "rec:policy"
+```
+
+The rules that constrain it:
+
+- `applied` and `rolled_back` are **terminal**.
+- `rejected → pending` exists so a recommendation can re-enter review on refreshed evidence **under its existing `dedup_key`**, rather than becoming a second proposal competing with the first.
+- `pending → applied` directly is permitted **only** when the transition's `observer_type` is `"rec:policy"` — the auto-apply path. Critically, `observer_type` is the discriminator, never `observer_id`, because `observer_id` is a host-asserted label with no normative structure.
+- `expired` is computed from `valid_to` and is reachable only from `pending` or `approved`. An expired recommendation MUST NOT be applied, and **expiry of an approved recommendation withdraws that approval**.
+
+That last clause closes a real hole. Without it, a recommendation approved in March could sit unapplied until September and then execute against a store that has moved on entirely, carrying an approval nobody would grant today.
+
+## The Audit Chain Is the Authoritative Record
+
+Each lifecycle transition is **one immutable audit Observation grain** (Section 8.6), hash-chained per recommendation. Its `derived_from` includes the recommendation's content address and the previous audit grain's address, plus any result addresses.
+
+What makes this elegant is that it introduces **no new fields**. The Observation schema already has everything needed:
+
+- The **acting principal** goes in `observer_id` — `"user:alice"`, `"agent:worker-3"`, `"policy:auto"`.
+- Its **class** goes in `observer_type`, which MUST be either `"human"` (registered, Section 24.2) or one of the namespaced values `"rec:agent"`, `"rec:policy"`, `"rec:system"` (Section 24.3).
+- The **mandatory human-readable reason** goes in `object` — the common field CAL projects as an Observation's text content, so the reason renders correctly in SML with no additional rule. RECOMMENDED ≤ 500 characters.
+
+One elision rule applies specifically here: an audit grain's `observer_id` **MUST NOT** be elided under selective disclosure (Section 10.2). The acting principal is what makes the chain tamper-evident; a selectively-disclosed chain that dropped it is no longer an audit trail.
+
+The chain is portable, tamper-evident, and fork-mergeable — which means an audit history survives export, federation, and independent forks of a store.
+
+## Why `rec_status` Lives in the Index Layer
+
+Here is the design decision that does the most work in this type.
+
+A recommendation's review state — `rec_status` ∈ `pending | approved | rejected | applied | rolled_back | expired` — is **not stored in the .mg blob.** Like `superseded_by` and `verification_status`, it is a rebuildable index-layer cache derived from the audit chain, enumerated as an index-layer field in Sections 5.6, 6.1, and 28.3.
+
+Three consequences follow, and each one is the point.
+
+**A plain write cannot forge a status.** The general prohibition on writers setting index-layer fields (Section 6.1) binds `rec_status` automatically. Rule 3 makes it explicit: a `SUPERSEDE … SET` targeting it MUST be rejected. Transitions occur only through the review/apply path that emits audit grains. You cannot approve your own recommendation by writing a field.
+
+**The content address is stable across the lifecycle.** Propose, approve, apply, and roll back never re-address the grain. A host can hold one identifier through the entire review process — no chasing a moving hash through a UI, no stale links in a review queue.
+
+**Importers cannot smuggle in an approval.** Section 11.7 classifies `rec_status` as **Rebuildable**: an importer MUST reconstruct it from the audit chain and MUST NOT trust an imported value. A recommendation arriving from another store carries its evidence and its audit history, but not an unearned "approved."
+
+<Callout type="success">
+This is the same architectural move OMS makes throughout: anything mutable, contested, or trust-sensitive belongs in the index layer, derived from immutable evidence. Approval is exactly such a thing. Making `rec_status` a payload field would have been simpler to implement and would have destroyed the property the type exists to provide.
+</Callout>
+
+## Content Changes Are Supersessions, Not Status Changes
+
+Lifecycle ≠ content. A change in the recommendation's *content* — refreshed evidence, a larger duplicate cluster, an updated metric — is a **supersession** of the grain: a new content address with the **same `dedup_key`**.
+
+And a supersession **MUST reset the superseding grain's `rec_status` to `pending`**.
+
+This is not bookkeeping. Approval is granted to specific content, and it must never carry forward to content no reviewer has seen. If an analyzer could refresh a proposal's evidence while inheriting yesterday's approval, "approved" would mean nothing.
+
+The identifier that stays constant across a supersession chain is therefore `dedup_key`, **not** the content address — the inverse of the usual OMS relationship, and worth stating plainly because it is easy to get backwards:
+
+| Situation | Content address | `dedup_key` | `rec_status` |
+|-----------|----------------|-------------|--------------|
+| Lifecycle transition (approve, apply) | unchanged | unchanged | changes |
+| Content change (evidence refresh) | **new** | unchanged | resets to `pending` |
+
+## The `dedup_key` Construction Is Normative
+
+Rule 5 specifies the computation exactly, because a shared identity that two implementations compute differently is not an identity at all:
+
+```
+dedup_key = hex(sha256(nfc(casefold(analyzer_family)) || 0x00 ||
+                       nfc(target_ref)                || 0x00 ||
+                       action_kind))
+```
+
+Three NUL-separated, UTF-8 encoded components, in exactly that order, lowercase hex output. Normalization is NFC applied *after* case-folding.
+
+Each choice carries a reason:
+
+- **`analyzer_family`** is `analyzer.id` with the `/major` suffix removed. So bumping `waiser.duplicate_sweep/1` → `/2` does not re-propose the entire queue as novel, while the exact version stays visible in `analyzer.id`.
+- **`target_ref`** is NFC-normalized but deliberately **not** case-folded, because a `grain:sha256:` digest and a host-defined opaque segment may both be case-sensitive.
+- **`action_kind`** is the proposal variant — the literal `cal`, `edit`, or `data`.
+- The **proposal body and the evidence are excluded**, so a content refresh supersedes rather than re-proposes.
+
+And it is **computed, never author-chosen**. An analyzer that picks its own dedup key can trivially evade a reviewer's dismissal by picking a different one.
+
+<Callout type="warning">
+Because `dedup_key` is the shared identity across hosts, this construction is normative rather than advisory. Two implementations MUST derive the same key for the same proposal, or deduplication fails on any imported, federated, or forked store — and a reviewer who dismissed a proposal on one host would see it return through another.
+</Callout>
+
+## Applier Obligations
+
+A stored `proposal_cal` is CAL authored by one principal and executed later by another. It does not carry a capability of its own — CAL binds every query to a `CapabilityToken` at execution time. So the question "whose authority does this run under?" has to be answered explicitly, and rules 8 and 9 answer it.
+
+**Execution authority (rule 8).** An applier MUST execute the batch under the **approving principal's** capability — never the analyzer's, and never an ambient store authority. For an auto-applied recommendation it is the host-configured policy principal for the recommendation's namespace, **not** a principal derived from `observer_id`; that field is a host-asserted label with no normative structure and MUST NOT be resolved to a capability.
+
+The effect is that a recommendation can never do more than its approver could do by hand. An analyzer with broad read access proposing a change to a namespace the approver cannot write is simply rejected at apply time.
+
+**Namespace containment (rule 8).** An applier MUST reject a proposal whose writes resolve outside the recommendation's own namespace. A recommendation MUST NOT propose writes into a namespace it does not itself inhabit.
+
+**Bounds and target validation (rule 9).**
+
+- `proposal_cal` MUST NOT exceed CAL's `MAX_QUERY_LENGTH` of 8192 bytes, and applying it is subject to the same Tier-1 write quotas as any other CAL batch.
+- Before applying a `proposal_edit`, a host MUST resolve the `doc:` target against an **allowlist** and MUST verify `base_digest` against the current document head, rejecting the proposal if the base has drifted.
+- `proposal_data` is opaque to OMS: a host MUST validate it against its own schema before applying, and SHOULD require it to be signed (Section 9) when the recommendation crosses a trust boundary.
+
+## Reproducible Undo
+
+Rollback is not guesswork. The inverse of an applied proposal is **derived at apply time** and recorded on the applied audit grain as a store-operation plan — no new CAL syntax required:
+
+| Applied operation | Inverse |
+|-------------------|---------|
+| `SUPERSEDE` | Reinstate the prior content by superseding back |
+| `ADD` | Supersede the added grain with `invalidation_type: "retraction"` |
+| `REVERT` | Supersede back to the reverted head |
+| Document edit | Supersede back to the prior head |
+
+The `ADD` case is the interesting one. Retraction closes the grain's `system_valid_to` and removes it from the default recall path while the blob itself survives. OMS defines no separate tombstone mechanism, and none is needed — the existing supersession and invalidation machinery already expresses "this should no longer be recalled" without deleting anything.
+
+Because CAL is structurally non-destructive, **every `proposal_cal` is rollbackable**. A `proposal_data` change is opaque to OMS and MAY be irreversible: a host that cannot derive an inverse for one MUST record it as *not rollbackable* on the applied audit grain, rather than offer a rollback it cannot actually perform.
+
+## A Complete Recommendation Grain
+
+```json
+{
+  "type": "recommendation",
+  "target_ref": "entity:fitness:preferences/user:john-smith",
+  "analyzer": {
+    "id": "curator.duplicate_sweep/1",
+    "params": {"window": "90d", "min_cluster": 2}
+  },
+  "summary": {
+    "template_id": "merge_duplicate_facts",
+    "args": {"count": 7, "subject": "user:john-smith"}
+  },
+  "dedup_key": "4f8c1ba97d2e5c3016a8b4f9e0d7c25184be3a6f90c1d7e2b5a84f3c0e6d219e",
+  "proposal_cal": "SUPERSEDE facts WHERE subject = \"user:john-smith\" AND relation = \"preferred_activity\" SET object = \"morning_run_5k\" REASON \"merge 7 duplicate extractions\"",
+  "severity": "low",
+  "metric_snapshot": {
+    "metric": "duplicate_fact_ratio",
+    "baseline": 0.14,
+    "n": 51,
+    "window": "90d",
+    "query": "COUNT facts WHERE namespace = \"fitness:preferences\"",
+    "review_after": 1742601600000
+  },
+  "derived_from": [
+    "mg:sha256:a1b2c3...",
+    "mg:sha256:d4e5f6...",
+    "mg:sha256:7890ab..."
+  ],
+  "evidence_query": "RECALL facts WHERE subject = \"user:john-smith\" AND relation = \"preferred_activity\"",
+  "confidence": 0.83,
+  "importance": 0.4,
+  "valid_to": 1745193600000,
+  "namespace": "agent:recommendations",
+  "created_at": 1740034800000
+}
+```
+
+Note what is absent: there is no `rec_status`. It is not a field an author writes.
+
+Recommendation grains SHOULD use a dedicated namespace such as `"agent:recommendations"` (rule 7), which keeps the proposal queue efficiently discoverable and cleanly separable from user memory. Because the namespace hash sits in bytes 3–4 of the fixed header, a store can partition the queue without deserializing anything.
+
+## Field Compaction
+
+Recommendation-specific fields have their own compaction block (Section 6.13):
+
+| Full Name | Short Key | Type |
+|-----------|-----------|------|
+| `target_ref` | `tref` | string |
+| `analyzer` | `anlz` | map |
+| `summary` | `summ` | map |
+| `dedup_key` | `ddk` | string |
+| `proposal_cal` | `pcal` | string |
+| `proposal_edit` | `pedit` | map |
+| `proposal_data` | `pdata` | map |
+| `severity` | `sev` | string |
+| `metric_snapshot` | `msnap` | map |
+| `evidence_query` | `evq` | string |
+
+`rec_status` is deliberately absent from this table. It is compacted in Section 6.1 as `rstat`, alongside `verification_status` — because it is an index-layer field, not a blob field.
+
+## Querying Recommendations in CAL
+
+CAL 1.2 added Recommendation to its closed grain-type set with a type-specific field set — `target_ref`, `analyzer`, `severity`, `dedup_key`, `rec_status`:
+
+```sql
+RECALL recommendations
+  WHERE rec_status = "pending" AND severity = "high"
+  ORDER BY importance DESC
+  LIMIT 20
+```
+
+But note what CAL does **not** offer. Recommendation is **query-only**. There is no `ADD recommendation`, and lifecycle transitions never occur via `ADD` or `SUPERSEDE … SET`. Like Events, Tools, and States, it is absent from the CAL-addable whitelist enforced by `CAL-E051`.
+
+That absence is the type's safety model expressed in the query language. Recommendations are engine-emitted and lifecycle-gated; a language that could create or transition one would be a second path around the review gate.
+
+There is a deliberate asymmetry worth knowing: `verification_status` is a *meta field* in CAL, queryable on every grain type, while `rec_status` is a *recommendation field*, scoped to this one type. Both are index-layer fields in OMS. The scoping reflects that a review state has no analogue on a Fact or an Event.
+
+In SML, a Recommendation projects as a `<recommendation>` element rendering the proposal summary:
+
+```sml
+<recommendation target="entity:alice/velocity" severity="low">consolidate 2 duplicate "week 8 velocity" observations into one</recommendation>
+```
+
+The element was added in SML 1.1, which is why SML's version moved at all — two documents both labelled "SML 1.0" would otherwise differ in element set with nothing to distinguish them. Every SML 1.0 document remains a valid SML 1.1 document.
+
+## Putting It Together: A Governed Curation Loop
+
+The pieces compose into a loop that no single grain type could provide:
+
+1. **Analyze.** A curation analyzer queries the store, finds seven duplicate preference facts, and captures the baseline in `metric_snapshot`.
+2. **Propose.** It writes a Recommendation with `derived_from` set to the duplicate grains, a templated `summary`, a computed `dedup_key`, and a `proposal_cal` that merges them. Nothing in memory has changed.
+3. **Dedup.** The store checks `dedup_key`. If this proposal was already dismissed, it does not resurface as new.
+4. **Review.** A human opens the queue. `rec_status` is `pending`, rebuilt from an empty audit chain. They read the rendered summary, follow `derived_from` to the evidence, and approve — writing an audit Observation grain with `observer_id: "user:alice"`, `observer_type: "human"`, and a reason in `object`.
+5. **Apply.** An applier executes the CAL batch **under Alice's capability**, confined to the recommendation's namespace, bounded by Tier-1 quotas. It derives the inverse plan and records it on the applied audit grain.
+6. **Measure.** At `review_after`, the `metric_snapshot.query` re-runs. Did the duplicate ratio actually fall?
+7. **Roll back if not.** The recorded inverse plan reinstates the prior content — reproducibly, because it was derived at apply time rather than reconstructed later from memory.
+
+Throughout, the recommendation's content address never moved. Every transition is an immutable, hash-chained grain. And `rec_status` at any point is not a stored assertion but a conclusion, rebuildable from the chain by anyone holding it.
+
+## Design Considerations
+
+### Template Your Summaries From the Start
+
+The most common way to get this type wrong is to let an LLM-backed analyzer write `summary` as prose "just for now." It violates rule 4, and it quietly breaks reviewer-facing deduplication, because two renderings of the same proposal will differ. Define the template first.
+
+### Keep Evidence Bounded, and Set `evidence_query`
+
+`derived_from` is RECOMMENDED at ≤ 64 entries. A cluster of four hundred duplicates should carry a representative subset plus an `evidence_query` that regenerates the full set. Stuffing all four hundred addresses in makes the grain large and the provenance graph unpleasant to traverse.
+
+### Set `valid_to` on Anything Time-Sensitive
+
+A proposal grounded in a measurement taken today may be wrong in three months. Because expiry withdraws approval as well as blocking application, `valid_to` is the mechanism that stops a stale-but-approved change from executing against a store that has moved on.
+
+### Do Not Resolve `observer_id` to a Capability
+
+It is a host-asserted label. It is excellent for display and for audit reading, and it MUST NOT be used to derive execution authority. The gate for auto-apply is `observer_type == "rec:policy"`, and the capability for an auto-apply is the host-configured policy principal for that namespace.
+
+### Give the Queue Its Own Namespace
+
+`"agent:recommendations"` keeps proposals out of the default recall path for user memory. An agent assembling context for a conversation should not accidentally surface its own pending self-improvement proposals as if they were established facts.
+
+## Summary
+
+The Recommendation grain type gives autonomous self-improvement something it has generally lacked: a governed, portable, content-addressed record of what a system wants to change and why — with a review gate that a write cannot bypass.
+
+Five properties define it:
+
+1. **It proposes, never mutates.** A Recommendation changes nothing by itself. Only an approved-and-applied recommendation reaches the store, and only through an applier bound by explicit obligations.
+
+2. **Review state is derived, not declared.** `rec_status` is a rebuildable index-layer cache, so a writer cannot forge an approval, an importer cannot smuggle one in, and the content address stays stable through the entire lifecycle.
+
+3. **Identity is computed and shared.** The normative `dedup_key` construction means two implementations derive the same key for the same proposal — so deduplication survives import, federation, and forking, and a dismissal actually sticks.
+
+4. **The audit chain is authoritative.** Every transition is one immutable Observation grain, hash-chained, carrying the acting principal and a mandatory reason — using no fields the Observation schema did not already have.
+
+5. **Undo is derived, not improvised.** Because CAL has no destructive verb, every `proposal_cal` is structurally invertible, and the inverse is computed at apply time and recorded rather than reconstructed after the fact.
+
+Together with the Skill type from v1.4, Recommendation completes a pair: one type for what an agent can do, and one for how it proposes to change — both immutable, both auditable, both portable across any conforming store.

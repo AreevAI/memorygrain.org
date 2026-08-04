@@ -70,17 +70,28 @@ The Workflow type (type byte `0x04`, Section 8.4) captures procedural memory —
 {
   "type": "workflow",
   "trigger": "RSI crosses below 30",
-  "steps": [
-    "Evaluate 30-day average volume against current volume",
-    "Check current position limits for the symbol",
-    "Verify margin availability for new position",
-    "Submit limit order at current bid minus 0.5%"
+  "nodes": [
+    "evaluate_volume",
+    "check_position_limits",
+    "verify_margin",
+    "submit_limit_order",
+    "stand_down"
+  ],
+  "edges": [
+    {"src": "evaluate_volume", "dst": "check_position_limits"},
+    {"src": "evaluate_volume", "dst": "verify_margin"},
+    {"src": "check_position_limits", "dst": "submit_limit_order", "cond": "all_checks_pass"},
+    {"src": "verify_margin", "dst": "submit_limit_order", "cond": "all_checks_pass"},
+    {"src": "check_position_limits", "dst": "stand_down", "cond": "limit_breached"},
+    {"src": "verify_margin", "dst": "stand_down", "cond": "insufficient_margin"}
   ],
   "created_at": 1739900000000,
   "namespace": "trading:strategies",
   "importance": 0.85
 }
 ```
+
+The two pre-trade checks are independent, so they fan out from the volume evaluation and run concurrently — the graph model says so directly, where a flat step list would have implied a sequential dependency that costs latency on a time-sensitive signal. `submit_limit_order` is the target of both conditional edges, so it only fires when every check has passed; either check can instead route to `stand_down`, a terminal node with no outgoing edges.
 
 Each Workflow is immutable — the strategy as it existed when it was created is preserved as a content-addressed blob. If the strategy is refined, a new Workflow grain is created and the old one is superseded through the `superseded_by` field. The complete evolution of a trading strategy is preserved in the supersession chain.
 

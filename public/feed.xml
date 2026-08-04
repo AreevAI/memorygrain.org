@@ -5,8 +5,31 @@
     <link>https://memorygrain.org/blog/</link>
     <description>Deep dives into the Open Memory Specification (.mg format) — COSE signing, header bytes, GDPR compliance, autonomous vehicles, IoT device profiles, and portability.</description>
     <language>en-us</language>
-    <lastBuildDate>Sat, 13 Jun 2026 13:08:32 GMT</lastBuildDate>
+    <lastBuildDate>Tue, 04 Aug 2026 07:19:24 GMT</lastBuildDate>
     <atom:link href="https://memorygrain.org/feed.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Grain Type Deep Dive: Recommendations</title>
+      <link>https://memorygrain.org/blog/memory-type-recommendations/</link>
+      <guid isPermaLink="true">https://memorygrain.org/blog/memory-type-recommendations/</guid>
+      <description>A comprehensive guide to the Recommendation grain type (0x0C), introduced in OMS v1.5 — governed, auditable proposals to change memory or agent configuration. Covers the propose/review/apply/roll-back lifecycle, why rec_status lives in the index layer, the normative dedup_key construction, applier execution authority, and reproducible undo.</description>
+      <pubDate>Mon, 03 Aug 2026 00:00:00 GMT</pubDate>
+      <category>memory-types</category>
+      <category>recommendations</category>
+      <category>governance</category>
+      <category>self-improvement</category>
+      <category>audit</category>
+    </item>
+    <item>
+      <title>Grain Type Deep Dive: Skills</title>
+      <link>https://memorygrain.org/blog/memory-type-skills/</link>
+      <guid isPermaLink="true">https://memorygrain.org/blog/memory-type-skills/</guid>
+      <description>A comprehensive guide to the Skill grain type (0x0B), introduced in OMS v1.4 — the hybrid definition-plus-competence model, why the Fact + mg:capable_of convention was promoted to a first-class type, proficiency as a supersession chain, skill transfer between agents, and how Skills differ from Workflows and capability Facts.</description>
+      <pubDate>Sat, 13 Jun 2026 00:00:00 GMT</pubDate>
+      <category>memory-types</category>
+      <category>skills</category>
+      <category>agent-capability</category>
+      <category>procedural-memory</category>
+    </item>
     <item>
       <title>Grain Type Deep Dive: Consensus — Multi-Agent Agreement as First-Class Memory</title>
       <link>https://memorygrain.org/blog/memory-type-consensus/</link>
@@ -71,7 +94,7 @@
       <title>SML: The Context Format That Tells LLMs What to Trust</title>
       <link>https://memorygrain.org/blog/sml-context-format-for-llms/</link>
       <guid isPermaLink="true">https://memorygrain.org/blog/sml-context-format-for-llms/</guid>
-      <description>Semantic Markup Language (SML) uses grain type tag names as epistemic signals — telling an LLM not just what information is, but what kind of information it is. Hands-on examples across all 10 grain types, from customer support to incident response.</description>
+      <description>Semantic Markup Language (SML) uses grain type tag names as epistemic signals — telling an LLM not just what information is, but what kind of information it is. Hands-on examples across the grain-type elements, from customer support to incident response.</description>
       <pubDate>Wed, 04 Mar 2026 00:00:00 GMT</pubDate>
       <category>sml</category>
       <category>context-format</category>
@@ -356,7 +379,7 @@
       <title>Memory Type Deep Dive: Workflows</title>
       <link>https://memorygrain.org/blog/memory-type-workflows/</link>
       <guid isPermaLink="true">https://memorygrain.org/blog/memory-type-workflows/</guid>
-      <description>Workflows are procedural memory in OMS — learned sequences of actions that agents can replay. Learn about the Workflow memory type, the trigger-steps model, how agents learn workflows, versioning through supersession, and industry use cases.</description>
+      <description>Workflows are procedural memory in OMS — directed graphs of procedural steps that agents can replay. Learn the nodes-and-edges model introduced in OMS v1.4, how topology encodes forks and joins, node-to-Tool binding, versioning through supersession, and industry use cases.</description>
       <pubDate>Thu, 19 Feb 2026 00:00:00 GMT</pubDate>
       <category>memory-types</category>
       <category>workflows</category>
@@ -458,7 +481,7 @@
       <title>What Is a Memory Grain?</title>
       <link>https://memorygrain.org/blog/what-is-a-memory-grain/</link>
       <guid isPermaLink="true">https://memorygrain.org/blog/what-is-a-memory-grain/</guid>
-      <description>The memory grain is the atomic unit of agent knowledge in the Open Memory Specification. This post covers the ten grain types, the immutability model, content addressing, the .mg container capabilities, and the ten design principles that shape the format.</description>
+      <description>The memory grain is the atomic unit of agent knowledge in the Open Memory Specification. This post covers the twelve grain types, the immutability model, content addressing, the .mg container capabilities, and the ten design principles that shape the format.</description>
       <pubDate>Thu, 19 Feb 2026 00:00:00 GMT</pubDate>
       <category>memory-grain</category>
       <category>fundamentals</category>

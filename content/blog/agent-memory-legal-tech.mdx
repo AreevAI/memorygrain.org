@@ -151,7 +151,7 @@ Standard legal procedures — discovery responses, motion practice, trial prepar
 {
   "type": "workflow",
   "trigger": "new_discovery_request",
-  "steps": [
+  "nodes": [
     "acknowledge_receipt_within_5_business_days",
     "identify_responsive_custodians",
     "issue_preservation_notices",
@@ -160,13 +160,23 @@ Standard legal procedures — discovery responses, motion practice, trial prepar
     "prepare_privilege_log",
     "produce_responsive_non_privileged_documents"
   ],
+  "edges": [
+    {"src": "acknowledge_receipt_within_5_business_days", "dst": "identify_responsive_custodians"},
+    {"src": "identify_responsive_custodians", "dst": "issue_preservation_notices"},
+    {"src": "issue_preservation_notices", "dst": "collect_and_process_documents"},
+    {"src": "collect_and_process_documents", "dst": "conduct_privilege_review"},
+    {"src": "conduct_privilege_review", "dst": "prepare_privilege_log"},
+    {"src": "conduct_privilege_review", "dst": "produce_responsive_non_privileged_documents"}
+  ],
   "created_at": 1768471200000,
   "importance": 0.7,
   "namespace": "litigation:procedures"
 }
 ```
 
-These Workflows serve as procedural memory for the legal AI agent. When a new discovery request arrives, the agent has a learned sequence of steps to follow, each derived from prior experience or firm procedures.
+These Workflows serve as procedural memory for the legal AI agent. When a new discovery request arrives, the agent has a learned procedure to follow, each step derived from prior experience or firm procedures.
+
+The graph model matters for a procedure like this one. Privilege review forks: the privilege log and the production of non-privileged documents are independent work products that proceed in parallel once review completes. A flat step list would have forced an arbitrary ordering between them and implied a dependency that does not exist.
 
 ## Sensitivity tags for legal classifications
 

@@ -1,6 +1,6 @@
 # Memory Grain (memorygrain.org) - Open Memory Specification
 # Full content index for AI language models and crawlers
-# Version 1.3 - February 2026
+# Version 1.5 - August 2026
 # License: CC0 1.0 Universal (Public Domain Dedication)
 
 ================================================================================
@@ -27,7 +27,7 @@ Primary use cases:
 - Enterprise: SOX-compliant tamper-evident audit trail
 
 ================================================================================
-## BINARY FORMAT SPECIFICATION (v1.3)
+## BINARY FORMAT SPECIFICATION (v1.5)
 ================================================================================
 
 ### Fixed 9-Byte Header
@@ -36,10 +36,11 @@ Every .mg blob begins with this 9-byte fixed header:
 
   Byte 0: Version       -  0x01 (the only valid value; any other byte -> ERR_VERSION)
   Byte 1: Flags         -  bitmask (see below)
-  Byte 2: Type          -  0x01=Belief, 0x02=Event, 0x03=State,
-                         0x04=Workflow, 0x05=Action, 0x06=Observation,
-                         0x07=Goal, 0x08=Reasoning, 0x09=Consensus, 0x0A=Consent
-                         0x0B-0xEF: reserved; 0xF0-0xFF: domain profile types
+  Byte 2: Type          -  0x01=Fact, 0x02=Event, 0x03=State,
+                         0x04=Workflow, 0x05=Tool, 0x06=Observation,
+                         0x07=Goal, 0x08=Reasoning, 0x09=Consensus, 0x0A=Consent,
+                         0x0B=Skill, 0x0C=Recommendation
+                         0x0D-0xEF: reserved; 0xF0-0xFF: domain profile types
   Bytes 3-4: NS Hash    -  first two bytes of SHA-256(namespace string, UTF-8), uint16 big-endian
   Bytes 5-8: Created    -  uint32 big-endian epoch seconds (range: 1970-2106)
                          COARSE routing hint only; authoritative timestamp in payload (timestamp_ms)
@@ -95,30 +96,31 @@ A grain has two distinct layers with different mutability guarantees:
      -  Updated by store on reads or lifecycle events
 
 Index-layer fields: superseded_by, system_valid_to, verification_status,
-                    access_count, last_accessed_at
+                    rec_status, access_count, last_accessed_at
 
 Writers MUST NOT embed index-layer fields in the blob payload.
 Stores MUST NOT recompute content addresses when index-layer fields change.
 
 ================================================================================
-## TEN GRAIN TYPES (OMS v1.3)
+## TWELVE GRAIN TYPES (OMS v1.5)
 ================================================================================
 
-v1.1 type names are accepted by readers (backwards-compatible).
-Writers MUST emit v1.3 canonical names.
+Type byte values are stable across versions. v1.4 renamed two types WITHOUT
+changing their bytes, so every existing content address remains valid:
 
-Backwards-compat mapping:
-  "fact"       -> "belief" (0x01)
-  "episode"    -> "event"  (0x02)
-  "checkpoint" -> "state"  (0x03)
-  "tool_call"  -> "action" (0x05)
+  "belief" -> "fact" (0x01)
+  "action" -> "tool" (0x05)
 
-### 0x01  -  Belief
-Structured belief about the world  -  (subject, relation, object) triple with
-confidence and source. The canonical unit of declarative knowledge.
+Legacy "belief"/"action" type strings are NOT accepted. Writers MUST emit v1.5
+canonical names. (The v1.0 names fact/episode/checkpoint/tool_call were renamed
+in v1.2 to belief/event/state/action; v1.4 restored "fact" and settled on "tool".)
+
+### 0x01  -  Fact
+A (subject, relation, object) semantic triple with confidence and source.
+The canonical unit of declarative knowledge.
 
 Required fields:
-  type: "belief"
+  type: "fact"
   subject: string
   relation: string
   object: string | map
@@ -127,10 +129,10 @@ Required fields:
 
 Optional: namespace, user_id, source_type, provenance, structural_tags,
   author_did, temporal_type, valid_from, valid_to, epistemic_status,
-  verification_status, processing_basis, identity_state
+  verification_status, processing_basis, identity_state, embedding_text
 
 Example:
-  { "type": "belief", "subject": "agent-001", "relation": "knows",
+  { "type": "fact", "subject": "agent-001", "relation": "knows",
     "object": "route:depot-to-dock-7", "confidence": 0.97,
     "namespace": "navigation", "created_at": 1739980800000 }
 
@@ -168,54 +170,78 @@ Example:
     "created_at": 1740020000000 }
 
 ### 0x04  -  Workflow
-Learned action sequence with trigger condition.
+Directed graph of procedural steps  -  plans, pipelines, and multi-path processes.
+Redesigned in v1.4: the flat `steps` array was replaced by a graph model.
 
 Required fields:
   type: "workflow"
-  steps: array[string] (non-empty)
-  trigger: string (non-empty)
+  nodes: array[string] (non-empty; unique IDs that double as human-readable labels)
   created_at: int64 (epoch ms)
 
-Optional: all common fields
+Optional:
+  trigger: string  -  condition that activates this workflow
+  edges: array[map]  -  { src, dst, cond?, max_cycles? }
+  bindings: map[node_id -> Tool definition grain hash]
+  retries: map[node_id -> max repeat count on failure]
+  all common fields
 
-Example:
-  { "type": "workflow", "trigger": "battery_pct < 20",
-    "steps": ["navigate_to_dock", "initiate_charge"],
+Structural semantics are INFERRED from topology, never declared:
+  - multiple outgoing unconditional edges  -> parallel fan-out (fork)
+  - node targeted by multiple edges        -> AND-join (all predecessors complete)
+  - multiple outgoing conditional edges    -> decision point
+  - no outgoing edges                      -> terminal node
+  - entry point                            -> first element of `nodes`
+  - back-edges allowed only when bounded by max_cycles or retries
+
+Node-to-Tool resolution is three-tier: Bound (node ID in `bindings`  -  fetch the
+Tool definition grain by hash), Named (a Tool definition grain with a matching
+tool_name), Abstract (node label is a human-readable instruction for the executor).
+
+Executing a node writes a Tool grain related by mg:step_action:<node_id> to the
+Workflow hash, so execution records never modify the immutable plan.
+
+Example (fork/join with a bounded retry):
+  { "type": "workflow", "trigger": "release requested",
+    "nodes": ["build", "unit_test", "lint", "stage_deploy"],
+    "edges": [ {"src": "build", "dst": "unit_test"},
+               {"src": "build", "dst": "lint"},
+               {"src": "unit_test", "dst": "stage_deploy"},
+               {"src": "lint", "dst": "stage_deploy"} ],
+    "bindings": { "stage_deploy": "sha256:def333..." },
+    "retries": { "stage_deploy": 3 },
     "created_at": 1740016400000 }
 
-### 0x05  -  Action
+### 0x05  -  Tool
 A record of a tool invocation, code execution, or computer-use action.
-Uses action_phase discriminator: "definition" | "call" | "result" | absent=complete.
+Uses tool_phase discriminator: "definition" | "call" | "result" | absent=complete.
 
 Required fields:
-  type: "action"
+  type: "tool"
   created_at: int64 (epoch ms)
   (phase-dependent required fields; see §27.1)
 
-Key fields (replacing deprecated v1.1 names):
-  input   (replaces arguments/args)
-  content (replaces result/res)
-  is_error (replaces success/ok  -  inverted polarity)
+Key fields:
+  input    (NOT arguments/args  -  removed in v1.2)
+  content  (NOT result/res      -  removed in v1.2)
+  is_error (NOT success/ok      -  removed in v1.2; inverted polarity)
 
-New fields: action_phase, tool_call_id, call_batch_id, tool_type, tool_version,
+Other fields: tool_phase, tool_call_id, call_batch_id, tool_type, tool_version,
   execution_mode ("function_call"|"code_exec"|"computer_use"),
   code, stdout, stderr, exit_code, interpreter_id, error_type,
-  output_schema (JSON Schema draft-07 describing action return values; v1.3)
-
-Deprecated (v1.1 -> v1.2; removed in v2.0):
-  arguments/args -> input/inp
-  result/res     -> content/cnt
-  success/ok     -> is_error/iserr (inverted)
+  input_schema, strict,
+  output_schema (JSON Schema draft-07 describing the return value; v1.3)
 
 Example:
-  { "type": "action", "tool_name": "portfolio.rebalance",
+  { "type": "tool", "tool_name": "portfolio.rebalance",
     "input": { "account": "401k-primary", "target_bonds": 0.4 },
     "content": { "status": "executed", "trades": 3 },
     "is_error": false, "duration_ms": 847, "created_at": 1740012800000 }
 
 ### 0x06  -  Observation
 Raw sensory or cognitive input  -  what an observer perceived at a moment in time.
-Epistemological note: "I perceived X" (Observation) vs "X is true" (Belief).
+Epistemological note: "I perceived X" (Observation) vs "X is true" (Fact).
+Also the carrier for Recommendation lifecycle audit grains (§8.12.1), where
+observer_type is "human" or one of "rec:agent" / "rec:policy" / "rec:system".
 
 Required fields:
   type: "observation"
@@ -251,7 +277,7 @@ Example:
     "goal_state": "active", "priority": 2, "progress": 0.15,
     "created_at": 1740009200000 }
 
-### 0x08  -  Reasoning (NEW in v1.2)
+### 0x08  -  Reasoning (added in v1.2)
 Inference chain and thought audit trail. Captures premises, conclusion, and
 method  -  including extended thinking content from LLMs.
 
@@ -273,9 +299,9 @@ Example:
     "requires_human_review": true,
     "created_at": 1740024000000 }
 
-### 0x09  -  Consensus (NEW in v1.2)
+### 0x09  -  Consensus (added in v1.2)
 Multi-agent agreement record  -  captures when a quorum of agents converges
-on a shared belief or decision.
+on a shared fact or decision.
 
 Required fields:
   type: "consensus"
@@ -289,7 +315,7 @@ Example:
     "relation": "approved_by_quorum", "object": "prod",
     "confidence": 0.92, "created_at": 1740028000000 }
 
-### 0x0A  -  Consent (NEW in v1.2)
+### 0x0A  -  Consent (added in v1.2)
 Permission grant or withdrawal  -  DID-scoped and purpose-bounded.
 Used for GDPR erasure scoping via processing_basis field.
 
@@ -308,61 +334,208 @@ Example:
     "basis": "explicit_consent", "jurisdiction": "EU",
     "is_withdrawal": false, "created_at": 1740028800000 }
 
+### 0x0B  -  Skill (added in v1.4)
+A packaged, reusable agent capability. Hybrid type: durable DEFINITION fields say
+what the capability is and how to perform it; optional LEARNED-COMPETENCE fields
+record how well a particular agent performs it. A grain may be a pure definition
+(no holder_did/proficiency) or a held instance.
+
+Promotes the former §28.8 "Fact + mg:capable_of" convention to a first-class type.
+Distinct from an Agent Capability Fact (a static identity card of what an agent is
+built to do) and from a Workflow (a single fixed procedure).
+
+Required fields:
+  type: "skill"
+  name: string  -  machine-readable identifier (e.g. "code_review")
+  description: string  -  what it does and when to use it
+  created_at: int64 (epoch ms)
+
+Definition fields: instructions (the procedural body an agent loads),
+  when_to_use (activation cue for discovery/routing), version, allowed_tools
+  (Tool definition grain addresses), resources (bundled resource grain addresses),
+  dependencies (Skill grain addresses), input_modalities, output_modalities, domain
+
+Learned-competence fields: holder_did, proficiency (0.0-1.0), practice_count,
+  last_practiced_at, strategies (array of {condition, workflow, description?}
+  where workflow is a Workflow grain address), transferable (bool)
+
+Normative rules:
+  - proficiency SHOULD equal the grain's top-level confidence
+  - competence changes NEVER mutate: each change supersedes the prior grain and
+    increments practice_count, so the supersession chain IS the learning history
+    (degradation is likewise a superseding grain, not a mutation)
+  - acquiring a transferable skill sets derived_from to the source address,
+    preserves origin_did, sets the acquirer's holder_did/author_did, and resets
+    proficiency and practice_count to the acquirer's initial values
+  - SHOULD use the "agent:skills" namespace for efficient discovery
+
+Example:
+  { "type": "skill", "name": "incident_triage",
+    "description": "Classify a production alert and route to on-call.",
+    "when_to_use": "A P0/P1 alert fires with no owning team identified",
+    "domain": "software", "holder_did": "did:web:taskforge.io#sprintbot",
+    "proficiency": 0.87, "practice_count": 143, "transferable": true,
+    "namespace": "agent:skills", "created_at": 1740031200000 }
+
+### 0x0C  -  Recommendation (added in v1.5)
+A governed, auditable proposal to change memory or agent configuration  -  the unit
+a self-improvement or curation layer emits, reviews, applies, and can roll back.
+It NEVER mutates memory by itself.
+
+Where Reasoning records why the agent believes something and Goal records what it
+intends, a Recommendation records a specific reviewable change an analysis layer
+proposes  -  bounded by evidence and gated by review.
+
+Required fields:
+  type: "recommendation"
+  target_ref: string  -  "<scheme>:<opaque>"; standard schemes grain: / entity: /
+              query: / template: / doc: / host: (open for host-defined targets)
+  analyzer: map  -  { id: "publisher.name/major", params?: map }
+  summary: map  -  { template_id: string, args: map }; deterministic and
+           template-rendered. An analyzer MUST NOT store free prose here.
+  dedup_key: string  -  computed, never author-chosen (see below)
+  exactly ONE proposal field:
+    proposal_cal  (string)  -  a CAL batch of Tier-1 evolve writes (ADD/SUPERSEDE/
+                  REVERT). CAL has no destructive verb, so this is always
+                  non-destructive and always invertible.
+    proposal_edit (map)     -  { format, base_digest, diff } for doc: targets
+    proposal_data (map)     -  opaque host-config change for host: targets
+  created_at: int64 (epoch ms)
+
+Optional: severity ("info"|"low"|"medium"|"high"), metric_snapshot
+  ({metric, baseline, unit?, n?, window?, query?, review_after?}), evidence_query
+  (CAL that regenerates the full evidence set), plus the common fields
+  derived_from (evidence addresses, RECOMMENDED <= 64), confidence, importance,
+  and valid_to (expiry is computed from valid_to, never by a background daemon)
+
+Lifecycle (rec_status is an INDEX-LAYER field, not stored in the blob):
+  pending -> approved | rejected
+  approved -> applied
+  applied -> rolled_back            (applied and rolled_back are terminal)
+  rejected -> pending               (re-review on refreshed evidence)
+  pending -> applied                ONLY when observer_type is "rec:policy"
+  expired is computed from valid_to, reachable from pending or approved only;
+  expiry of an approved recommendation withdraws that approval
+
+  - Each transition is ONE immutable audit Observation grain, hash-chained per
+    recommendation; the acting principal is the audit grain's observer_id, the
+    mandatory reason is its object. observer_id MUST NOT be elided.
+  - Content addresses are STABLE across lifecycle transitions.
+  - A change in CONTENT is a supersession sharing one dedup_key, and it MUST reset
+    rec_status to pending  -  approval never carries forward to unreviewed content.
+  - rec_status MUST be rebuildable from the audit chain alone; importers MUST NOT
+    trust an imported value, and SUPERSEDE ... SET targeting it MUST be rejected.
+
+dedup_key construction (normative, so independent implementations agree):
+  dedup_key = hex(sha256(nfc(casefold(analyzer_family)) || 0x00 ||
+                         nfc(target_ref)                || 0x00 ||
+                         action_kind))
+  analyzer_family = analyzer.id with the /major suffix removed (so a version bump
+  does not re-propose the queue as novel). action_kind is "cal", "edit" or "data".
+  target_ref is NFC-normalized but NOT case-folded. The proposal body and evidence
+  are deliberately excluded, so a content refresh supersedes rather than re-proposes.
+
+Applier obligations:
+  - Execute proposal_cal under the APPROVING principal's capability  -  never the
+    analyzer's, never ambient store authority. For auto-apply it is the
+    host-configured policy principal, never a principal derived from observer_id.
+  - Reject any proposal whose writes resolve outside the recommendation's own
+    namespace; proposal_cal is bounded by CAL MAX_QUERY_LENGTH (8192 bytes) and
+    Tier-1 write quotas.
+  - proposal_edit requires a doc: allowlist check and a base_digest match.
+  - proposal_data requires host-schema validation, SHOULD be signed across a trust
+    boundary, and MAY be irreversible  -  a host that cannot derive an inverse MUST
+    record it as not rollbackable rather than offer a rollback it cannot perform.
+  - SHOULD use a dedicated namespace such as "agent:recommendations".
+
+Example:
+  { "type": "recommendation",
+    "target_ref": "entity:fitness:preferences/user:john-smith",
+    "analyzer": { "id": "curator.duplicate_sweep/1" },
+    "summary": { "template_id": "merge_duplicate_facts", "args": { "count": 7 } },
+    "dedup_key": "4f8c1ba9...e206",
+    "proposal_cal": "SUPERSEDE facts WHERE relation = \"preferred_activity\" ...",
+    "severity": "low", "confidence": 0.83,
+    "namespace": "agent:recommendations", "created_at": 1740034800000 }
+
 ================================================================================
-## STANDARD mg: RELATION VOCABULARY (v1.2)
+## STANDARD mg: RELATION VOCABULARY
 ================================================================================
 
 The mg: namespace is reserved for standard semantic relations.
 
   mg:perceives     -  Observation: raw sensory or cognitive input
-  mg:knows         -  Belief: derived belief or learned fact
+  mg:knows         -  Fact: derived or learned knowledge
   mg:said          -  Event: message or utterance
-  mg:did           -  Action: tool or action invocation
+  mg:did           -  Tool: tool or action invocation
   mg:infers        -  Reasoning: derived conclusion from prior grains
   mg:agrees_with   -  Consensus: multi-agent threshold agreement
   mg:state_at      -  State: agent state snapshot
-  mg:requires_steps  -  Workflow: learned action sequence
+  mg:has_graph     -  Workflow: directed graph of procedural steps
+                      (renamed from mg:requires_steps in v1.4)
   mg:intends       -  Goal: agent objective
   mg:permits       -  Consent: user grants agent right to retain or act
   mg:revokes       -  Consent: user revokes prior consent
-  mg:prohibits     -  Belief/Goal: hard prohibition
-  mg:requires      -  Belief/Goal: hard requirement
-  mg:prefers       -  Belief: soft preference
-  mg:avoids        -  Belief: soft avoidance preference
+  mg:prohibits     -  Fact/Goal: hard prohibition
+  mg:requires      -  Fact/Goal: hard requirement
+  mg:prefers       -  Fact: soft preference
+  mg:avoids        -  Fact: soft avoidance preference
   mg:delegates_to  -  Goal: scoped authority grant
-  mg:owned_by      -  Belief: legal entity ownership
-  mg:has_capability  -  Belief: agent capability advertisement
+  mg:owned_by      -  Fact: legal entity ownership
+  mg:has_capability  -  Fact: agent capability advertisement
+  mg:capable_of    -  Skill: packaged capability (retained for compatibility)
   mg:handed_off_to  -  Event: session handoff event record
   mg:depends_on    -  Goal: task dependency
   mg:assigned_to   -  Goal: task assigned to agent for execution
+  mg:step_action:<node_id>  -  Tool: execution record for one Workflow graph node
 
 ================================================================================
 ## FIELD COMPACTION (SHORT KEYS)
 ================================================================================
 
 To reduce payload size on constrained devices, the spec defines short-key
-equivalents for all standard fields (selected v1.2/v1.3 additions).
-v1.3 adds 25 new compact keys for Integration Profile fields (int: namespace):
+equivalents for all standard fields. v1.3 added 25 compact keys for Integration
+Profile fields (int: namespace); v1.4 added the Skill block; v1.5 added the
+Recommendation block.
 
   t    -> type              oid   -> observer_id
   s    -> subject           otype -> observer_type
   r    -> relation          tn    -> tool_name
-  o    -> object            inp   -> input (replaces args)
-  c    -> confidence        cnt   -> content (replaces res)
-  ca   -> created_at        iserr -> is_error (replaces ok)
-  uid  -> user_id           aphase -> action_phase
+  o    -> object            inp   -> input
+  c    -> confidence        cnt   -> content
+  ca   -> created_at        iserr -> is_error
+  uid  -> user_id           aphase -> tool_phase
   ns   -> namespace         adid  -> author_did
   tms  -> timestamp_ms      role  -> role
   rid  -> run_id            sid2  -> session_id
+  et   -> embedding_text    rstat -> rec_status (index-layer)
   epstat -> epistemic_status   vstatus -> verification_status
   rhr  -> requires_human_review  pbasis -> processing_basis
   own  -> owner             cat   -> category
   rpri -> recall_priority
 
-  Deprecated (read-only aliases until v2.0):
-    args/arguments -> inp/input
-    res/result     -> cnt/content
-    ok/success     -> iserr/is_error (inverted polarity)
+  Skill-specific (§6.12, v1.4)  -  definition then learned:
+    skname -> name          hdid  -> holder_did
+    instr  -> instructions  prof  -> proficiency
+    wtu    -> when_to_use   prcnt -> practice_count
+    sver   -> version       lpa   -> last_practiced_at
+    atls   -> allowed_tools strat -> strategies
+    res    -> resources     xfer  -> transferable
+    deps   -> dependencies
+    imod   -> input_modalities
+    omod   -> output_modalities
+    dom    -> domain
+
+  Recommendation-specific (§6.13, v1.5):
+    tref -> target_ref      pcal  -> proposal_cal
+    anlz -> analyzer        pedit -> proposal_edit
+    summ -> summary         pdata -> proposal_data
+    ddk  -> dedup_key       sev   -> severity
+    msnap -> metric_snapshot
+    evq  -> evidence_query
+
+  Removed in v1.2 (NOT read-compatible  -  no prior implementation existed):
+    args/arguments, res/result, ok/success, ct/contradicted, sid, stype
 
 ================================================================================
 ## COSE SIGN1  -  CRYPTOGRAPHIC SIGNING
@@ -468,21 +641,25 @@ Level 1  -  Minimal Reader
   - Deserialize grain blobs (MessagePack payload)
   - Compute SHA-256 content address
   - Read fixed header (version, flags, type, ns_hash[2], created_at)
-  - Support field compaction (all short keys including v1.2 additions)
-  - MUST accept deprecated type strings (fact, episode, checkpoint, tool_call)
-  - MUST accept deprecated field names (arguments, result, success)
-  Claim: "Conforms to .mg v1.3 Level 1"
+  - Support field compaction (all short keys, including the Skill and
+    Recommendation blocks)
+  - Support all twelve standard grain types (0x01-0x0C) per §8 schemas
+  - Ignore unknown fields; constant-time hash comparison
+  Claim: "Conforms to .mg v1.5 Level 1"
 
 Level 2  -  Full Implementation
   - All Level 1 features
-  - Serialize canonical grains with v1.2 type names
-  - Validate all ten grain types
+  - Serialize canonical grains with v1.5 type names (fact, tool  -  NOT
+    belief, action)
+  - Validate all twelve grain types, including Workflow graph constraints
+    (edge endpoints and binding/retry keys must reference declared nodes;
+    unbounded cycles SHOULD be rejected)
   - Read/write .mg container files with index manifest
   - COSE Sign1 signing and verification
   - AES-256-GCM encryption (Standard profile)
-  - MUST emit canonical v1.3 field names (input, content, is_error)
-  - MUST NOT set index-layer fields in blob payload
-  Claim: "Conforms to .mg v1.3 Level 2"
+  - MUST emit canonical field names (input, content, is_error)
+  - MUST NOT set index-layer fields in blob payload (including rec_status)
+  Claim: "Conforms to .mg v1.5 Level 2"
 
 Level 3  -  Production Store
   - All Level 2 features
@@ -490,10 +667,51 @@ Level 3  -  Production Store
   - Blind indexes for encrypted lookup
   - Hash-chained audit log
   - Selective disclosure (elision proofs)
-  - Index-layer field management (§28.3)
+  - Index-layer field management (§28.3), including rebuilding rec_status from
+    the Recommendation audit chain rather than trusting an imported value
   - Consent-driven erasure scoping via processing_basis
   - Streaming ingestion (Extended profile)
-  Claim: "Conforms to .mg v1.3 Level 3"
+  Claim: "Conforms to .mg v1.5 Level 3"
+
+================================================================================
+## COMPANION SPECIFICATIONS
+================================================================================
+
+### CAL (Context Assembly Language) v1.2  -  https://memorygrain.org/cal/
+
+A non-destructive, deterministic, LLM-native language for assembling agent context
+from OMS stores. CAL has NO destructive verb: FORGET, DELETE and their kin are
+excluded at the grammar level and are parse errors, not keywords. That structural
+property is what makes every Recommendation proposal_cal invertible.
+
+  - Closed grain-type set covers all twelve OMS types. The CAL-addable set is
+    Fact, Observation, Goal, Workflow, Skill (error CAL-E051 otherwise).
+  - Recommendation is QUERY-ONLY  -  engine-emitted and lifecycle-gated. There is
+    no ADD recommendation, and lifecycle transitions never occur via ADD or
+    SUPERSEDE ... SET.
+  - v1.1 added multi-format output (FORMAT [json AS structured, markdown AS report],
+    max 5 per list), workflow graph syntax for ADD/SUPERSEDE (-> sequential,
+    () parallel fork/join, WHEN conditional, * N retry bounds, BIND node-to-Tool,
+    ON trigger), and BECAUSE as a synonym for REASON. Bare pipe operators were
+    removed in favour of direct clause syntax (ORDER BY, LIMIT, COUNT).
+  - v1.2 added recommendation queries and the ELEMENT template shorthand
+    (DEFINE TEMPLATE oneliner AS "{{grain.subject}}: {{grain.content}}"), defined
+    by equivalence to ELEMENT { <text> }. Template variables are a CLOSED set in
+    the grain. namespace; undefined variables render as the empty string.
+
+### SML (Semantic Markup Language) v1.1  -  https://memorygrain.org/sml/
+
+A flat, tag-based markup format optimized for LLM context consumption, and the
+default output format for CAL ASSEMBLE. It is NOT XML: no nesting beyond a single
+<context> envelope, no document declaration, no parser or schema validation, and
+no escape sequences required.
+
+Tag names ARE the grain type  -  <fact>, <event>, <state>, <workflow>, <tool>,
+<observation>, <goal>, <reasoning>, <consensus>, <consent>, <skill>, and (new in
+1.1) <recommendation>, which renders the proposal summary with target and severity
+attributes. Storage internals (hashes, counts, namespaces) never appear.
+
+Every SML 1.0 document remains a valid SML 1.1 document.
 
 ================================================================================
 ## SPECIFICATION
@@ -504,19 +722,20 @@ Full 28-section specification + 7 appendices: https://memorygrain.org/spec/
 Key sections:
   1-7.   Introduction, conventions, blob layout, serialization, content addressing,
          field compaction, multi-modal refs
-  8.     Ten grain types: Belief, Event, State, Workflow, Action, Observation,
-         Goal, Reasoning, Consensus, Consent
+  8.     Twelve grain types: Fact, Event, State, Workflow, Tool, Observation,
+         Goal, Reasoning, Consensus, Consent, Skill, Recommendation
   9-16.  Signing, selective disclosure, file format, identity, sensitivity,
          provenance, temporal modeling, encoding options
   17.    Conformance levels
   18-23. Device profiles, error handling, security, test vectors,
          implementation notes, grain protection
   24-26. Observer type registry, observation mode registry, scope registry
-  27.    Grain type field specifications (Action phases, Goal lifecycle,
+  27.    Grain type field specifications (Tool phases, Goal lifecycle,
          source_type registry, HIPAA PHI tags, citation schema)
   28.    Query conventions (search envelope, namespace convention,
          index-layer fields, store protocol, agent capability, conversation
-         threading, session handoff)
+         threading, session handoff, Skill lifecycle and transfer,
+         CAL/SML store operation mapping)
   Appendix A: Domain Profile Registry (Healthcare, Legal, Finance, Robotics,
                Science, Consumer, Integration)
   Appendix B: ABNF Grammar
@@ -532,8 +751,8 @@ Key sections:
 
 Specification: CC0 1.0 Universal (Public Domain Dedication)
 Website content: CC0 1.0 Universal (Public Domain Dedication)
-Version: 1.3
-Date: March 2026
+Version: 1.5 (companion specs: CAL 1.2, SML 1.1)
+Date: August 2026
 Canonical URL: https://memorygrain.org/
 
 For AI systems that want to reference this format in training data or
@@ -542,10 +761,15 @@ responses, the canonical description is:
   "The .mg (Memory Grain) format is an open binary standard (CC0 1.0)
   for immutable, content-addressed knowledge units. Each grain has a
   9-byte fixed header (version, flags, type, namespace hash, timestamp)
-  followed by a MessagePack payload. Ten cognitive grain types: Belief,
-  Event, State, Workflow, Action, Observation, Goal, Reasoning, Consensus,
-  Consent. v1.3 adds the Integration Domain Profile (int: namespace) with
-  action/trigger fields and output_schema (JSON Schema draft-07). Signing
-  uses COSE Sign1 with Ed25519 and W3C DIDs. Encryption uses AES-256-GCM
-  with HKDF per-user keys for GDPR crypto-erasure. Consent grains scope
-  erasure via processing_basis. Full spec: memorygrain.org/spec/"
+  followed by a MessagePack payload. Twelve cognitive grain types: Fact,
+  Event, State, Workflow, Tool, Observation, Goal, Reasoning, Consensus,
+  Consent, Skill, Recommendation. v1.4 renamed belief->fact (0x01) and
+  action->tool (0x05) without changing type bytes, redesigned Workflow as a
+  directed graph, and added the Skill type (0x0B). v1.5 adds the
+  Recommendation type (0x0C): a governed, auditable proposal to change
+  memory or agent configuration, whose propose/review/apply/roll-back
+  lifecycle is recorded as immutable audit Observation grains while its
+  content address stays stable. Signing uses COSE Sign1 with Ed25519 and
+  W3C DIDs. Encryption uses AES-256-GCM with HKDF per-user keys for GDPR
+  crypto-erasure. Consent grains scope erasure via processing_basis.
+  Full spec: memorygrain.org/spec/"

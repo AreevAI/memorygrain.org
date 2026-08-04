@@ -52,7 +52,7 @@ CAL/1 ASSEMBLE roadmap_context
   FROM
     profile:    (RECALL facts ABOUT "priya"
                   WHERE relation IS PREFERENCE
-                  | ORDER BY confidence DESC | LIMIT 10),
+                  ORDER BY confidence DESC LIMIT 10),
     goals:      (RECALL goals ABOUT "priya"
                   WHERE goal_state = "active" RECENT 5),
     history:    (RECALL events ABOUT "priya" RECENT 8),
@@ -103,7 +103,7 @@ RECALL events THREAD "sess-9f3a2b"
 RECALL LIKE "onboarding friction in enterprise accounts"
 ```
 
-`ABOUT` means `WHERE subject = ...`. `RECENT 5` means `| ORDER BY time DESC | LIMIT 5`. `CONTRADICTIONS` means `WHERE contradicted = true WITH contradiction_detection`. `LIKE` triggers semantic search. Every shortcut has a deterministic expansion — no ambiguity, no surprises.
+`ABOUT` means `WHERE subject = ...`. `RECENT 5` means `ORDER BY time DESC LIMIT 5`. `CONTRADICTIONS` means `WHERE verification_status = "contradicted" WITH contradiction_detection`. `LIKE` triggers semantic search. Every shortcut has a deterministic expansion — no ambiguity, no surprises.
 
 ## From Memory Store to LLM Call
 
@@ -118,7 +118,7 @@ CAL/1 ASSEMBLE roadmap_context
   FOR "helping priya prepare the Q2 product roadmap"
   FROM
     profile:   (RECALL facts ABOUT "priya" WHERE relation IS PREFERENCE
-                 | ORDER BY confidence DESC | LIMIT 10),
+                 ORDER BY confidence DESC LIMIT 10),
     goals:     (RECALL goals ABOUT "priya" WHERE goal_state = "active" RECENT 5),
     history:   (RECALL events ABOUT "priya" RECENT 8)
   BUDGET 3000 tokens

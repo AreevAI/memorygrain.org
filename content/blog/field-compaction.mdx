@@ -24,11 +24,11 @@ Because the mapping is bijective (every full name maps to exactly one short key,
 
 ## Core Fields (Section 6.1)
 
-The core field map applies to all ten grain types. Here is the complete table:
+The core field map applies to all twelve grain types. Here is the complete table:
 
 | Full Name | Short Key | Type | Description |
 |-----------|-----------|------|-------------|
-| `type` | `t` | string | Grain type: "fact", "event", "state", "action", etc. |
+| `type` | `t` | string | Grain type: "fact", "event", "state", "tool", etc. |
 | `subject` | `s` | string | Entity being described (RDF subject) |
 | `relation` | `r` | string | Semantic relationship (RDF predicate) |
 | `object` | `o` | string | Value or target (RDF object) |
@@ -91,10 +91,15 @@ Like Event, State fields are already short and retain their names.
 
 | Full Name | Short Key | Type |
 |-----------|-----------|------|
-| `steps` | `steps` | array[string] |
 | `trigger` | `trigger` | string |
+| `nodes` | `nodes` | array[string] |
+| `edges` | `edges` | array[map] |
+| `bindings` | `bind` | map[string→string] |
+| `retries` | `retries` | map[string→int] |
 
-Again, these field names are short enough that the mapping is an identity function.
+Nested edge fields compact separately: `src`, `dst`, and `cond` keep their names, while `max_cycles` becomes `mxc`.
+
+Almost all of these field names are short enough that the mapping is an identity function — `bindings` → `bind` is the only real saving, and `max_cycles` → `mxc` matters because it repeats once per edge.
 
 ### Tool (Section 6.5)
 

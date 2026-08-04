@@ -10,7 +10,7 @@ An autonomous vehicle is a machine that must remember what it sensed, what it de
 
 The challenge for AV memory is not just volume. It is structure. A LiDAR scan taken at time T must be temporally aligned with the camera frame taken at the same physical moment. A braking decision must be traceable to the specific sensor readings that triggered it. A learned driving pattern — "slow down when approaching a school zone" — must be distinct from a transient observation and carry different lifecycle semantics. And all of this must work on hardware ranging from microcontrollers on sensor modules to GPU-equipped onboard computers to cloud-based post-processing clusters.
 
-The Open Memory Specification addresses these requirements through its ten grain types, device profiles, content references for large binary data, and the 9-byte fixed header that enables efficient filtering at every layer of the compute stack.
+The Open Memory Specification addresses these requirements through its twelve grain types, device profiles, content references for large binary data, and the 9-byte fixed header that enables efficient filtering at every layer of the compute stack.
 
 ## Observations: the sensor data backbone
 
@@ -275,24 +275,34 @@ Grain protection via `invalidation_policy` (Section 23) provides a formal mechan
 
 ## Workflows for learned driving patterns
 
-The Workflow type (type byte `0x04`) captures procedural memory — learned sequences of actions that are triggered by specific conditions:
+The Workflow type (type byte `0x04`) captures procedural memory as a directed graph of steps, activated by a trigger condition:
 
 ```json
 {
   "type": "workflow",
   "trigger": "approaching_intersection",
-  "steps": [
-    "Check traffic signal state via perception",
-    "Reduce speed to intersection approach limit",
-    "Scan for pedestrians in crosswalks",
-    "Yield to oncoming traffic if turning left",
-    "Proceed through intersection when clear"
+  "nodes": [
+    "check_signal_state",
+    "reduce_to_approach_limit",
+    "scan_crosswalks",
+    "yield_oncoming",
+    "proceed_when_clear"
+  ],
+  "edges": [
+    {"src": "check_signal_state", "dst": "reduce_to_approach_limit"},
+    {"src": "check_signal_state", "dst": "scan_crosswalks"},
+    {"src": "reduce_to_approach_limit", "dst": "yield_oncoming", "cond": "turning_left"},
+    {"src": "reduce_to_approach_limit", "dst": "proceed_when_clear", "cond": "going_straight"},
+    {"src": "scan_crosswalks", "dst": "proceed_when_clear"},
+    {"src": "yield_oncoming", "dst": "proceed_when_clear"}
   ],
   "created_at": 1739900000000,
   "namespace": "av:behavior",
   "importance": 0.9
 }
 ```
+
+The structure here is carried entirely by the topology, not by any declared node type (Section 8.4). `check_signal_state` has two outgoing unconditional edges, so speed reduction and crosswalk scanning fan out in parallel — which is what actually happens on approach. The two `cond` edges out of `reduce_to_approach_limit` make it a decision point, and `proceed_when_clear` is the target of multiple edges, so it is an AND-join: the vehicle does not enter the intersection until every predecessor path has completed.
 
 Workflows are distinct from Goals in a critical way: a Workflow describes *how* to do something (procedural knowledge), while a Goal describes *what* to achieve (declarative objective). The vehicle might have a Goal "arrive at destination safely" and multiple Workflows that are activated along the route — "approaching_intersection", "merging_onto_highway", "navigating_parking_lot".
 

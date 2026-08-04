@@ -23,7 +23,7 @@ Before mapping anything, take stock of what exists. Agent memory systems typical
 - **Sensor telemetry** --- IoT readings, monitoring metrics, environmental measurements
 - **Task tracking** --- objectives, goals, and their completion status in project management systems or custom stores
 
-Each of these maps to one or more of the ten OMS grain types. The mapping is not arbitrary --- it follows directly from the type definitions in Section 8 of the specification.
+Each of these maps to one or more of the twelve OMS grain types. The mapping is not arbitrary --- it follows directly from the type definitions in Section 8 of the specification.
 
 ## Mapping existing stores to OMS grain types
 
@@ -95,7 +95,7 @@ Every tool invocation your agent makes --- API calls, function calls, database q
 }
 ```
 
-Required fields are `tool_name`, `arguments`, `result`, `success`, and `created_at`. Optional fields include `duration_ms` for execution time and `error` for failure messages. If your existing logs lack some of these fields, you can still migrate --- set `success` based on HTTP status codes, estimate `duration_ms` from log timestamps, and reconstruct `arguments` from request payloads.
+The canonical field names are `tool_name`, `input`, `content`, and `is_error`, alongside `created_at`. The older `arguments` / `result` / `success` names were removed in v1.2 and are not accepted. Optional fields include `duration_ms` for execution time and `error_type` for structured failure classification. If your existing logs lack some of these fields you can still migrate --- derive `is_error` from HTTP status codes (note the inverted polarity: `is_error: false` means success), estimate `duration_ms` from log timestamps, and reconstruct `input` from request payloads.
 
 ### Configuration snapshots become State grains
 
@@ -115,18 +115,25 @@ The `context` map is flexible --- it accepts any map structure as the agent stat
 
 ### Procedural runbooks become Workflow grains
 
-Documented procedures --- "when X happens, do Y then Z" --- are Workflows. Section 8.4 requires `type`, `steps` (a non-empty array of strings), `trigger` (a non-empty string describing the activation condition), and `created_at`.
+Documented procedures --- "when X happens, do Y then Z" --- are Workflows. Section 8.4 requires `type`, `nodes` (a non-empty array of unique node IDs), and `created_at`. `trigger` (the activation condition) and `edges` (the connections between nodes) are both optional.
 
 ```json
 {
   "type": "workflow",
-  "steps": ["fetch_data", "validate_schema", "transform", "load"],
   "trigger": "new CSV file uploaded",
+  "nodes": ["fetch_data", "validate_schema", "transform", "load"],
+  "edges": [
+    {"src": "fetch_data", "dst": "validate_schema"},
+    {"src": "validate_schema", "dst": "transform"},
+    {"src": "transform", "dst": "load"}
+  ],
   "created_at": 1739980800000
 }
 ```
 
-If your agent has learned procedures through trial and error or has them configured as automation rules, each one becomes a Workflow grain. The trigger-steps model captures what activates the workflow and what happens when it runs.
+If your agent has learned procedures through trial and error or has them configured as automation rules, each one becomes a Workflow grain.
+
+Migrating an existing flat step list is mechanical: the steps become `nodes` in order, and each consecutive pair becomes an edge. But it is worth taking the extra pass to model real concurrency and branching while you are in there — the graph model exists because most documented procedures are not actually linear, and a mechanical translation preserves an ordering the original never meant to assert.
 
 ### Sensor telemetry becomes Observation grains
 
@@ -197,7 +204,7 @@ Level 1 (Section 17.1) is read-only. A Level 1 implementation can:
 - Deserialize the version byte and canonical MessagePack payload
 - Compute and verify SHA-256 content addresses
 - Support field compaction (expanding short keys to full names)
-- Recognize all ten grain types
+- Recognize all twelve grain types
 - Ignore unknown fields (forward compatibility)
 - Use constant-time hash comparison
 

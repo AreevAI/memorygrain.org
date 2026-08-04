@@ -12,9 +12,9 @@ The challenge is not just storing this data. It is storing it in a format that i
 
 The Open Memory Specification provides a standards-based approach. Every piece of clinical knowledge — a vital reading, a diagnosis, a treatment goal, a lab order — becomes an immutable, content-addressed memory grain with built-in compliance primitives. This post maps OMS to healthcare workflows, showing how each memory type serves a specific clinical function, how PHI protection works at the binary level, and how HIPAA's technical safeguard requirements align with OMS capabilities.
 
-## The ten grain types in clinical context
+## The twelve grain types in clinical context
 
-OMS defines ten grain types (Section 8), each with a type byte in the 9-byte fixed header that enables O(1) filtering without payload deserialization. In a healthcare system, every type has a natural clinical role.
+OMS defines twelve grain types (Section 8), each with a type byte in the 9-byte fixed header that enables O(1) filtering without payload deserialization. In a healthcare system, every type has a natural clinical role.
 
 ### Observations for vitals and sensor data
 
@@ -350,6 +350,6 @@ Consider a complete clinical workflow modeled in OMS:
 
 Every grain in this workflow is immutable, content-addressed, and carries sensitivity bits set to `11` (PHI). Every grain has a `user_id` enabling per-patient encryption and crypto-erasure. Every grain's provenance is traceable. And every grain can be exported in a `.mg` file for portability.
 
-This is not a hypothetical architecture. It is a direct application of the ten grain types, the sensitivity classification system, the per-user encryption pattern, the selective disclosure mechanism, and the bi-temporal model — all defined in the OMS v1.2 specification with precise binary formats and validation rules.
+This is not a hypothetical architecture. It is a direct application of the twelve grain types, the sensitivity classification system, the per-user encryption pattern, the selective disclosure mechanism, and the bi-temporal model — all defined in the OMS specification with precise binary formats and validation rules.
 
 Healthcare AI agents need memory that is as carefully designed as the clinical decisions they support. OMS provides the standard for building it.

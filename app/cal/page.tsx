@@ -13,7 +13,7 @@ import { buildMetadata } from '@/lib/metadata'
 export const metadata: Metadata = buildMetadata({
   title: 'CAL Specification',
   description:
-    'Context Assembly Language (CAL) v1.0: A non-destructive, deterministic, LLM-native query language for assembling agent context from OMS memory stores. 27 sections covering safety model, grammar, type system, streaming, compliance, and conformance levels.',
+    'Context Assembly Language (CAL) v1.2: A non-destructive, deterministic, LLM-native query language for assembling agent context from OMS memory stores. 27 sections covering safety model, grammar, type system, multi-format output, streaming, compliance, and conformance levels. Part of the Open Memory Specification (OMS) v1.5.',
 })
 
 async function getSpecHtml(): Promise<string> {
@@ -36,7 +36,7 @@ async function getSpecHtml(): Promise<string> {
 }
 
 const tocSections = [
-  { id: 'cal-context-assembly-language-specification-v10', label: 'CAL · Context Assembly' },
+  { id: 'cal-context-assembly-language-specification-v12', label: 'CAL · Context Assembly' },
   { id: 'abstract', label: 'Abstract' },
   { id: '1-introduction', label: '1. Introduction' },
   { id: '2-the-safety-model', label: '2. Safety Model' },

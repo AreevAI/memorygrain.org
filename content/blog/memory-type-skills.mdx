@@ -1,0 +1,345 @@
+---
+title: "Grain Type Deep Dive: Skills"
+description: "A comprehensive guide to the Skill grain type (0x0B), introduced in OMS v1.4 — the hybrid definition-plus-competence model, why the Fact + mg:capable_of convention was promoted to a first-class type, proficiency as a supersession chain, skill transfer between agents, and how Skills differ from Workflows and capability Facts."
+date: "2026-06-13"
+readTime: "15 min read"
+tags: ["memory-types", "skills", "agent-capability", "procedural-memory"]
+---
+
+An agent that can only remember facts, events, and its own reasoning is missing something obvious: the ability to remember *what it can do*, and to get better at it.
+
+OMS v1.4 introduced the **Skill** grain type (`0x0B`, Section 8.11) for exactly that. A Skill is a packaged, reusable agent capability — the durable definition of what a capability is and how to perform it, plus optional records of how well a particular agent performs it. It is the unit an agent loads to acquire a capability, and the unit it supersedes as it improves.
+
+This post covers the full Skill schema: why a dedicated type was required, the hybrid definition/competence model, every required and optional field, the proficiency lifecycle, skill transfer between agents, and how Skills relate to Workflows and capability Facts.
+
+## Why a Dedicated Skill Type Was Required
+
+Earlier OMS revisions did not have a Skill type. Skills were a **convention**: a Fact grain using the `mg:capable_of` relation, with the skill's details packed into the Fact's `object` map. (In those revisions type `0x01` was still spelled `"belief"` — v1.4 renamed it to `"fact"` without changing the byte.)
+
+```json
+{
+  "type": "belief",
+  "subject": "agent:reviewer-1",
+  "relation": "mg:capable_of",
+  "object": {
+    "name": "code_review",
+    "proficiency": 0.82,
+    "practice_count": 47
+  },
+  "confidence": 0.82
+}
+```
+
+The convention was semantically correct. An agent *is* capable of code review, and that *is* a claim about the world with a confidence attached. The problem was operational, and it showed up as soon as multi-agent deployments started querying skills at scale.
+
+**Querying required unpacking every candidate.** The skill's name, domain, and proficiency lived inside an opaque `object` map. A store cannot index into a free-form map the way it indexes a typed field. Answering "which agents in this fleet hold a transferable software skill above 0.7 proficiency?" meant deserializing every `mg:capable_of` Fact and filtering in application code — a full scan where a type-scoped index should have sufficed.
+
+**The schema was unenforceable.** Because `object` accepts any map, nothing stopped one team from writing `proficiency` and another from writing `skill_level`. There were no required fields, so there was no validation to fail. Divergence was silent.
+
+**Definition and competence were tangled.** A skill definition — the instructions, the permitted tools, the bundled resources — is shareable and largely static. An agent's mastery of it is personal and changes constantly. Collapsing both into one `object` map meant that recording a single practice run rewrote the entire capability description alongside it.
+
+The result was type byte `0x0B`, following the precedent Consent (`0x0A`) set in v1.2: when a convention becomes performance-critical, it gets promoted to a first-class type. Byte values `0x01`–`0x0A` were untouched, so every existing content address remained valid.
+
+<Callout type="info">
+The `mg:capable_of` relation is retained in the standard vocabulary for backward compatibility, and it now maps to the Skill grain in the Section 8 relation table. New skills SHOULD be written as Skill grains.
+</Callout>
+
+## The Hybrid Model: Definition Plus Competence
+
+The central design decision in the Skill type is that it is **hybrid**. One grain carries two groups of fields with very different lifecycles:
+
+- **Definition fields** are the durable, shareable specification: what the capability is, how to perform it, what it may invoke, what it ships with. These change when the capability itself is revised.
+- **Learned-competence fields** record a particular agent's mastery: proficiency, practice count, last practiced, the strategies it has found. These change constantly.
+
+A grain may carry only the first group — a **pure definition**, publishable by anyone, holdable by no one. Or it may carry both — a **held instance**, one agent's copy of a capability it is actively practicing.
+
+This is why there is no separate `SkillDefinition` type. A pure definition and a held instance are the same shape; the difference is whether `holder_did` and `proficiency` are present. That keeps transfer simple: acquiring a skill means writing a grain of the same type with your own competence fields reset.
+
+## Required Fields
+
+The Skill type has four required fields (Section 8.11):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `type` | string | Must be `"skill"` |
+| `name` | string | Machine-readable skill identifier, e.g. `"code_review"` |
+| `description` | string | Human-readable summary of what the skill does and when to use it |
+| `created_at` | int64 | Creation timestamp in epoch milliseconds |
+
+`name` and `description` alone are sufficient to define a skill. Everything else is optional — which is deliberate, because a capability you can name and describe is already useful for discovery even before anyone writes down how to perform it.
+
+The header byte for Skill is `0x0B`, so a Skill grain's 9-byte fixed header begins `01 00 0B`.
+
+## Definition Fields
+
+These specify the capability itself. All are optional.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `instructions` | string | The procedural body — the prose or markdown "skill body" an agent loads when applying it |
+| `when_to_use` | string | Natural-language activation cue: the conditions under which the skill SHOULD be selected |
+| `version` | string | Opaque, skill-defined version string, e.g. `"2.1.0"` |
+| `allowed_tools` | array[string] | Content addresses of Tool definition grains the skill may invoke |
+| `resources` | array[string] | Content addresses of bundled resource grains — scripts, templates, reference files |
+| `dependencies` | array[string] | Content addresses of Skill grains that must be available first |
+| `input_modalities` | array[string] | What the skill operates on: `"text"`, `"image"`, `"code"`, `"audio"`. Open enum |
+| `output_modalities` | array[string] | What the skill produces. Open enum |
+| `domain` | string | Domain context: `"software"`, `"research"`, `"healthcare"`, `"finance"`. Open enum |
+
+Two of these deserve comment.
+
+**`when_to_use` is a routing signal, not documentation.** An agent choosing among two hundred available skills needs something cheap to match against the current situation. That is what `when_to_use` is for — it is read at selection time, whereas `instructions` is read only after selection. Splitting them means an agent can scan activation cues without loading every skill body.
+
+**`allowed_tools` is a bound, not a manifest.** It enumerates the Tool definition grains the skill is *permitted* to invoke. A skill that lists three tools and tries to call a fourth is exceeding its declared scope, and a careful executor should treat that as an error rather than a surprise.
+
+Note also that `version` is not what determines which skill is current. Supersession by system time remains authoritative for "latest" (Section 5). `version` is an opaque label for humans and for compatibility checks; the supersession chain is the truth.
+
+<Callout type="info">
+Binary or large file payloads do not go in `resources` directly — that field holds content addresses of resource grains. Actual binary payloads travel via the common `content_refs` field (Section 6.1), consistent with the OMS rule that grains carry references, never blobs.
+</Callout>
+
+## Learned-Competence Fields
+
+These record one agent's mastery. Omit them entirely for a pure definition.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `holder_did` | string | DID of the agent that holds and practices this skill |
+| `proficiency` | float64 | Current mastery level, range [0.0, 1.0] |
+| `practice_count` | int | Number of successful applications |
+| `last_practiced_at` | int64 | Most recent successful application, epoch ms |
+| `strategies` | array[map] | Context-dependent approaches — each `{condition, workflow, description?}` |
+| `transferable` | bool | If `true`, another agent MAY ingest this grain to acquire the skill |
+
+`holder_did` is distinct from the common `author_did`. `author_did` records who *wrote the grain*; `holder_did` records whose *competence it describes*. They are usually the same agent — but not when a supervisor records an assessment of a subordinate agent, and not immediately after a transfer.
+
+When `proficiency` is present it SHOULD equal the grain's top-level `confidence`. The two say the same thing from different angles: how well the agent performs the skill, and how much credence to give the claim that it does.
+
+Each entry in `strategies` links a condition to a Workflow grain:
+
+```json
+"strategies": [
+  {
+    "condition": "security_focused",
+    "workflow": "mg:sha256:a1b2c3...",
+    "description": "OWASP-oriented review for auth and input handling code"
+  },
+  {
+    "condition": "style_focused",
+    "workflow": "mg:sha256:d4e5f6...",
+    "description": "Linting and convention compliance review"
+  }
+]
+```
+
+This is the mechanism that makes a Skill adaptive rather than fixed. The capability is "code review"; the strategies are the specific procedures it runs depending on what kind of diff arrived.
+
+## Reference Constraints
+
+The Skill type is unusually reference-heavy, and each reference is typed (Section 8.11, rule 4):
+
+- Each `strategies[].workflow` **MUST** be the content address of a Workflow grain (Section 8.4).
+- Each `dependencies` entry **MUST** be the content address of a Skill grain.
+- Each `allowed_tools` entry **SHOULD** reference a Tool definition grain (Section 27.1).
+
+The MUST on `dependencies` matters more than it looks. Because dependencies point at Skill grains, and Skill grains can themselves have dependencies, skills compose into a graph. A `security_review` skill can depend on a `threat_modeling` skill, which depends on an `asset_inventory` skill. Acquiring the first means resolving the whole closure — which is exactly why the type is required rather than merely recommended.
+
+## A Complete Skill Grain
+
+```json
+{
+  "type": "skill",
+  "name": "code_review",
+  "description": "Review code changes for correctness, style, and security issues",
+  "version": "2.1.0",
+
+  "instructions": "Read the diff, classify the change, then apply the matching strategy. Always check auth and input-handling paths first.",
+  "when_to_use": "a pull request or code diff needs review before merge",
+  "allowed_tools": ["mg:sha256:b0c1d2..."],
+  "resources": ["mg:sha256:c3d4e5..."],
+  "dependencies": ["mg:sha256:f7e8d9..."],
+  "domain": "software",
+  "input_modalities": ["code", "text"],
+  "output_modalities": ["text"],
+
+  "holder_did": "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",
+  "proficiency": 0.82,
+  "practice_count": 47,
+  "last_practiced_at": 1711929600000,
+  "transferable": true,
+  "strategies": [
+    {
+      "condition": "security_focused",
+      "workflow": "mg:sha256:a1b2c3...",
+      "description": "OWASP-oriented review for auth and input handling code"
+    },
+    {
+      "condition": "style_focused",
+      "workflow": "mg:sha256:d4e5f6...",
+      "description": "Linting and convention compliance review"
+    }
+  ],
+
+  "confidence": 0.82,
+  "source_type": "agent_inferred",
+  "namespace": "agent:skills",
+  "author_did": "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",
+  "created_at": 1711929600000
+}
+```
+
+Skill grains SHOULD use the `"agent:skills"` namespace. Because the namespace hash occupies bytes 3–4 of the fixed header, a store can filter to the skill partition without deserializing a single payload.
+
+## Field Compaction
+
+Skill-specific fields have their own compaction block (Section 6.12), grouped by definition and learned:
+
+| Full Name | Short Key | Group |
+|-----------|-----------|-------|
+| `name` | `skname` | definition |
+| `instructions` | `instr` | definition |
+| `when_to_use` | `wtu` | definition |
+| `version` | `sver` | definition |
+| `allowed_tools` | `atls` | definition |
+| `resources` | `res` | definition |
+| `dependencies` | `deps` | definition |
+| `input_modalities` | `imod` | definition |
+| `output_modalities` | `omod` | definition |
+| `domain` | `dom` | definition |
+| `holder_did` | `hdid` | learned |
+| `proficiency` | `prof` | learned |
+| `practice_count` | `prcnt` | learned |
+| `last_practiced_at` | `lpa` | learned |
+| `strategies` | `strat` | learned |
+| `transferable` | `xfer` | learned |
+
+`name` compacts to `skname` rather than to something shorter because `n` and `nm` were already spoken for, and a collision in the compaction table is worse than three extra bytes. `description` does not appear here at all — it reuses the shared `desc` key, which Goal grains also use. Likewise `license` uses the common `lic` key and bundled payloads use `cr` (`content_refs`).
+
+## Proficiency Is a Supersession Chain
+
+Here is the rule that shapes everything about how Skills behave in practice (Section 8.11, rule 3):
+
+> Learned-competence improvement is recorded by supersession: each change in `proficiency` writes a new Skill grain that supersedes the prior one and increments `practice_count`. The supersession chain is the complete learning history; Skill grains are never mutated in place.
+
+A skill at proficiency 0.82 with 47 practices is not a row that got updated 47 times. It is the head of a chain of 47 immutable grains, each one a content-addressed record of what the agent's competence was at that moment.
+
+**Degradation works the same way.** An implementation MAY decay proficiency when `last_practiced_at` exceeds some threshold — but decay is *also* a superseding grain with reduced proficiency, not a mutation of the existing one. There is no operation in OMS that lowers a number in place.
+
+<Callout type="success">
+This is what makes agent learning auditable. "Why did this agent's code-review proficiency drop from 0.85 to 0.61 last quarter?" is answerable by walking the supersession chain: each link has a timestamp, an author DID, and `derived_from` pointers to the Events, Tool grains, and Reasoning grains that informed the change. You cannot quietly inflate an agent's competence record, because inflating it means writing a new grain that says so, signed and timestamped.
+</Callout>
+
+The cost is real and worth stating plainly: a heavily practiced skill produces a long chain. Stores handle this the way they handle any supersession chain — the index layer tracks the current head via `superseded_by` and `system_valid_to`, so ordinary queries touch one grain, and the history is there when you need it.
+
+## Skill Transfer Between Agents
+
+Transfer is the payoff for making skills a portable, content-addressed type. The convention (Section 28.8):
+
+1. **Discover.** Agent A queries its store: `type=skill, namespace="agent:skills", transferable=true`.
+2. **Share.** Agent A shares the Skill grain *and* all Workflow grains referenced in `strategies` — a `get_batch` on the content addresses. Dependencies must travel too.
+3. **Ingest and rewrite.** Agent B writes a new Skill grain that:
+   - sets `derived_from` to Agent A's Skill grain content address,
+   - preserves Agent A's DID in `origin_did` for provenance,
+   - sets its own `holder_did` and `author_did`,
+   - resets `proficiency` and `practice_count` to its own initial values, typically `0`.
+4. **Practice.** Agent B improves through use, superseding its own grain as described above.
+
+Step 3 is the one that carries the design's judgment. **Proficiency does not transfer.** Agent B inherits the *definition* — the instructions, the tools, the strategies — but starts its competence record at zero.
+
+That is not a limitation to work around; it is the correct semantics. Agent A's 0.82 proficiency is a claim about Agent A, established over 47 practices in Agent A's environment with Agent A's tools. Copying that number to Agent B would assert something no evidence supports. Agent B gets the recipe, not the track record — and `origin_did` plus `derived_from` preserve exactly where the recipe came from.
+
+### Discovery Queries
+
+Find the best available skills:
+
+```
+type=skill, namespace="agent:skills", system_valid_to=null, sort=proficiency DESC
+```
+
+Find every agent that holds a specific skill:
+
+```
+type=skill, name="code_review", system_valid_to=null
+```
+
+The `system_valid_to=null` filter is what restricts results to current heads rather than the whole supersession history.
+
+## Skill vs. Workflow vs. Capability Fact
+
+Three OMS constructs sit near each other, and mixing them up produces a store that is hard to query. The spec distinguishes them explicitly (Section 28.8):
+
+| Construct | Grain type | What it captures |
+|-----------|-----------|------------------|
+| Agent Capability (§28.5) | Fact with `mg:has_capability` | Static identity card — what the agent *is built to do* |
+| Skill (§8.11) | Skill (`0x0B`) | Packaged, reusable capability — definition plus optional learned proficiency and strategies |
+| Workflow (§8.4) | Workflow (`0x04`) | A single fixed procedure — a directed graph of steps, not an adaptive capability |
+
+The distinction that matters most in practice is Skill vs. Workflow. A Workflow is *one procedure*. A Skill is a capability that may select among several procedures depending on context — that is precisely what `strategies` encodes. "Review this code" is a skill; "run the OWASP-oriented review graph" is a workflow. The skill decides which workflow to run.
+
+A capability Fact, meanwhile, is advertisement. It says the agent does code review, for the benefit of an orchestrator deciding where to route work. It carries no instructions, no tools, and nothing transferable.
+
+## Authoring Skills in CAL
+
+Skills are in CAL's addable set, alongside Fact, Observation, Goal, and Workflow:
+
+```sql
+ADD skill
+  SET name = "code_review"
+  SET description = "Review code changes for correctness, style, and security issues"
+  SET instructions = "Read the diff, classify the change, then apply the matching strategy; check auth and input-handling paths first."
+  SET when_to_use = "a pull request or code diff needs review before merge"
+  SET version = "2.1.0"
+  SET domain = "software"
+  REASON "authoring reusable code-review skill definition"
+```
+
+`name` and `description` are the required `SET` fields, mirroring the grain schema. Querying uses the type-specific field set:
+
+```sql
+RECALL skills
+  WHERE domain = "software" AND transferable = true AND proficiency > 0.7
+  ORDER BY proficiency DESC
+  LIMIT 10
+```
+
+In SML — the flat markup CAL renders for LLM consumption — a Skill projects as a `<skill>` element whose text is the description:
+
+```sml
+<skill name="code_review" proficiency="0.82" domain="software">Review code changes for correctness, style, and security issues</skill>
+```
+
+The tag itself tells the model what kind of thing it is reading. A `<fact>` is a claim; a `<skill>` is a capability the agent can apply.
+
+## Design Considerations
+
+### Publish Definitions Separately from Instances
+
+If a skill is meant to be shared across a fleet, publish it as a pure definition — no `holder_did`, no `proficiency`. Each agent then writes its own held instance with `derived_from` pointing at the definition. The alternative, transferring one agent's held instance around, works but muddies provenance: every downstream copy traces back through an arbitrary agent's practice history rather than to the canonical definition.
+
+### Bound the Dependency Graph
+
+Because `dependencies` reference other Skill grains, a deep chain means a large transfer closure. Keep dependency graphs shallow, and prefer `allowed_tools` over a dependency when what you need is a tool rather than a capability.
+
+### Set `transferable` Deliberately
+
+`transferable: true` is an invitation. A skill whose `instructions` encode organization-specific procedure, or whose `allowed_tools` reference internal systems, should say `false` — not because OMS enforces it, but because the flag is how other agents decide whether ingesting the grain is appropriate.
+
+### Keep `proficiency` and `confidence` in Sync
+
+The spec says `proficiency` SHOULD equal top-level `confidence`. Honor it. Tools that reason about grain reliability generically read `confidence`; tools that reason about skills read `proficiency`. If they disagree, one of your two answers is wrong and nothing in the format will tell you which.
+
+## Summary
+
+The Skill grain type gives agent capabilities the same treatment OMS gives knowledge, actions, and consent: a first-class type, a required schema, a content address, and an immutable history.
+
+Four properties define it:
+
+1. **Hybrid structure.** One type carries both the durable definition — instructions, tools, resources, dependencies — and one agent's learned competence. A grain may be a pure definition or a held instance, and the shape is the same either way.
+
+2. **Learning as supersession.** Proficiency never mutates. Each change writes a superseding grain and increments `practice_count`, so the chain *is* the learning history — auditable, timestamped, and attributable.
+
+3. **Transfer without borrowed credit.** An agent acquiring a skill inherits the definition and preserves provenance via `origin_did` and `derived_from`, but resets proficiency to its own starting point. The recipe travels; the track record does not.
+
+4. **Adaptive by composition.** Through `strategies`, one Skill selects among several Workflow grains by condition — which is what separates a capability from a fixed procedure.
+
+Promoted from a convention in v1.4 because querying it at fleet scale demanded it, the Skill type turns "what can this agent do, and how well" from an application-layer concern into something the memory format itself can answer.

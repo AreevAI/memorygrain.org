@@ -1,4 +1,4 @@
-import { Database, ScrollText, Bookmark, GitBranch, Wrench, Activity, Target, BrainCircuit, Users, ShieldCheck, type LucideIcon } from 'lucide-react'
+import { Database, ScrollText, Bookmark, GitBranch, Wrench, Activity, Target, BrainCircuit, Users, ShieldCheck, GraduationCap, Lightbulb, type LucideIcon } from 'lucide-react'
 
 type GrainType = {
   key: string
@@ -58,7 +58,6 @@ const groups: Group[] = [
         byte: '0x08',
         tagline: 'How the agent concluded it',
         description: 'An inference chain — premises, conclusion, and method. Captures extended thinking from LLMs. Grains with requires_human_review block automated decisions until cleared.',
-        isNew: true,
       },
       {
         key: 'state',
@@ -88,7 +87,16 @@ const groups: Group[] = [
         icon: GitBranch,
         byte: '0x04',
         tagline: 'How to do it',
-        description: 'A trigger-response procedure: when a condition fires, execute these steps in order. Encodes repeatable processes that can be shared across agents.',
+        description: 'A directed graph of procedural steps — nodes, edges, and conditions. Expresses parallel fan-out, AND-joins, decision points, and bounded retries, with nodes bound to Tool definitions.',
+      },
+      {
+        key: 'skill',
+        label: 'Skill',
+        icon: GraduationCap,
+        byte: '0x0B',
+        tagline: 'What the agent can do',
+        description: 'A packaged, transferable capability — instructions, allowed tools, and bundled resources — plus optional learned competence. Proficiency improves by supersession, so the chain is the complete learning history.',
+        isNew: true,
       },
       {
         key: 'goal',
@@ -101,8 +109,8 @@ const groups: Group[] = [
     ],
   },
   {
-    label: 'Social',
-    summary: 'Multi-agent & trust',
+    label: 'Governance',
+    summary: 'Trust, permission & change control',
     types: [
       {
         key: 'consensus',
@@ -111,7 +119,6 @@ const groups: Group[] = [
         byte: '0x09',
         tagline: 'What agents agreed on',
         description: 'A multi-agent agreement record. Captures when a quorum of agents converges on a shared fact or decision, with trust-weighted confidence across the participating agents.',
-        isNew: true,
       },
       {
         key: 'consent',
@@ -120,6 +127,14 @@ const groups: Group[] = [
         byte: '0x0A',
         tagline: 'What the user permitted',
         description: 'A DID-scoped, purpose-bounded permission grant or withdrawal. Revoking a Consent grain triggers cascading erasure of all grains whose processing depended on it.',
+      },
+      {
+        key: 'recommendation',
+        label: 'Recommendation',
+        icon: Lightbulb,
+        byte: '0x0C',
+        tagline: 'What the agent proposes to change',
+        description: 'A governed, auditable proposal to change memory or agent configuration. It never mutates anything by itself — it moves through propose → review → apply → roll back, and every transition is an immutable audit grain.',
         isNew: true,
       },
     ],
@@ -184,16 +199,16 @@ function GrainCard({ type }: { type: GrainType }) {
 
 export function MemoryTypes() {
   return (
-    <section aria-label="Ten grain types" style={{ padding: 'clamp(4rem, 8vw, 6rem) 0' }}>
+    <section aria-label="Twelve grain types" style={{ padding: 'clamp(4rem, 8vw, 6rem) 0' }}>
       <div className="container-content">
 
         {/* Section header */}
         <div style={{ textAlign: 'center', maxWidth: 600, margin: '0 auto', marginBottom: 'clamp(2.5rem, 5vw, 4rem)' }}>
           <p style={{ fontSize: '0.8125rem', fontFamily: 'var(--font-mono)', color: 'var(--accent)', fontWeight: 600, marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Grain Types · OMS v1.3
+            Grain Types · OMS v1.5
           </p>
           <h2 style={{ fontSize: 'clamp(1.5rem, 3.5vw, 2.25rem)', fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--fg)', marginBottom: '0.875rem' }}>
-            Ten grains for every kind of knowledge
+            Twelve grains for every kind of knowledge
           </h2>
           <p style={{ fontSize: '1rem', color: 'var(--fg-secondary)', lineHeight: 1.7 }}>
             Each type has a required schema, a single-byte identifier, and optional fields for compliance, provenance, and multi-modal content.

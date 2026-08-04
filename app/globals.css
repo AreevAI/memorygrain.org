@@ -29,6 +29,8 @@
   --reasoning: #a855f7;
   --consensus: #10b981;
   --consent: #ec4899;
+  --skill: #06b6d4;
+  --recommendation: #d946ef;
   /* v1.1 aliases — kept for backwards compatibility */
   --episode: var(--event);
   --checkpoint: var(--state);
@@ -78,6 +80,8 @@
   --color-reasoning: var(--reasoning);
   --color-consensus: var(--consensus);
   --color-consent: var(--consent);
+  --color-skill: var(--skill);
+  --color-recommendation: var(--recommendation);
   /* v1.1 aliases */
   --color-episode: var(--event);
   --color-checkpoint: var(--state);

@@ -2,7 +2,7 @@
 
 > The open standard for immutable, content-addressed memory grains.
 > Built for AI agents, autonomous vehicles, robots, and IoT systems.
-> Version 1.3 - Standards Track - CC0 1.0 - March 2026
+> Version 1.5 - Standards Track - CC0 1.0 - August 2026
 
 ## What is the .mg format?
 
@@ -12,15 +12,16 @@ control  -  but for agent memory.
 
 ## Companion Specifications
 
-OMS v1.3 includes two companion specifications:
+OMS v1.5 includes two companion specifications:
 
-- **CAL (Context Assembly Language)** - A non-destructive, deterministic, LLM-native query language
-  for assembling agent context from OMS memory stores. CAL cannot delete data - this is enforced
-  at the grammar level. 27 sections + 6 appendices covering safety model, grammar, type system,
+- **CAL (Context Assembly Language) v1.2** - A non-destructive, deterministic, LLM-native query
+  language for assembling agent context from OMS memory stores. CAL cannot delete data - this is
+  enforced at the grammar level, which is also what makes every Recommendation proposal invertible.
+  27 sections + 6 appendices covering safety model, grammar, type system, multi-format output,
   streaming, compliance, and conformance levels.
 
-- **SML (Semantic Markup Language)** - A flat, tag-based markup format optimized for LLM context
-  consumption. Tag names map directly to OMS grain types (belief, goal, event, etc.) so LLMs
+- **SML (Semantic Markup Language) v1.1** - A flat, tag-based markup format optimized for LLM context
+  consumption. Tag names map directly to OMS grain types (fact, goal, event, etc.) so LLMs
   understand the epistemic status of each piece of context without parsing schemas. SML is the
   default output format for CAL ASSEMBLE statements.
 
@@ -34,7 +35,7 @@ Each memory grain is:
 ## Key Concepts
 
 - **Content address**: SHA-256(blob bytes) = 64-character lowercase hex string
-- **Memory grain**: Atomic knowledge unit  -  one belief, event, observation, etc.
+- **Memory grain**: Atomic knowledge unit  -  one fact, event, observation, etc.
 - **Grain container**: .mg file  -  portable unit containing indexed grains with checksum
 - **Canonical serialization**: Sorted keys, NFC strings, null omission, deterministic bytes
 - **Field compaction**: Short keys (e.g., `t`=type, `s`=subject) reduce storage
@@ -44,33 +45,67 @@ Each memory grain is:
 - **Crypto-erasure**: Destroy per-user HKDF key -> O(1) GDPR erasure
 - **Immutability boundary**: Blob (immutable, hashed) vs. Index layer (mutable status fields)
 
-## Ten Grain Types (OMS v1.3)
+## Twelve Grain Types (OMS v1.5)
 
-| Type | Byte | Description | v1.1 Name |
-|------|------|-------------|-----------|
-| Belief | 0x01 | Semantic triple: subject-relation-object with confidence score | Fact |
-| Event | 0x02 | Timestamped interaction record (message, log entry, utterance) | Episode |
-| State | 0x03 | Agent state snapshot for save/restore | Checkpoint |
-| Workflow | 0x04 | Learned action sequence with trigger | Workflow |
-| Action | 0x05 | Tool invocation, code execution, or computer-use record | ToolCall |
-| Observation | 0x06 | Observer reading  -  physical sensors, AI agents, or humans | Observation |
-| Goal | 0x07 | Desired outcome with priority, status, and success criteria | Goal |
-| Reasoning | 0x08 | Inference chain and thought audit trail (new in v1.2) |  -  |
-| Consensus | 0x09 | Multi-agent agreement record (new in v1.2) |  -  |
-| Consent | 0x0A | Permission grant or withdrawal  -  DID-scoped, purpose-bounded (new in v1.2) |  -  |
+| Type | Byte | Description | Added |
+|------|------|-------------|-------|
+| Fact | 0x01 | Semantic triple: subject-relation-object with confidence score | v1.0 |
+| Event | 0x02 | Timestamped interaction record (message, log entry, utterance) | v1.0 |
+| State | 0x03 | Agent state snapshot for save/restore | v1.0 |
+| Workflow | 0x04 | Directed graph of procedural steps  -  plans, pipelines, processes | v1.0 |
+| Tool | 0x05 | Tool invocation, code execution, or computer-use record | v1.0 |
+| Observation | 0x06 | Observer reading  -  physical sensors, AI agents, or humans | v1.0 |
+| Goal | 0x07 | Desired outcome with priority, status, and success criteria | v1.0 |
+| Reasoning | 0x08 | Inference chain and thought audit trail | v1.2 |
+| Consensus | 0x09 | Multi-agent agreement record | v1.2 |
+| Consent | 0x0A | Permission grant or withdrawal  -  DID-scoped, purpose-bounded | v1.2 |
+| Skill | 0x0B | Packaged, reusable agent capability  -  definition plus optional learned proficiency | v1.4 |
+| Recommendation | 0x0C | Governed, auditable proposal to change memory or agent configuration | v1.5 |
 
-All v1.1 type names are accepted by readers (backwards-compatible). Writers MUST emit v1.3 canonical names.
+Type byte values are stable across versions: v1.4 renamed `belief` -> `fact` (0x01) and `action` ->
+`tool` (0x05) without changing their bytes, so existing content addresses remain valid. Legacy
+`belief`/`action` type strings are NOT accepted. Writers MUST emit v1.5 canonical names.
 
-## Binary Format (v1.3 Header)
+## Binary Format (v1.5 Header)
 
 ```
 Byte 0: Version = 0x01
 Byte 1: Flags = [signed|encrypted|compressed|has_content_refs|has_embedding_refs|cbor_encoding|sensitivity(2 bits)]
-Byte 2: Type = 0x01..0x0A (Belief..Consent); 0x0B-0xEF reserved; 0xF0-0xFF domain profile types
+Byte 2: Type = 0x01..0x0C (Fact..Recommendation); 0x0D-0xEF reserved; 0xF0-0xFF domain profile types
 Bytes 3-4: Namespace hash = first two bytes of SHA-256(namespace), uint16 big-endian
 Bytes 5-8: Created-at = uint32 epoch seconds (coarse routing hint; authoritative timestamp in payload)
 Bytes 9+: MessagePack or CBOR payload (canonical, sorted keys, NFC strings, nulls omitted)
 ```
+
+## Workflow as a Directed Graph (v1.4)
+
+Workflow grains model directed graphs, not flat step lists. Fields: `nodes` (required, unique IDs),
+`edges` (`src`, `dst`, optional `cond`, optional `max_cycles`), `bindings` (node ID -> Tool
+definition grain hash), `retries` (node ID -> max repeat count), optional `trigger`.
+
+Structure is inferred from topology, never declared: multiple outgoing unconditional edges = parallel
+fan-out; multiple incoming edges = AND-join; multiple outgoing conditional edges = decision point; no
+outgoing edges = terminal. The entry point is the first element of `nodes`. The relation
+`mg:has_graph` replaces the v1.3 `mg:requires_steps`.
+
+## Recommendation Lifecycle (v1.5)
+
+A Recommendation never mutates memory by itself. It names a `target_ref`, the producing `analyzer`,
+a deterministic `summary` (`template_id` + `args`, never analyzer free prose), a computed
+`dedup_key`, and exactly one of `proposal_cal` / `proposal_edit` / `proposal_data`.
+
+- Lifecycle: `pending -> approved | rejected`; `approved -> applied`; `applied -> rolled_back`;
+  `rejected -> pending` (re-review on refreshed evidence). `pending -> applied` only under an
+  `observer_type` of `rec:policy`. `expired` is computed from `valid_to`.
+- Each transition is one immutable audit Observation grain, hash-chained per recommendation.
+- `rec_status` is an index-layer cache, NOT stored in the blob  -  rebuildable from the audit chain,
+  and never writer-settable. Content addresses are therefore stable across lifecycle transitions.
+- A change in content is a supersession sharing one `dedup_key`, and it resets `rec_status` to
+  `pending` so an approval never carries forward to unreviewed content.
+- `dedup_key` = hex(sha256(nfc(casefold(analyzer_family)) || 0x00 || nfc(target_ref) || 0x00 ||
+  action_kind))  -  computed, never author-chosen, so dedup survives import, federation, and forking.
+- An applier executes `proposal_cal` under the APPROVING principal's capability, never the
+  analyzer's, and never outside the recommendation's own namespace.
 
 ## Immutability Boundary (new in v1.2)
 
@@ -78,7 +113,8 @@ Grains have two layers with different mutability guarantees:
 - **Blob** (immutable): 9-byte fixed header + payload  -  covered by content address and COSE signature
 - **Index** (mutable): Status/access fields managed by the store  -  NOT part of the hash or signature
 
-Index-layer fields: `superseded_by`, `system_valid_to`, `verification_status`, `access_count`, `last_accessed_at`
+Index-layer fields: `superseded_by`, `system_valid_to`, `verification_status`, `rec_status`,
+`access_count`, `last_accessed_at`. Writers MUST NOT set them; importers MUST rebuild them.
 
 ## Compliance
 

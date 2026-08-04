@@ -218,10 +218,17 @@ Learned escalation procedures are captured as Workflow grains (Section 8.4):
 {
   "type": "workflow",
   "trigger": "customer_satisfaction_below_3",
-  "steps": [
+  "nodes": [
     "transfer_to_senior",
     "offer_discount",
-    "schedule_callback"
+    "schedule_callback",
+    "close_ticket"
+  ],
+  "edges": [
+    {"src": "transfer_to_senior", "dst": "offer_discount"},
+    {"src": "offer_discount", "dst": "schedule_callback", "cond": "declined"},
+    {"src": "offer_discount", "dst": "close_ticket", "cond": "accepted"},
+    {"src": "schedule_callback", "dst": "close_ticket"}
   ],
   "created_at": 1768471200000,
   "importance": 0.7,
@@ -229,7 +236,7 @@ Learned escalation procedures are captured as Workflow grains (Section 8.4):
 }
 ```
 
-Workflows are procedural memory — learned sequences of actions that should be triggered under specific conditions. The `trigger` field defines when the workflow activates. The `steps` array defines the ordered sequence. As agents observe which escalation patterns work and which do not, the `success_count` and `failure_count` fields on related Facts track effectiveness.
+Workflows are procedural memory — a directed graph of steps activated by a condition. The `trigger` field defines when the workflow activates; `nodes` names the steps and `edges` connects them. Node roles come from the topology rather than from any declared field (Section 8.4): the two `cond` edges out of `offer_discount` make it a decision point, so a customer who accepts the discount skips the callback entirely. As agents observe which escalation patterns work and which do not, the `success_count` and `failure_count` fields on related Facts track effectiveness.
 
 ## Event-to-Fact consolidation
 
