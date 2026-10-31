@@ -6,7 +6,7 @@
 # were deleted along with it, so the old pipeline could no longer have applied
 # even if it ran.
 #
-# Trigger: push to deploy/odin (notify.sh routes that branch to #odin).
+# Trigger: push to deploy/odin.
 #
 # The deployment pins image tag `latest` with imagePullPolicy: Always, so a
 # rollout restart is required after the push — set-image alone is a no-op when
@@ -60,15 +60,19 @@ steps:
         from_secret: github_token
 
   - name: deploy
-    image: bitnami/kubectl:latest
+    # Bitnami's `latest` by digest, as devops' agent-tools-deploy pins it. HOME is set because the
+    # image runs as UID 1001 with no HOME, and the agent's netrc injection fails writing "//.netrc".
+    # Applying the overlay also restores the base's 1 replica if the site was scaled to 0.
+    image: bitnami/kubectl@sha256:b29d8c1665b70817259ceecaea16ab27aab6368b48daf485d19436c809067492
     commands:
-      - mkdir -p ~/.kube
-      - echo "$ODIN_KUBECONFIG" > ~/.kube/config
+      - printf '%s\n' "$ODIN_KUBECONFIG" > /tmp/kubeconfig
       - kubectl apply -k /tmp/devops/services/memorygrain-web/overlays/odin-prod
       - kubectl rollout restart deployment/memorygrain-web -n memorygrain-web
       - kubectl rollout status deployment/memorygrain-web -n memorygrain-web --timeout=300s
       - kubectl get pods,ingress,certificate -n memorygrain-web
     environment:
+      HOME: /tmp
+      KUBECONFIG: /tmp/kubeconfig
       ODIN_KUBECONFIG:
         from_secret: odin_kubeconfig
 
