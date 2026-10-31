@@ -52,12 +52,40 @@ steps:
         from_secret: harbor_password
 
   - name: clone-devops
-    image: alpine/git
+    image: python:3.12-alpine
     commands:
-      - git clone --depth 1 https://$GITHUB_TOKEN@github.com/mindgryd/devops.git /tmp/devops
+      - apk add --no-cache git
+      - pip install --quiet PyJWT cryptography requests
+      - |
+        python3 -c "
+        import jwt, time, requests, subprocess, sys, os
+
+        app_id = os.environ['GH_APP_ID'].strip()
+        key = os.environ['GH_APP_PRIVATE_KEY']
+        install_id = os.environ['GH_APP_INSTALLATION_ID_DEVOPS'].strip()
+
+        now = int(time.time())
+        encoded = jwt.encode({'iat': now - 60, 'exp': now + 600, 'iss': app_id}, key, algorithm='RS256')
+
+        r = requests.post(
+            f'https://api.github.com/app/installations/{install_id}/access_tokens',
+            headers={'Authorization': f'Bearer {encoded}', 'Accept': 'application/vnd.github+json'})
+        if r.status_code != 201:
+            print(f'ERROR: GitHub API {r.status_code}: {r.json().get(\"message\", \"unknown\")}'); sys.exit(1)
+        token = r.json()['token']
+
+        if subprocess.run(['git', 'clone', '--depth=1',
+            f'https://x-access-token:{token}@github.com/mindgryd/devops.git', '.devops']).returncode != 0:
+            print('ERROR: devops clone failed'); sys.exit(1)
+        print('devops cloned')
+        "
     environment:
-      GITHUB_TOKEN:
-        from_secret: github_token
+      GH_APP_ID:
+        from_secret: gh_app_id
+      GH_APP_PRIVATE_KEY:
+        from_secret: gh_app_private_key
+      GH_APP_INSTALLATION_ID_DEVOPS:
+        from_secret: gh_app_installation_id_devops
 
   - name: deploy
     # Bitnami's `latest` by digest, as devops' agent-tools-deploy pins it. HOME is set because the
@@ -66,7 +94,7 @@ steps:
     image: bitnami/kubectl@sha256:b29d8c1665b70817259ceecaea16ab27aab6368b48daf485d19436c809067492
     commands:
       - printf '%s\n' "$ODIN_KUBECONFIG" > /tmp/kubeconfig
-      - kubectl apply -k /tmp/devops/services/memorygrain-web/overlays/odin-prod
+      - kubectl apply -k .devops/services/memorygrain-web/overlays/odin-prod
       - kubectl rollout restart deployment/memorygrain-web -n memorygrain-web
       - kubectl rollout status deployment/memorygrain-web -n memorygrain-web --timeout=300s
       - kubectl get pods,ingress,certificate -n memorygrain-web
