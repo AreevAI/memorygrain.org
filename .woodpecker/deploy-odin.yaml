@@ -22,7 +22,7 @@ labels:
 
 steps:
   - name: slack-start
-    image: registry.atmatic.ai/mindgryd/wp-notify
+    image: registry.mindgryd.com/mindgryd/wp-notify
     failure: ignore
     commands:
       - notify started
@@ -35,16 +35,16 @@ steps:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     commands:
-      - docker login registry.atmatic.ai -u $HARBOR_USERNAME -p $HARBOR_PASSWORD
+      - docker login registry.mindgryd.com -u $HARBOR_USERNAME -p $HARBOR_PASSWORD
       - >-
         docker build
         --build-arg NEXT_PUBLIC_GA_ID=G-VW8SRXQEW3
         --build-arg NEXT_PUBLIC_SITE_URL=https://memorygrain.org
-        -t registry.atmatic.ai/opensource/memorygrain-web:latest
-        -t registry.atmatic.ai/opensource/memorygrain-web:${CI_PIPELINE_NUMBER}
+        -t registry.mindgryd.com/opensource/memorygrain-web:latest
+        -t registry.mindgryd.com/opensource/memorygrain-web:${CI_PIPELINE_NUMBER}
         .
-      - docker push registry.atmatic.ai/opensource/memorygrain-web:latest
-      - docker push registry.atmatic.ai/opensource/memorygrain-web:${CI_PIPELINE_NUMBER}
+      - docker push registry.mindgryd.com/opensource/memorygrain-web:latest
+      - docker push registry.mindgryd.com/opensource/memorygrain-web:${CI_PIPELINE_NUMBER}
     environment:
       HARBOR_USERNAME:
         from_secret: harbor_username
@@ -73,7 +73,7 @@ steps:
         from_secret: odin_kubeconfig
 
   - name: slack-success
-    image: registry.atmatic.ai/mindgryd/wp-notify
+    image: registry.mindgryd.com/mindgryd/wp-notify
     failure: ignore
     commands:
       - notify success
@@ -82,7 +82,7 @@ steps:
         from_secret: slack_bot_token
 
   - name: slack-failure
-    image: registry.atmatic.ai/mindgryd/wp-notify
+    image: registry.mindgryd.com/mindgryd/wp-notify
     failure: ignore
     when:
       - status: [failure]
