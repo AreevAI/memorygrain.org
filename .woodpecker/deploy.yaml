@@ -1,12 +1,9 @@
-# Deploy memorygrain.org to the Odin cluster (Hetzner Mumbai).
+# Deploy memorygrain.org to production: the CloudPe areev-prod cluster, namespace
+# `memorygrain-web` (since 2026-11-03; Odin before, Atlas before that).
 #
-# Replaces the former deploy-atlas.yaml. Atlas (Azure Dublin) was
-# decommissioned 2026-06-15 and the websites moved to Odin — see
-# services/WEBSITE-MIGRATION-ODIN.md in the devops repo. The atlas overlays
-# were deleted along with it, so the old pipeline could no longer have applied
-# even if it ran.
-#
-# Trigger: push to deploy/odin.
+# Trigger: push to deploy/prod (deploy/odin no longer deploys).
+# Kubeconfig: repository secret cloudpe_kubeconfig_sites_deployer, the
+# `sites-deployer` service account (devops cloudpe-cluster/areev-prod/18-sites.sh).
 #
 # The deployment pins image tag `latest` with imagePullPolicy: Always, so a
 # rollout restart is required after the push — set-image alone is a no-op when
@@ -15,7 +12,7 @@
 when:
   - event: manual
   - event: push
-    branch: deploy/odin
+    branch: deploy/prod
 
 labels:
   location: office
@@ -93,16 +90,16 @@ steps:
     # Applying the overlay also restores the base's 1 replica if the site was scaled to 0.
     image: bitnami/kubectl@sha256:b29d8c1665b70817259ceecaea16ab27aab6368b48daf485d19436c809067492
     commands:
-      - printf '%s\n' "$ODIN_KUBECONFIG" > /tmp/kubeconfig
-      - kubectl apply -k .devops/services/memorygrain-web/overlays/odin-prod
+      - printf '%s\n' "$KUBECONFIG_DATA" > /tmp/kubeconfig
+      - kubectl apply -k .devops/services/memorygrain-web/overlays/cloudpe
       - kubectl rollout restart deployment/memorygrain-web -n memorygrain-web
       - kubectl rollout status deployment/memorygrain-web -n memorygrain-web --timeout=300s
       - kubectl get pods,ingress,certificate -n memorygrain-web
     environment:
       HOME: /tmp
       KUBECONFIG: /tmp/kubeconfig
-      ODIN_KUBECONFIG:
-        from_secret: odin_kubeconfig
+      KUBECONFIG_DATA:
+        from_secret: cloudpe_kubeconfig_sites_deployer
 
   - name: slack-success
     image: registry.mindgryd.com/mindgryd/wp-notify
